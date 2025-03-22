@@ -41,9 +41,10 @@ export class PostService {
         const postKey = Object.keys(postWrapper)[0]; // e.g., "Post 1"
         const postData = postWrapper[postKey];
         
-        // Debug comments specifically
+        // Debug logs
         console.log(`${postKey} comments:`, postData.Comments);
         console.log(`${postKey} image:`, postData.Image);
+        console.log(`${postKey} tags:`, postData.Tags || postData.tags);
         
         // Transform to our Post structure with camelCase properties
         const transformedPost = {
@@ -55,7 +56,11 @@ export class PostService {
           likes: postData.Likes || 0,
           // Resolve image path correctly
           image: resolveImagePath(postData.Image),
-          category: postData.Category || undefined,
+          // Handle both category and Category (prefer lowercase)
+          category: postData.category || postData.Category || undefined,
+          // Extract tags from JSON data - check both capitalized and lowercase keys
+          tags: Array.isArray(postData.Tags) ? [...postData.Tags] : 
+               (Array.isArray(postData.tags) ? [...postData.tags] : undefined),
           comments: []
         };
         
@@ -95,11 +100,13 @@ export class PostService {
 
   static getAllPosts(): Post[] {
     const posts = PostService.getPostsFromStorage();
-    // Convert date strings to Date objects
-    return posts.map((post: any) => ({
-      ...post,
-      createdAt: new Date(post.createdAt)
-    }));
+    // Convert date strings to Date objects and sort by date (newest first)
+    return posts
+      .map((post: any) => ({
+        ...post,
+        createdAt: new Date(post.createdAt)
+      }))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort descending by date
   }
 
   static getPostById(id: string): Post | undefined {
@@ -149,14 +156,26 @@ export class PostService {
     };
   }
 
-  static likePost(id: string): void {
+  static likePost(id: string): Post | undefined {
     const posts = PostService.getPostsFromStorage();
-    const updatedPosts = posts.map(post => 
-      post.id === id ? { ...post, likes: post.likes + 1 } : post
-    );
+    let updatedPost: any = undefined;
+    
+    const updatedPosts = posts.map(post => {
+      if (post.id === id) {
+        updatedPost = { ...post, likes: post.likes + 1 };
+        return updatedPost;
+      }
+      return post;
+    });
     
     // Save back to localStorage
     PostService.savePostsToStorage(updatedPosts);
+    
+    // Return the updated post with proper Date object, or undefined if not found
+    return updatedPost ? {
+      ...updatedPost,
+      createdAt: new Date(updatedPost.createdAt)
+    } : undefined;
   }
 
   static addComment(postId: string, text: string, postedBy: string): void {

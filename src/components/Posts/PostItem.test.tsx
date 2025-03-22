@@ -11,7 +11,9 @@ export default describe('PostItem', () => {
     content: 'Test post content',
     author: 'Test Author',
     createdAt: new Date('2023-05-15'),
-    likes: 5
+    likes: 5,
+    category: 'Internships',
+    tags: ['internship', 'opportunity']
   };
   
   const mockOnLike = vi.fn();
@@ -40,6 +42,17 @@ export default describe('PostItem', () => {
     expect(screen.getByText(formattedDate)).toBeInTheDocument();
   });
   
+  it('displays category and tags correctly', () => {
+    render(<PostItem post={mockPost} onLike={mockOnLike} />);
+    
+    // Check for category
+    expect(screen.getByText('Internships')).toBeInTheDocument();
+    
+    // Check for tags
+    expect(screen.getByText('internship')).toBeInTheDocument();
+    expect(screen.getByText('opportunity')).toBeInTheDocument();
+  });
+  
   it('calls onLike when the like button is clicked', () => {
     render(<PostItem post={mockPost} onLike={mockOnLike} />);
     
@@ -51,5 +64,32 @@ export default describe('PostItem', () => {
     
     expect(mockOnLike).toHaveBeenCalledTimes(1);
     expect(mockOnLike).toHaveBeenCalledWith('1');
+  });
+
+  it('displays multiple tags correctly', () => {
+    const postWithMultipleTags = {
+      ...mockPost,
+      tags: ['javascript', 'react', 'testing']
+    };
+    
+    render(<PostItem post={postWithMultipleTags} onLike={mockOnLike} />);
+    
+    // Check for all tags
+    expect(screen.getByText('javascript')).toBeInTheDocument();
+    expect(screen.getByText('react')).toBeInTheDocument();
+    expect(screen.getByText('testing')).toBeInTheDocument();
+  });
+  
+  it('handles missing tags gracefully', () => {
+    const postWithoutTags = {
+      ...mockPost,
+      tags: undefined
+    };
+    
+    // This should render without errors
+    render(<PostItem post={postWithoutTags} onLike={mockOnLike} />);
+    
+    // Should still render the post content
+    expect(screen.getByText('Test Post Title')).toBeInTheDocument();
   });
 });

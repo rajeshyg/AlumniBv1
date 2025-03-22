@@ -82,7 +82,7 @@ export default function Posts() {
             title="Reset to original posts from JSON"
           >
             <RefreshCw className="w-4 h-4" />
-            <span>Reset Posts from JSON</span>
+            <span> </span>
           </button>
           <button 
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md"
@@ -112,6 +112,7 @@ export default function Posts() {
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="px-3 py-2 border border-border/40 bg-background rounded-md"
+            aria-label="Category:"
           >
             <option value="">All Categories</option>
             {categories.map(cat => (

@@ -13,7 +13,9 @@ vi.mock('../../services/PostService', () => {
       author: 'Author 1',
       createdAt: new Date('2023-01-15'),
       likes: 5,
-      comments: []
+      comments: [],
+      category: 'Internships',
+      tags: ['internship', 'opportunity']
     },
     {
       id: '2',
@@ -22,7 +24,9 @@ vi.mock('../../services/PostService', () => {
       author: 'Author 2',
       createdAt: new Date('2023-02-20'),
       likes: 10,
-      comments: []
+      comments: [],
+      category: 'Scholarships',
+      tags: ['scholarship', 'financial-aid']
     }
   ];
   
@@ -141,5 +145,21 @@ export default describe('PostsPage', () => {
     expect(PostService.likePost).toHaveBeenCalledTimes(1);
     expect(PostService.likePost).toHaveBeenCalledWith('1');
     expect(PostService.getAllPosts).toHaveBeenCalledTimes(2); // Initial + after liking
+  });
+
+  it('filters posts by category', () => {
+    render(<PostsPage />);
+    
+    // Initially both posts should be displayed
+    expect(screen.getByText('Test Post 1')).toBeInTheDocument();
+    expect(screen.getByText('Test Post 2')).toBeInTheDocument();
+    
+    // Find category selector by test ID instead of label
+    const categorySelector = screen.getByTestId('category-select');
+    fireEvent.change(categorySelector, { target: { value: 'Internships' } });
+    
+    // Now only the first post should be visible
+    expect(screen.getByText('Test Post 1')).toBeInTheDocument();
+    expect(screen.queryByText('Test Post 2')).not.toBeInTheDocument();
   });
 });

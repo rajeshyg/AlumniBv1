@@ -24,8 +24,8 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
   const [tags, setTags] = useState<string[]>([]);
   const [category, setCategory] = useState('');
 
-  // Predefined categories matching the JSON data
-  const categories = ['Internship', 'Graduate Program', 'Open House', 'Scholarship', 'General'];
+  // Predefined categories matching the updated categories
+  const categories = ['Internships', 'Admissions', 'Scholarships', 'General'];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,10 +111,11 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
       </div>
       
       <div>
-        <label className="block text-sm font-medium mb-1">
+        <label htmlFor="content" className="block text-sm font-medium mb-1">
           Content
         </label>
         <RichTextEditor 
+          id="content"
           value={content} 
           onChange={setContent} 
           placeholder="Write your post content here..."

@@ -19,7 +19,8 @@
               "Posted by": "Alumni_Naga"
             }
           ],
-          "Category": "Internship"
+          "category": "Internships",
+          "tags": ["Yale", "Summer", "Internship", "USA"]
         }
       },
       {
@@ -41,7 +42,8 @@
               "Posted by": "Student_Inga"
             }
           ],
-          "Category": "Internship"
+          "category": "Internships",
+          "tags": ["CSIS", "Internships", "USA", "Paid"]
         }
       },
       {
@@ -63,7 +65,8 @@
               "Posted by": "Student_Anita"
             }
           ],
-          "Category": "Internship"
+          "category": "Internships",
+          "tags": ["WISE", "Summer", "Internships", "Engineering"]
         }
       },
       {
@@ -85,7 +88,8 @@
               "Posted by": "Student_Fatima"
             }
           ],
-          "Category": "Graduate Program"
+          "category": "Admissions",
+          "tags": ["North South University", "MS", "CSE", "Spring", "Admission"]
         }
       },
       {
@@ -107,7 +111,8 @@
               "Posted by": "Student_Maria"
             }
           ],
-          "Category": "Open House"
+          "category": "Admissions",
+          "tags": ["Hudson County", "Open House", "Spring", "College"]
         }
       },
       {
@@ -129,7 +134,8 @@
               "Posted by": "Student_Arif"
             }
           ],
-          "Category": "Graduate Program"
+          "category": "Admissions",
+          "tags": ["North South University", "MPH", "Spring", "Public Health"]
         }
       },
       {
@@ -151,7 +157,8 @@
               "Posted by": "Student_Tanvir"
             }
           ],
-          "Category": "Graduate Program"
+          "category": "Admissions",
+          "tags": ["North South University", "EMPH", "Spring", "Executive"]
         }
       },
       {
@@ -173,7 +180,8 @@
               "Posted by": "Student_Ahmed"
             }
           ],
-          "Category": "Scholarship"
+          "category": "Scholorships",
+          "tags": ["UCSI", "Trust", "Scholarship", "Funding"]
         }
       },
       {
@@ -195,8 +203,9 @@
               "Posted by": "Student_Ravi"
             }
           ],
-          "Category": "Scholarship"
+          "category": "Scholorships",
+          "tags": ["Speakout Media", "Scholarship", "America", "Tulane"]
         }
       }
     ]
-  }
+}

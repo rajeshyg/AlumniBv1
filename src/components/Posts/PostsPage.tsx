@@ -10,6 +10,7 @@ export const PostsPage: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   
   // Function to refresh posts from storage
   const refreshPosts = () => {
@@ -51,6 +52,21 @@ export const PostsPage: React.FC = () => {
     refreshPosts();
   };
 
+  // Get unique categories from posts
+  const categories = ['All', ...new Set(posts.map(post => post.category).filter(Boolean))];
+
+  // Filter posts based on search term and category
+  const filteredPosts = posts.filter(post => {
+    const matchesSearch = 
+      post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      post.author.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCategory = !categoryFilter || categoryFilter === 'All' || post.category === categoryFilter;
+    
+    return matchesSearch && matchesCategory;
+  });
+
   return (
     <div className="posts-page">
       <h1>Community Posts</h1>
@@ -63,6 +79,20 @@ export const PostsPage: React.FC = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           className="mr-2 px-3 py-2 border rounded-md"
         />
+        
+        {/* Add category filter */}
+        <select
+          data-testid="category-select"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="mr-2 px-3 py-2 border rounded-md"
+        >
+          <option value="">All Categories</option>
+          {categories.map(cat => (
+            cat && <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+        
         <button
           onClick={handleReset}
           className="px-3 py-2 bg-red-500 text-white rounded-md mr-2"
@@ -89,24 +119,18 @@ export const PostsPage: React.FC = () => {
       
       <div className="posts-list">
         <h2>Recent Posts</h2>
-        {posts.length === 0 ? (
+        {filteredPosts.length === 0 ? (
           <p>No posts yet. Be the first to post!</p>
         ) : (
-          posts
-            .filter(post => 
-              post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              post.author.toLowerCase().includes(searchTerm.toLowerCase())
-            )
-            .map(post => (
-              <div key={post.id} className="mb-4 p-4 border rounded-lg">
-                <PostItem 
-                  post={post} 
-                  onLike={handleLikePost}
-                  onComment={handleAddComment}
-                />
-              </div>
-            ))
+          filteredPosts.map(post => (
+            <div key={post.id} className="mb-4 p-4 border rounded-lg">
+              <PostItem 
+                post={post} 
+                onLike={handleLikePost}
+                onComment={handleAddComment}
+              />
+            </div>
+          ))
         )}
       </div>
     </div>

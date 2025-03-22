@@ -4,8 +4,9 @@ import { PostForm } from './PostForm';
 
 // Mock the RichTextEditor and ImageUploader components
 vi.mock('./RichTextEditor', () => ({
-  RichTextEditor: ({ value, onChange, placeholder }: any) => (
+  RichTextEditor: ({ id, value, onChange, placeholder }: any) => (
     <textarea 
+      id={id}
       data-testid="rich-text-editor"
       value={value} 
       onChange={(e) => onChange(e.target.value)}
@@ -59,26 +60,18 @@ export default describe('PostForm', () => {
   it('submits form with entered data', () => {
     render(<PostForm onSubmit={mockSubmit} />);
     
-    // Fill in form fields
-    fireEvent.change(screen.getByLabelText(/title/i), { 
-      target: { value: 'Test Title' } 
-    });
+    // Fill out the form
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Test Title' } });
+    fireEvent.change(screen.getByLabelText(/author/i), { target: { value: 'Test Author' } });
     
-    fireEvent.change(screen.getByLabelText(/author/i), {
-      target: { value: 'Test Author' }
-    });
+    // Use getByTestId instead of getByLabelText for content
+    fireEvent.change(screen.getByTestId('rich-text-editor'), { target: { value: 'Test content' } });
     
-    fireEvent.change(screen.getByTestId('rich-text-editor'), {
-      target: { value: 'Test content' }
-    });
-    
-    // Select a category
-    fireEvent.change(screen.getByLabelText(/category/i), {
-      target: { value: 'Internship' }
-    });
+    // Select a category if needed
+    fireEvent.change(screen.getByLabelText(/category/i), { target: { value: 'Internships' } });
     
     // Submit the form
-    fireEvent.click(screen.getByRole('button', { name: /create post/i }));
+    fireEvent.click(screen.getByText(/create post/i));
     
     // Check if onSubmit was called with correct data
     expect(mockSubmit).toHaveBeenCalledTimes(1);
@@ -86,9 +79,9 @@ export default describe('PostForm', () => {
       title: 'Test Title',
       author: 'Test Author',
       content: 'Test content',
-      category: 'Internship',
-      tags: [],
-      images: []
+      category: 'Internships',
+      images: undefined,
+      tags: undefined
     });
   });
   
