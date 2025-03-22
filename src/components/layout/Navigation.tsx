@@ -1,11 +1,12 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, User, Settings } from 'lucide-react';
+import { Home, User, Settings, FileText } from 'lucide-react';
 import { useThemeStore } from '../../store/theme';
 import { cn } from '../../lib/utils';
 
 const navItems = [
   { to: '/home', icon: Home, label: 'Home' },
+  { to: '/posts', icon: FileText, label: 'Posts' },
   { to: '/profile', icon: User, label: 'Profile' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

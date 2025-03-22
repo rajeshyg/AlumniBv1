@@ -4,6 +4,7 @@ import { AppLayout } from '../components/layout/AppLayout';
 
 // Lazy-loaded route components
 const Home = lazy(() => import('../pages/Home'));
+const Posts = lazy(() => import('../pages/Posts'));
 const Profile = lazy(() => import('../pages/Profile'));
 const Settings = lazy(() => import('../pages/Settings'));
 const NotFound = lazy(() => import('../pages/NotFound'));
@@ -20,6 +21,10 @@ export const router = createBrowserRouter([
       {
         path: 'home',
         element: <Home />,
+      },
+      {
+        path: 'posts',
+        element: <Posts />,
       },
       {
         path: 'profile',
