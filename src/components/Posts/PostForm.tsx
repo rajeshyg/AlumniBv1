@@ -94,23 +94,6 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
       </div>
       
       <div>
-        <label htmlFor="category" className="block text-sm font-medium mb-1">
-          Category
-        </label>
-        <select
-          id="category"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="w-full px-3 py-2 border border-border/40 bg-background rounded-md"
-        >
-          <option value="">Select a category</option>
-          {categories.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-      </div>
-      
-      <div>
         <label htmlFor="content" className="block text-sm font-medium mb-1">
           Content
         </label>
@@ -120,6 +103,24 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
           onChange={setContent} 
           placeholder="Write your post content here..."
         />
+      </div>
+      
+      <div>
+        <label htmlFor="category" className="block text-sm font-medium mb-1">
+          Category
+        </label>
+        <select
+          id="category"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="w-full px-3 py-2 border border-border/40 bg-background rounded-md"
+          aria-label="Category"
+        >
+          <option value="">Select a category</option>
+          {categories.map(cat => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
       </div>
       
       <div>

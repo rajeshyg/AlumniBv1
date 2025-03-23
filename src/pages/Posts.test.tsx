@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { PostsPage } from './PostsPage';
-import { PostService } from '../../services/PostService';
+import Posts from './Posts';
+import { PostService } from '../services/PostService';
 
 // Mock the PostService
-vi.mock('../../services/PostService', () => {
+vi.mock('../services/PostService', () => {
   const mockPosts = [
     {
       id: '1',
@@ -52,13 +52,14 @@ vi.mock('../../services/PostService', () => {
         }
         return undefined;
       }),
-      resetStorage: vi.fn()
+      resetStorage: vi.fn(),
+      addComment: vi.fn()
     }
   };
 });
 
 // Mock the PostForm and PostItem components
-vi.mock('./PostForm', () => ({
+vi.mock('../components/Posts/PostForm', () => ({
   PostForm: ({ onSubmit, onCancel }: any) => (
     <div data-testid="post-form">
       <button 
@@ -75,7 +76,7 @@ vi.mock('./PostForm', () => ({
   )
 }));
 
-vi.mock('./PostItem', () => ({
+vi.mock('../components/Posts/PostItem', () => ({
   PostItem: ({ post, onLike, onComment }: any) => (
     <div data-testid={`post-item-${post.id}`}>
       <div>{post.title || 'Untitled'}</div>
@@ -93,14 +94,31 @@ vi.mock('./PostItem', () => ({
   )
 }));
 
-// Export the test suite
-export default describe('PostsPage', () => {
+// Mock the TabNavigation component
+vi.mock('../components/shared/TabNavigation', () => ({
+  TabNavigation: ({ tabs, activeTab, onTabChange }: any) => (
+    <div data-testid="tab-navigation">
+      {tabs.map((tab: any) => (
+        <button
+          key={tab.id}
+          data-testid={`tab-${tab.id}`}
+          data-active={activeTab === tab.id}
+          onClick={() => onTabChange(tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}));
+
+describe('Posts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
   
   it('renders the page with posts list', () => {
-    render(<PostsPage />);
+    render(<Posts />);
     
     expect(screen.getByText('Community Posts')).toBeInTheDocument();
     expect(screen.getByText('Recent Posts')).toBeInTheDocument();
@@ -108,7 +126,7 @@ export default describe('PostsPage', () => {
   });
   
   it('displays posts from PostService', () => {
-    render(<PostsPage />);
+    render(<Posts />);
     
     // Check if posts are displayed
     expect(screen.getByText('Test Post 1')).toBeInTheDocument();
@@ -118,7 +136,7 @@ export default describe('PostsPage', () => {
   });
   
   it('creates a new post when form is submitted', () => {
-    render(<PostsPage />);
+    render(<Posts />);
     
     // First click the New Post button to show the form
     fireEvent.click(screen.getByText('New Post'));
@@ -136,7 +154,7 @@ export default describe('PostsPage', () => {
   });
   
   it('likes a post when like button is clicked', () => {
-    render(<PostsPage />);
+    render(<Posts />);
     
     // Find like buttons in our mocked PostItems
     const likeButtons = screen.getAllByText(/Like \(\d+\)/i);
@@ -146,19 +164,31 @@ export default describe('PostsPage', () => {
     expect(PostService.likePost).toHaveBeenCalledWith('1');
     expect(PostService.getAllPosts).toHaveBeenCalledTimes(2); // Initial + after liking
   });
-
-  it('filters posts by category', () => {
-    render(<PostsPage />);
+  
+  it('filters posts by tab category', () => {
+    render(<Posts />);
     
     // Initially both posts should be displayed
     expect(screen.getByText('Test Post 1')).toBeInTheDocument();
     expect(screen.getByText('Test Post 2')).toBeInTheDocument();
     
-    // Find category selector by test ID instead of label
-    const categorySelector = screen.getByTestId('category-select');
-    fireEvent.change(categorySelector, { target: { value: 'Internships' } });
+    // Get the Internships tab and click it
+    const internshipsTab = screen.getByTestId('tab-Internships');
+    fireEvent.click(internshipsTab);
     
     // Now only the first post should be visible
+    expect(screen.getByText('Test Post 1')).toBeInTheDocument();
+    expect(screen.queryByText('Test Post 2')).not.toBeInTheDocument();
+  });
+  
+  it('filters posts by search query', () => {
+    render(<Posts />);
+    
+    // Type in the search input
+    const searchInput = screen.getByPlaceholderText('Search posts...');
+    fireEvent.change(searchInput, { target: { value: 'opportunity' } });
+    
+    // Only posts with "opportunity" should be visible
     expect(screen.getByText('Test Post 1')).toBeInTheDocument();
     expect(screen.queryByText('Test Post 2')).not.toBeInTheDocument();
   });
