@@ -1,28 +1,11 @@
 import { User } from '../models/User';
 
-export interface IUserService {
-  loadUsers(): Promise<User[]>;
-  findUsersByEmail(email: string): Promise<User[]>;
-  findUserById(studentId: string): Promise<User | null>;
-  login(email: string, password: string): Promise<{
-    success: boolean;
-    users?: User[];
-    message?: string;
-  }>;
-  selectUserProfile(user: User): void;
-  setCurrentUser(user: User): void;
-  getCurrentUser(): Promise<User | null>;
-  isAuthenticated(): boolean;
-  logout(): void;
-  switchProfile(options: { keepEmail?: boolean; redirectToLogin?: boolean }): void;
-}
-
-export class UserService implements IUserService {
-  private users: User[] = [];
-  private readonly STORAGE_KEY = 'auth_user';
+export class UserService {
+  private static users: User[] = [];
+  private static readonly STORAGE_KEY = 'auth_user';
   
   // Parse CSV data into User objects
-  private parseCSV(csvData: string): User[] {
+  static parseCSV(csvData: string): User[] {
     try {
       // Simplify the parsing to debug the issue
       const lines = csvData.split('\n');
@@ -95,7 +78,7 @@ export class UserService implements IUserService {
   }
   
   // Load users from CSV
-  async loadUsers(): Promise<User[]> {
+  static async loadUsers(): Promise<User[]> {
     try {
       const response = await fetch('/data/users.csv');
       
@@ -115,7 +98,7 @@ export class UserService implements IUserService {
   }
   
   // Find users by email
-  async findUsersByEmail(email: string): Promise<User[]> {
+  static async findUsersByEmail(email: string): Promise<User[]> {
     if (this.users.length === 0) {
       await this.loadUsers();
     }
@@ -130,7 +113,7 @@ export class UserService implements IUserService {
   }
   
   // Find user by ID
-  async findUserById(studentId: string): Promise<User | null> {
+  static async findUserById(studentId: string): Promise<User | null> {
     if (this.users.length === 0) {
       await this.loadUsers();
     }
@@ -139,7 +122,7 @@ export class UserService implements IUserService {
   }
   
   // Login with email
-  async login(email: string, password: string): Promise<{
+  static async login(email: string, password: string): Promise<{
     success: boolean;
     users?: User[];
     message?: string;
@@ -176,44 +159,28 @@ export class UserService implements IUserService {
   }
   
   // Select a specific user profile (when multiple profiles share an email)
-  selectUserProfile(user: User): void {
+  static selectUserProfile(user: User): void {
     this.setCurrentUser(user);
   }
   
   // Set current user in localStorage
-  setCurrentUser(user: User): void {
+  static setCurrentUser(user: User): void {
     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(user));
   }
   
   // Get current user from localStorage
-  async getCurrentUser(): Promise<User | null> {
+  static getCurrentUser(): User | null {
     const userJson = localStorage.getItem(this.STORAGE_KEY);
     return userJson ? JSON.parse(userJson) : null;
   }
   
   // Check if user is authenticated
-  isAuthenticated(): boolean {
+  static isAuthenticated(): boolean {
     return !!this.getCurrentUser();
   }
   
   // Logout user
-  logout(): void {
+  static logout(): void {
     localStorage.removeItem(this.STORAGE_KEY);
-  }
-
-  // Switch Profile
-  switchProfile(options: { keepEmail?: boolean; redirectToLogin?: boolean }): void {
-    localStorage.removeItem(this.STORAGE_KEY);
-    if (options.keepEmail) {
-      // Implement logic to keep the email if needed
-      // For now, just navigate to login
-      if (options.redirectToLogin) {
-        //window.location.href = '/login'; // handled by component
-      }
-    } else {
-      if (options.redirectToLogin) {
-        //window.location.href = '/login'; // handled by component
-      }
-    }
   }
 }

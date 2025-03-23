@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { User } from '../../models/User';
 import { useAuth } from '../../context/AuthContext';
 
 export const LoginForm: React.FC = () => {
+  const location = useLocation();
   const { login, selectProfile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('test'); // Default password for demo
@@ -10,6 +12,25 @@ export const LoginForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [userOptions, setUserOptions] = useState<User[]>([]);
   const [showOptions, setShowOptions] = useState(false);
+
+  // Handle direct profile selection mode
+  useEffect(() => {
+    const state = location.state as { switchProfile?: boolean; profiles?: User[] };
+    if (state?.switchProfile && state.profiles) {
+      setUserOptions(state.profiles);
+      setShowOptions(true);
+    }
+  }, [location.state]);
+
+  // Set email if switching profiles
+  useEffect(() => {
+    const state = location.state as { switchProfile?: boolean; email?: string };
+    if (state?.switchProfile && state.email) {
+      setEmail(state.email);
+      // Automatically trigger login with stored email
+      handleSubmit(new Event('submit') as any);
+    }
+  }, [location.state]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

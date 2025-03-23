@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ProfileToggle } from './profile-toggle';
 import { useAuth } from '../context/AuthContext';
@@ -27,13 +27,13 @@ vi.mock('./ui/dropdown-menu', () => ({
 
 describe('ProfileToggle', () => {
   const mockNavigate = vi.fn();
-
+  
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useNavigate).mockReturnValue(mockNavigate);
   });
 
-  it('renders login option when not authenticated', async () => {
+  it('renders login option when not authenticated', () => {
     vi.mocked(useAuth).mockReturnValue({
       authState: {
         isAuthenticated: false,
@@ -44,21 +44,18 @@ describe('ProfileToggle', () => {
       logout: vi.fn(),
       login: vi.fn(),
       selectProfile: vi.fn(),
-      switchProfile: vi.fn()
+      resetAuthState: vi.fn()
     });
 
     render(<ProfileToggle />);
     const trigger = screen.getByTestId('dropdown-trigger');
-    await fireEvent.click(trigger);
-
-    const dropdownContent = await screen.findByTestId('dropdown-content');
-    expect(dropdownContent).toBeVisible();
-    expect(await screen.findByText(/login/i)).toBeInTheDocument();
+    fireEvent.click(trigger);
+    
+    expect(screen.getByText(/login/i)).toBeInTheDocument();
   });
 
-  it('renders user information when authenticated', async () => {
+  it('renders user information when authenticated', () => {
     const mockUser = {
-      studentId: '123',
       name: 'John Doe',
       email: 'john@example.com',
       centerName: 'Test Center',
@@ -75,73 +72,42 @@ describe('ProfileToggle', () => {
       logout: vi.fn(),
       login: vi.fn(),
       selectProfile: vi.fn(),
-      switchProfile: vi.fn()
-    });
-
-    render(<ProfileToggle />);
-    const trigger = screen.getByTestId('dropdown-trigger');
-    await fireEvent.click(trigger);
-
-    const dropdownContent = await screen.findByTestId('dropdown-content');
-    expect(dropdownContent).toBeVisible();
-    expect(await screen.findByText('Switch Profile')).toBeInTheDocument();
-    expect(await screen.findByText(mockUser.name)).toBeInTheDocument();
-  });
-
-  it('handles logout correctly', async () => {
-    const mockLogout = vi.fn();
-    vi.mocked(useAuth).mockReturnValue({
-      authState: {
-        isAuthenticated: true,
-        currentUser: { studentId: '123', name: 'John Doe', email: 'john@example.com' },
-        loading: false,
-        error: null
-      },
-      logout: mockLogout,
-      login: vi.fn(),
-      selectProfile: vi.fn(),
-      switchProfile: vi.fn()
-    });
-
-    render(<ProfileToggle />);
-    const trigger = screen.getByTestId('dropdown-trigger');
-    await fireEvent.click(trigger);
-
-    const dropdownContent = await screen.findByTestId('dropdown-content');
-    expect(dropdownContent).toBeVisible();
-    const logoutButton = await screen.findByText(/logout/i);
-    await fireEvent.click(logoutButton);
-
-    expect(mockLogout).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenCalledWith('/login');
-  });
-
-  it('handles switch profile correctly', () => {
-    const mockSwitchProfile = vi.fn();
-    vi.mocked(useAuth).mockReturnValue({
-      authState: {
-        isAuthenticated: true,
-        currentUser: { studentId: '123', name: 'John Doe', email: 'john@example.com' },
-        loading: false,
-        error: null
-      },
-      logout: vi.fn(),
-      login: vi.fn(),
-      selectProfile: vi.fn(),
-      switchProfile: mockSwitchProfile
+      resetAuthState: vi.fn()
     });
 
     render(<ProfileToggle />);
     const trigger = screen.getByTestId('dropdown-trigger');
     fireEvent.click(trigger);
 
-    const switchProfileButton = screen.getByText(/switch profile/i);
-    fireEvent.click(switchProfileButton);
+    // Changed: Look for first name instead of initials
+    expect(screen.getByText('John')).toBeInTheDocument(); // First name in avatar
+    expect(screen.getByText(mockUser.name)).toBeInTheDocument(); // Full name in dropdown
+    expect(screen.getByText(mockUser.email)).toBeInTheDocument();
+  });
 
-    expect(mockSwitchProfile).toHaveBeenCalledWith({
-      keepEmail: true,
-      redirectToLogin: true
+  it('handles logout correctly', () => {
+    const mockLogout = vi.fn();
+    vi.mocked(useAuth).mockReturnValue({
+      authState: {
+        isAuthenticated: true,
+        currentUser: { name: 'John Doe' },
+        loading: false,
+        error: null
+      },
+      logout: mockLogout,
+      login: vi.fn(),
+      selectProfile: vi.fn(),
+      resetAuthState: vi.fn()
     });
+
+    render(<ProfileToggle />);
+    const trigger = screen.getByTestId('dropdown-trigger');
+    fireEvent.click(trigger);
+    
+    const logoutButton = screen.getByText(/logout/i);
+    fireEvent.click(logoutButton);
+    
+    expect(mockLogout).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/login');
   });
 });

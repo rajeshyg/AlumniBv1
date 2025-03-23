@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthState } from '../models/User';
-import { IUserService, UserService } from '../services/UserService';
+import { UserService } from '../services/UserService';
 
 // Default auth state
 const defaultAuthState: AuthState = {
@@ -20,41 +20,37 @@ const AuthContext = createContext<{
   }>;
   selectProfile: (user: User) => void;
   logout: () => void;
-  switchProfile: (options: { keepEmail?: boolean; redirectToLogin?: boolean }) => void;
 }>({
   authState: defaultAuthState,
   login: async () => ({ success: false }),
   selectProfile: () => {},
-  logout: () => {},
-  switchProfile: () => {}
+  logout: () => {}
 });
 
 // Auth provider component
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [authState, setAuthState] = useState<AuthState>(defaultAuthState);
-  const userService: IUserService = new UserService();
 
   // Check for existing session on mount
   useEffect(() => {
-    console.log("AuthContext useEffect: Checking for existing session"); // ADD LOG
-    const currentUser = userService.getCurrentUser();
-    console.log("AuthContext useEffect: Current user from service:", currentUser); // ADD LOG
+    const currentUser = UserService.getCurrentUser();
     setAuthState({
-      ...authState,
-      loading: true
+      isAuthenticated: !!currentUser,
+      currentUser,
+      loading: false,
+      error: null
     });
-    console.log("AuthContext useEffect: setAuthState to loading: true"); // ADD LOG
     
-    userService.getCurrentUser()
-      .then((currentUser) => setAuthState(prev => ({ ...prev, currentUser: currentUser || null, isAuthenticated: !!currentUser, loading: false }))).catch(() => setAuthState(prev => ({ ...prev, isAuthenticated: false, currentUser: null, loading: false })));
-  }, [userService]);
+    // Preload users data
+    UserService.loadUsers();
+  }, []);
 
+  // Login function
   const login = async (email: string, password: string) => {
-    console.log("AuthContext login: Start", { email }); // ADD LOG
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      const result = await userService.login(email, password);
+      const result = await UserService.login(email, password);
       
       if (result.success && result.users?.length === 1) {
         // Single user found - auto login
@@ -89,7 +85,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Select profile function (for multi-profile emails)
   const selectProfile = (user: User) => {
-    userService.selectUserProfile(user);
+    UserService.selectUserProfile(user);
     setAuthState({
       isAuthenticated: true,
       currentUser: user,
@@ -100,10 +96,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Logout function
   const logout = () => {
-    console.log("AuthContext logout: Start"); // ADD LOG
     console.log("Logging out user...");
     // First clear the user from storage
-    userService.logout();
+    UserService.logout();
     
     // Then update auth state to reflect logged out status
     setAuthState({
@@ -113,23 +108,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       error: null
     });
     
-    console.log("AuthContext logout: User logged out successfully"); // ADD LOG
-  };
-
-  const switchProfile = (options: { keepEmail?: boolean; redirectToLogin?: boolean }) => {
-    userService.switchProfile(options);
-    setAuthState(prev => ({ ...prev, loading: true, error: null }));
-    
-    setAuthState({
-      isAuthenticated: false,
-      currentUser: null,
-      loading: false,
-      error: null
-    });
+    console.log("User logged out successfully");
   };
 
   return (
-    <AuthContext.Provider value={{ authState, login, selectProfile, logout, switchProfile }}>
+    <AuthContext.Provider value={{ authState, login, selectProfile, logout }}>
       {children}
     </AuthContext.Provider>
   );
