@@ -8,16 +8,22 @@ const Posts = lazy(() => import('../pages/Posts'));
 const Profile = lazy(() => import('../pages/Profile'));
 const Settings = lazy(() => import('../pages/Settings'));
 const NotFound = lazy(() => import('../pages/NotFound'));
+const Login = lazy(() => import('../pages/Login')); // Add Login page
 
 export const router = createBrowserRouter([
+  // Root redirect to login
+  {
+    path: '/',
+    element: <Navigate to="/login" replace />,
+  },
+  {
+    path: '/login',
+    element: <Login />,
+  },
   {
     path: '/',
     element: <AppLayout />,
     children: [
-      {
-        index: true,
-        element: <Navigate to="/home" replace />,
-      },
       {
         path: 'home',
         element: <Home />,

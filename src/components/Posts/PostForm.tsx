@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { RichTextEditor } from './RichTextEditor';
 import { ImageUploader } from './ImageUploader';
 import { Tag } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 interface PostFormProps {
   onSubmit: (post: {
     title: string;
     content: string;
     author: string;
+    authorId: string;
     images?: string[];
     tags?: string[];
     category?: string;
@@ -16,9 +18,9 @@ interface PostFormProps {
 }
 
 export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
+  const { authState } = useAuth();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [author, setAuthor] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -29,18 +31,26 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (content.trim() && author.trim() && title.trim()) {
+    
+    if (!authState.currentUser) {
+      console.error('User not authenticated');
+      return;
+    }
+    
+    if (content.trim() && title.trim()) {
       onSubmit({
         title,
         content,
-        author,
+        author: authState.currentUser.name, // Use full name directly
+        authorId: authState.currentUser.studentId,
         images: images.length > 0 ? images : undefined,
         tags: tags.length > 0 ? tags : undefined,
         category: category || 'General'
       });
+      
+      // Reset form
       setTitle('');
       setContent('');
-      setAuthor('');
       setImages([]);
       setTags([]);
       setCategory('');
@@ -74,20 +84,6 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
           id="title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full px-3 py-2 border border-border/40 bg-background rounded-md"
-          required
-        />
-      </div>
-      
-      <div>
-        <label htmlFor="author" className="block text-sm font-medium mb-1">
-          Author
-        </label>
-        <input
-          type="text"
-          id="author"
-          value={author}
-          onChange={(e) => setAuthor(e.target.value)}
           className="w-full px-3 py-2 border border-border/40 bg-background rounded-md"
           required
         />

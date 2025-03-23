@@ -1,15 +1,26 @@
-import React from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Header } from './Header';
 import { Navigation } from './Navigation';
 import { ErrorFallback } from '../shared/ErrorFallback';
 import { useThemeStore } from '../../store/theme';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../context/AuthContext';
 
 export function AppLayout() {
   const { device } = useThemeStore();
+  const { authState } = useAuth();
+  const navigate = useNavigate();
   const isMobile = device === 'mobile';
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authState.isAuthenticated && !authState.loading) {
+      console.log("AppLayout: User not authenticated, redirecting to login");
+      navigate('/login');
+    }
+  }, [authState.isAuthenticated, authState.loading, navigate]);
 
   return (
     <div className={cn(

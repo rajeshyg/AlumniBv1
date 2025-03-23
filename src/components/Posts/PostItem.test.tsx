@@ -1,25 +1,50 @@
-import { describe, it, expect, vi } from 'vitest';
+import React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PostItem } from './PostItem';
 import { Post } from '../../models/Post';
+import { useAuth } from '../../context/AuthContext';
 
-// Export the test suite
-export default describe('PostItem', () => {
+// Mock the auth context
+vi.mock('../../context/AuthContext', () => ({
+  useAuth: vi.fn()
+}));
+
+describe('PostItem', () => {
   const mockPost: Post = {
     id: '1',
     title: 'Test Post Title',
     content: 'Test post content',
     author: 'Test Author',
+    authorId: 'author-123',
     createdAt: new Date('2023-05-15'),
     likes: 5,
+    likedBy: [],
     category: 'Internships',
     tags: ['internship', 'opportunity']
   };
   
   const mockOnLike = vi.fn();
+  const mockOnComment = vi.fn();
+  
+  // Mock user for auth context
+  const mockUser = {
+    studentId: "test-user-id",
+    name: "Test User",
+    email: "test@example.com"
+  };
   
   beforeEach(() => {
-    mockOnLike.mockClear();
+    vi.resetAllMocks();
+    // Setup mock auth context
+    (useAuth as any).mockReturnValue({
+      authState: {
+        currentUser: mockUser,
+        isAuthenticated: true,
+        loading: false,
+        error: null
+      }
+    });
   });
   
   it('renders post content correctly', () => {
@@ -56,14 +81,14 @@ export default describe('PostItem', () => {
   it('calls onLike when the like button is clicked', () => {
     render(<PostItem post={mockPost} onLike={mockOnLike} />);
     
-    // Find like button by role and click it
-    const likeButton = screen.getByRole('button', { 
-      name: /5/i  // Now we use the number as the accessible name
-    });
-    fireEvent.click(likeButton);
+    // Find like button and click it
+    const likeButton = screen.getByText('5').closest('button');
+    expect(likeButton).toBeInTheDocument();
+    
+    fireEvent.click(likeButton!);
     
     expect(mockOnLike).toHaveBeenCalledTimes(1);
-    expect(mockOnLike).toHaveBeenCalledWith('1');
+    expect(mockOnLike).toHaveBeenCalledWith('1', mockUser.studentId);
   });
 
   it('displays multiple tags correctly', () => {

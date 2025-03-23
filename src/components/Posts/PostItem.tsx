@@ -2,20 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { Post } from '../../models/Post';
 import { ThumbsUp, Tag, ChevronDown, ChevronUp, Share2, MessageCircle, Image as ImageIcon } from 'lucide-react';
 import { getCategoryFallbackImage } from '../../lib/imageUtils';
+import { useAuth } from '../../context/AuthContext';
 
 interface PostItemProps {
   post: Post;
-  onLike: (id: string) => void;
-  onComment?: (id: string, text: string, author: string) => void;
+  onLike: (id: string, userId: string) => void;
+  onComment?: (id: string, text: string, user: any) => void;
 }
 
 export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) => {
+  const { authState } = useAuth();
   const [expanded, setExpanded] = useState(false);
-  // Always keep comments minimized by default
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
-  const [commentAuthor, setCommentAuthor] = useState('');
   const [imageError, setImageError] = useState(false);
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  
+  // Determine if current user has liked this post
+  const hasLiked = post.likedBy?.includes(authState.currentUser?.studentId || '');
   
   // Debug log when post is rendered
   useEffect(() => {
@@ -37,12 +41,17 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
     ? post.content 
     : post.content.substring(0, 200) + '...';
 
+  const handleLike = () => {
+    if (authState.currentUser) {
+      onLike(post.id, authState.currentUser.studentId);
+    }
+  };
+
   const handleSubmitComment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (commentText.trim() && commentAuthor.trim() && onComment) {
-      onComment(post.id, commentText, commentAuthor);
+    if (commentText.trim() && onComment && authState.currentUser) {
+      onComment(post.id, commentText, authState.currentUser);
       setCommentText('');
-      setCommentAuthor('');
     }
   };
 
@@ -67,18 +76,49 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
       {/* Show image with error handling */}
       <div className="overflow-hidden">
         {post.image || imageError ? (
-          <img 
-            src={getImageSrc()}
-            alt={post.title} 
-            className="h-40 w-full object-cover rounded-md"
-            onError={handleImageError}
-          />
+          <>
+            <img 
+              src={getImageSrc()}
+              alt={post.title} 
+              className="max-h-60 w-full object-contain rounded-md cursor-pointer"
+              onError={handleImageError}
+              onClick={() => setShowImagePreview(true)}
+            />
+          </>
         ) : (
           <div className="flex items-center justify-center h-40 w-full bg-muted rounded-md">
             <ImageIcon className="h-10 w-10 text-muted-foreground" />
           </div>
         )}
       </div>
+
+      {/* Image Preview Modal */}
+      {showImagePreview && (
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowImagePreview(false)}
+        >
+          <div className="relative max-w-full max-h-full">
+            <button 
+              className="absolute top-2 right-2 bg-white rounded-full p-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowImagePreview(false);
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <img 
+              src={getImageSrc()} 
+              alt={post.title}
+              className="max-w-full max-h-[90vh] object-contain"
+            />
+          </div>
+        </div>
+      )}
 
       <div 
         className={`text-muted-foreground ${expanded ? '' : 'line-clamp-3'}`}
@@ -129,10 +169,10 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
         </div>
         <div className="flex gap-3">
           <button 
-            className="text-sm hover:text-primary flex items-center gap-1"
-            onClick={() => onLike(post.id)}
+            className={`text-sm hover:text-primary flex items-center gap-1 ${hasLiked ? 'text-primary font-medium' : ''}`}
+            onClick={handleLike}
           >
-            <ThumbsUp className={`w-4 h-4 ${post.likes > 0 ? 'text-primary' : ''}`} />
+            <ThumbsUp className={`w-4 h-4 ${hasLiked ? 'text-primary fill-primary' : ''}`} />
             <span>{post.likes}</span>
           </button>
           <button 
@@ -180,19 +220,9 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
             )}
           </div>
           
-          {/* Add comment form */}
-          {onComment && (
-            <form onSubmit={handleSubmitComment} className="space-y-3">
-              <div>
-                <input
-                  type="text"
-                  placeholder="Your name"
-                  value={commentAuthor}
-                  onChange={(e) => setCommentAuthor(e.target.value)}
-                  className="w-full text-sm px-3 py-2 border border-border/40 bg-background rounded-md"
-                  required
-                />
-              </div>
+          {/* Add comment form - No author field needed */}
+          {onComment && authState.isAuthenticated && (
+            <form onSubmit={handleSubmitComment} className="space-y-3 mt-4">
               <div>
                 <textarea
                   placeholder="Write a comment..."
@@ -207,11 +237,19 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
                 <button 
                   type="submit"
                   className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md"
+                  disabled={!commentText.trim()}
                 >
                   Post comment
                 </button>
               </div>
             </form>
+          )}
+          
+          {/* Show login message if not authenticated */}
+          {showComments && !authState.isAuthenticated && (
+            <div className="mt-4 p-3 bg-muted rounded-md">
+              <p className="text-sm text-center">Please log in to comment</p>
+            </div>
           )}
         </div>
       )}

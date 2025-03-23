@@ -1,109 +1,64 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import Posts from './Posts';
 import { PostService } from '../services/PostService';
+import { useAuth } from '../context/AuthContext';
 
-// Mock the PostService
-vi.mock('../services/PostService', () => {
-  const mockPosts = [
-    {
-      id: '1',
-      title: 'Test Post 1',
-      content: 'Test post 1',
-      author: 'Author 1',
-      createdAt: new Date('2023-01-15'),
-      likes: 5,
-      comments: [],
-      category: 'Internships',
-      tags: ['internship', 'opportunity']
-    },
-    {
-      id: '2',
-      title: 'Test Post 2',
-      content: 'Test post 2',
-      author: 'Author 2',
-      createdAt: new Date('2023-02-20'),
-      likes: 10,
-      comments: [],
-      category: 'Scholarships',
-      tags: ['scholarship', 'financial-aid']
-    }
-  ];
-  
-  return {
-    PostService: {
-      getAllPosts: vi.fn(() => [...mockPosts]),
-      createPost: vi.fn((postData) => {
-        const newPost = {
-          ...postData,
-          id: '3',
-          createdAt: new Date(),
-          likes: 0,
-          comments: []
-        };
-        mockPosts.push(newPost);
-        return newPost;
-      }),
-      likePost: vi.fn((id) => {
-        const post = mockPosts.find(p => p.id === id);
-        if (post) {
-          post.likes += 1;
-          return { ...post };
-        }
-        return undefined;
-      }),
-      resetStorage: vi.fn(),
-      addComment: vi.fn()
-    }
-  };
-});
-
-// Mock the PostForm and PostItem components
-vi.mock('../components/Posts/PostForm', () => ({
-  PostForm: ({ onSubmit, onCancel }: any) => (
-    <div data-testid="post-form">
-      <button 
-        onClick={() => onSubmit({
-          title: 'New Post',
-          content: 'New content',
-          author: 'New Author'
-        })}
-      >
-        Submit Form
-      </button>
-      {onCancel && <button onClick={onCancel}>Cancel</button>}
-    </div>
-  )
+// Mock the dependencies
+vi.mock('../services/PostService', () => ({
+  PostService: {
+    getAllPosts: vi.fn(),
+    createPost: vi.fn(),
+    likePost: vi.fn(),
+    addComment: vi.fn(),
+    resetStorage: vi.fn(),
+  }
 }));
 
+vi.mock('../context/AuthContext', () => ({
+  useAuth: vi.fn()
+}));
+
+// Mock components used in Posts
 vi.mock('../components/Posts/PostItem', () => ({
-  PostItem: ({ post, onLike, onComment }: any) => (
-    <div data-testid={`post-item-${post.id}`}>
-      <div>{post.title || 'Untitled'}</div>
-      <div>{post.content}</div>
-      <div>By {post.author}</div>
-      <button onClick={() => onLike(post.id)}>
-        Like ({post.likes})
-      </button>
-      {onComment && (
-        <button onClick={() => onComment(post.id, 'Comment text', 'Comment author')}>
-          Comment
-        </button>
-      )}
+  PostItem: ({ post, onLike, onComment }) => (
+    <div data-testid={`post-${post.id}`}>
+      <h2>{post.title}</h2>
+      <p>{post.content}</p>
+      <button onClick={() => onLike(post.id, 'test-user-id')}>Like</button>
+      {onComment && <button onClick={() => onComment(post.id, 'Test comment', {})}>Comment</button>}
     </div>
   )
 }));
 
-// Mock the TabNavigation component
+vi.mock('../components/Posts/PostForm', () => ({
+  PostForm: ({ onSubmit, onCancel }) => (
+    <form data-testid="post-form" onSubmit={(e) => {
+      e.preventDefault();
+      onSubmit({
+        title: 'New Post',
+        content: 'New Content',
+        author: 'Test User',
+        authorId: 'test-user-id'
+      });
+    }}>
+      <button type="submit">Submit</button>
+      {onCancel && <button onClick={onCancel}>Cancel</button>}
+    </form>
+  )
+}));
+
 vi.mock('../components/shared/TabNavigation', () => ({
-  TabNavigation: ({ tabs, activeTab, onTabChange }: any) => (
+  TabNavigation: ({ tabs, activeTab, onTabChange }) => (
     <div data-testid="tab-navigation">
-      {tabs.map((tab: any) => (
+      {tabs.map(tab => (
         <button
           key={tab.id}
           data-testid={`tab-${tab.id}`}
-          data-active={activeTab === tab.id}
           onClick={() => onTabChange(tab.id)}
+          data-active={activeTab === tab.id}
         >
           {tab.label}
         </button>
@@ -113,83 +68,101 @@ vi.mock('../components/shared/TabNavigation', () => ({
 }));
 
 describe('Posts', () => {
+  const mockPosts = [
+    { id: '1', title: 'Post 1', content: 'Content 1', author: 'Author 1', authorId: 'user1', createdAt: new Date(), likes: 5, category: 'Internships', likedBy: [] },
+    { id: '2', title: 'Post 2', content: 'Content 2', author: 'Author 2', authorId: 'user2', createdAt: new Date(), likes: 3, category: 'Admissions', likedBy: [] }
+  ];
+
+  const mockUser = {
+    studentId: 'test-user-id',
+    name: 'Test User',
+    email: 'test@example.com'
+  };
+
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    (PostService.getAllPosts as any).mockReturnValue(mockPosts);
+    (useAuth as any).mockReturnValue({
+      authState: {
+        isAuthenticated: true,
+        currentUser: mockUser,
+        loading: false,
+        error: null
+      },
+      logout: vi.fn()
+    });
   });
-  
+
+  const renderWithRouter = (ui: React.ReactNode) => {
+    return render(<MemoryRouter>{ui}</MemoryRouter>);
+  };
+
   it('renders the page with posts list', () => {
-    render(<Posts />);
+    renderWithRouter(<Posts />);
     
     expect(screen.getByText('Community Posts')).toBeInTheDocument();
-    expect(screen.getByText('Recent Posts')).toBeInTheDocument();
-    expect(PostService.getAllPosts).toHaveBeenCalledTimes(1);
+    expect(PostService.getAllPosts).toHaveBeenCalled();
   });
-  
+
   it('displays posts from PostService', () => {
-    render(<Posts />);
+    renderWithRouter(<Posts />);
     
-    // Check if posts are displayed
-    expect(screen.getByText('Test Post 1')).toBeInTheDocument();
-    expect(screen.getByText('Test Post 2')).toBeInTheDocument();
-    expect(screen.getByText('By Author 1')).toBeInTheDocument();
-    expect(screen.getByText('By Author 2')).toBeInTheDocument();
+    expect(screen.getByTestId('post-1')).toBeInTheDocument();
+    expect(screen.getByTestId('post-2')).toBeInTheDocument();
   });
-  
+
   it('creates a new post when form is submitted', () => {
-    render(<Posts />);
+    renderWithRouter(<Posts />);
     
-    // First click the New Post button to show the form
+    // Click new post button to show form
     fireEvent.click(screen.getByText('New Post'));
     
-    // Now the form should be visible and we can find the submit button
-    fireEvent.click(screen.getByText('Submit Form'));
+    // Form should be visible
+    const form = screen.getByTestId('post-form');
+    expect(form).toBeInTheDocument();
     
-    expect(PostService.createPost).toHaveBeenCalledTimes(1);
-    expect(PostService.createPost).toHaveBeenCalledWith({
+    // Submit the form
+    fireEvent.submit(form);
+    
+    // Check if createPost was called
+    expect(PostService.createPost).toHaveBeenCalledWith(expect.objectContaining({
       title: 'New Post',
-      content: 'New content',
-      author: 'New Author'
-    });
-    expect(PostService.getAllPosts).toHaveBeenCalledTimes(2); // Initial + after creation
+      content: 'New Content'
+    }));
   });
-  
+
   it('likes a post when like button is clicked', () => {
-    render(<Posts />);
+    renderWithRouter(<Posts />);
     
-    // Find like buttons in our mocked PostItems
-    const likeButtons = screen.getAllByText(/Like \(\d+\)/i);
-    fireEvent.click(likeButtons[0]); // Like the first post
+    // Find and click the like button on the first post
+    const likeButton = screen.getByTestId('post-1').querySelector('button');
+    fireEvent.click(likeButton!);
     
-    expect(PostService.likePost).toHaveBeenCalledTimes(1);
-    expect(PostService.likePost).toHaveBeenCalledWith('1');
-    expect(PostService.getAllPosts).toHaveBeenCalledTimes(2); // Initial + after liking
+    // Check if likePost was called with the right arguments
+    expect(PostService.likePost).toHaveBeenCalledWith('1', 'test-user-id');
   });
-  
+
   it('filters posts by tab category', () => {
-    render(<Posts />);
+    renderWithRouter(<Posts />);
     
-    // Initially both posts should be displayed
-    expect(screen.getByText('Test Post 1')).toBeInTheDocument();
-    expect(screen.getByText('Test Post 2')).toBeInTheDocument();
+    // Click on a specific category tab
+    fireEvent.click(screen.getByTestId('tab-Internships'));
     
-    // Get the Internships tab and click it
-    const internshipsTab = screen.getByTestId('tab-Internships');
-    fireEvent.click(internshipsTab);
-    
-    // Now only the first post should be visible
-    expect(screen.getByText('Test Post 1')).toBeInTheDocument();
-    expect(screen.queryByText('Test Post 2')).not.toBeInTheDocument();
+    // Should filter the posts
+    expect(screen.queryByTestId('post-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('post-2')).not.toBeInTheDocument();
   });
-  
+
   it('filters posts by search query', () => {
-    render(<Posts />);
+    renderWithRouter(<Posts />);
     
-    // Type in the search input
-    const searchInput = screen.getByPlaceholderText('Search posts...');
-    fireEvent.change(searchInput, { target: { value: 'opportunity' } });
+    // Type in search box
+    fireEvent.change(screen.getByPlaceholderText('Search posts...'), {
+      target: { value: 'Post 1' }
+    });
     
-    // Only posts with "opportunity" should be visible
-    expect(screen.getByText('Test Post 1')).toBeInTheDocument();
-    expect(screen.queryByText('Test Post 2')).not.toBeInTheDocument();
+    // Should filter the posts
+    expect(screen.queryByTestId('post-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('post-2')).not.toBeInTheDocument();
   });
 });

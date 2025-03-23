@@ -1,211 +1,211 @@
 {
-    "Posts": [
-      {
-        "Post 1": {
-          "ID": "post-001",
-          "Title": "Yale University Summer Internship 2025",
-          "Content": "Exciting opportunity! Apply for the Yale University Summer Internship 2025 in Senator Warnock’s Office. Study in the USA and gain valuable experience. Visit www.scholarshipsads.com for more details!",
-          "Image": "Internship_1.png",
-          "Author": "Admin_ScholarshipTeam",
-          "createdAt": "2025-03-20T10:00:00Z",
-          "Likes": 25,
-          "Comments": [
-            {
-              "Text": "This looks amazing! Does anyone know the eligibility criteria?",
-              "Posted by": "Student_Harsha"
-            },
-            {
-              "Text": "I applied last year and it was a life-changing experience! Highly recommend.",
-              "Posted by": "Alumni_Naga"
-            }
-          ],
-          "category": "Internships",
-          "tags": ["Yale", "Summer", "Internship", "USA"]
-        }
-      },
-      {
-        "Post 2": {
-          "ID": "post-002",
-          "Title": "CSIS Internships 2025 in USA",
-          "Content": "Don’t miss out on the CSIS Internships 2025 in USA! These are paid opportunities open to students from different countries. Deadlines vary, so check out www.opportunitiescircle.com to apply now!",
-          "Image": "Internship_2.png",
-          "Author": "Admin_OpportunitiesCircle",
-          "createdAt": "2025-03-20T12:30:00Z",
-          "Likes": 18,
-          "Comments": [
-            {
-              "Text": "Are these internships remote or in-person?",
-              "Posted by": "Student_Shruti"
-            },
-            {
-              "Text": "Thanks for sharing! I’m definitely applying for this.",
-              "Posted by": "Student_Inga"
-            }
-          ],
-          "category": "Internships",
-          "tags": ["CSIS", "Internships", "USA", "Paid"]
-        }
-      },
-      {
-        "Post 3": {
-          "ID": "post-003",
-          "Title": "WISE Summer 2025 Internships",
-          "Content": "Attention engineering students! The WISE Summer 2025 Internships application deadline is 1 February 2025. Ranked one of the best in the U.S. by The Princeton Review. Apply at wise-intern.org!",
-          "Image": "Internship_3.jpg",
-          "Author": "Admin_WISETeam",
-          "createdAt": "2025-03-20T15:00:00Z",
-          "Likes": 30,
-          "Comments": [
-            {
-              "Text": "This is perfect for engineering students! Any tips for the application?",
-              "Posted by": "Student_Kiran"
-            },
-            {
-              "Text": "I heard their program is top-notch. Excited to apply!",
-              "Posted by": "Student_Anita"
-            }
-          ],
-          "category": "Internships",
-          "tags": ["WISE", "Summer", "Internships", "Engineering"]
-        }
-      },
-      {
-        "Post 4": {
-          "ID": "post-004",
-          "Title": "North South University MS in CSE Spring 2025",
-          "Content": "Pursue your Master of Science in Computer Science and Engineering at North South University! Apply for Spring 2025 by 27 November 2024. Admission test on 29 November 2024. Visit www.northsouth.edu for more info!",
-          "Image": "Admission_1.jpg",
-          "Author": "Admin_NSUAdmissions",
-          "createdAt": "2025-03-21T09:00:00Z",
-          "Likes": 12,
-          "Comments": [
-            {
-              "Text": "What’s the admission test like? Any preparation tips?",
-              "Posted by": "Student_Rahim"
-            },
-            {
-              "Text": "I’m so excited for this program! NSU has a great reputation.",
-              "Posted by": "Student_Fatima"
-            }
-          ],
-          "category": "Admissions",
-          "tags": ["North South University", "MS", "CSE", "Spring", "Admission"]
-        }
-      },
-      {
-        "Post 5": {
-          "ID": "post-005",
-          "Title": "Hudson County Community College Open House Spring 2025",
-          "Content": "Join Hudson County Community College at their Spring 2025 Open House on 22 March and 26 April! Tour the campus, meet faculty, and explore programs. Register at www.hccc.edu/openhouse!",
-          "Image": "HCCC_OpenHouse_2025.jpg",
-          "Author": "Admin_HCCC",
-          "createdAt": "2025-03-21T11:00:00Z",
-          "Likes": 20,
-          "Comments": [
-            {
-              "Text": "This is a great opportunity to explore HCCC! Will there be financial aid info?",
-              "Posted by": "Student_Aisha"
-            },
-            {
-              "Text": "I attended last year’s open house and loved it. Definitely going again!",
-              "Posted by": "Student_Maria"
-            }
-          ],
-          "category": "Admissions",
-          "tags": ["Hudson County", "Open House", "Spring", "College"]
-        }
-      },
-      {
-        "Post 6": {
-          "ID": "post-006",
-          "Title": "North South University MPH Spring 2025",
-          "Content": "Advance your career with a Master of Public Health at North South University! Apply for Spring 2025 by 27 November 2024. Admission test on 29 November 2024. Learn more at www.northsouth.edu!",
-          "Image": "Admission_2.jpg",
-          "Author": "Admin_NSUAdmissions",
-          "createdAt": "2025-03-21T14:00:00Z",
-          "Likes": 15,
-          "Comments": [
-            {
-              "Text": "Does this program offer any scholarships?",
-              "Posted by": "Student_Samia"
-            },
-            {
-              "Text": "I’m interested in the Epidemiology track. Sounds amazing!",
-              "Posted by": "Student_Arif"
-            }
-          ],
-          "category": "Admissions",
-          "tags": ["North South University", "MPH", "Spring", "Public Health"]
-        }
-      },
-      {
-        "Post 7": {
-          "ID": "post-007",
-          "Title": "North South University EMPH Spring 2025",
-          "Content": "Elevate your expertise with the Executive Master of Public Health at North South University! Apply for Spring 2025 by 27 November 2024. Admission test on 29 November 2024. Visit www.northsouth.edu!",
-          "Image": "Admission_3.png",
-          "Author": "Admin_NSUAdmissions",
-          "createdAt": "2025-03-21T16:30:00Z",
-          "Likes": 10,
-          "Comments": [
-            {
-              "Text": "This is perfect for working professionals! What’s the class schedule like?",
-              "Posted by": "Student_Nadia"
-            },
-            {
-              "Text": "I’ve heard great things about NSU’s public health programs.",
-              "Posted by": "Student_Tanvir"
-            }
-          ],
-          "category": "Admissions",
-          "tags": ["North South University", "EMPH", "Spring", "Executive"]
-        }
-      },
-      {
-        "Post 8": {
-          "ID": "post-008",
-          "Title": "UCSI University Trust Scholarship 2025",
-          "Content": "UCSI University Trust Scholarship 2025 offers RM 30 million in funding! Open to undergraduate and postgraduate students. Apply by 15 March 2025 at www.ucsiuniversitytrust.com!",
-          "Image": "Scholarship3.jpg",
-          "Author": "Admin_UCSITrust",
-          "createdAt": "2025-03-22T08:00:00Z",
-          "Likes": 22,
-          "Comments": [
-            {
-              "Text": "RM 30 million is huge! What programs are eligible?",
-              "Posted by": "Student_Lina"
-            },
-            {
-              "Text": "I’m applying for this scholarship. Fingers crossed!",
-              "Posted by": "Student_Ahmed"
-            }
-          ],
-          "category": "Scholorships",
-          "tags": ["UCSI", "Trust", "Scholarship", "Funding"]
-        }
-      },
-      {
-        "Post 9": {
-          "ID": "post-009",
-          "Title": "The Speakout Media Scholarship to America",
-          "Content": "Fully funded opportunity! The Speakout Media Scholarship to Tulane University in the USA is open. Apply by 5 December 2024. Don’t miss your chance to study in America!",
-          "Image": "Scholorship_2.jpeg",
-          "Author": "Admin_SpeakoutMedia",
-          "createdAt": "2025-03-22T10:00:00Z",
-          "Likes": 28,
-          "Comments": [
-            {
-              "Text": "A fully funded scholarship to the USA? This is incredible!",
-              "Posted by": "Student_Sara"
-            },
-            {
-              "Text": "What are the requirements for this scholarship?",
-              "Posted by": "Student_Ravi"
-            }
-          ],
-          "category": "Scholorships",
-          "tags": ["Speakout Media", "Scholarship", "America", "Tulane"]
-        }
+  "Posts": [
+    {
+      "Post 1": {
+        "ID": "post-001",
+        "Title": "Yale University Summer Internship 2025",
+        "Content": "Exciting opportunity! Apply for the Yale University Summer Internship 2025 in Senator Warnock’s Office. Study in the USA and gain valuable experience. Visit www.scholarshipsads.com for more details!",
+        "Image": "Internship_1.png",
+        "Author": "Admin_ScholarshipTeam",
+        "createdAt": "2025-03-20T10:00:00Z",
+        "Likes": 25,
+        "Comments": [
+          {
+            "Text": "This looks amazing! Does anyone know the eligibility criteria?",
+            "Posted by": "Student_Harsha"
+          },
+          {
+            "Text": "I applied last year and it was a life-changing experience! Highly recommend.",
+            "Posted by": "Alumni_Naga"
+          }
+        ],
+        "category": "Internships",
+        "tags": ["Yale", "Summer", "USA"]
       }
-    ]
+    },
+    {
+      "Post 2": {
+        "ID": "post-002",
+        "Title": "CSIS Internships 2025 in USA",
+        "Content": "Don’t miss out on the CSIS Internships 2025 in USA! These are paid opportunities open to students from different countries. Deadlines vary, so check out www.opportunitiescircle.com to apply now!",
+        "Image": "Internship_2.png",
+        "Author": "Admin_OpportunitiesCircle",
+        "createdAt": "2025-03-20T12:30:00Z",
+        "Likes": 18,
+        "Comments": [
+          {
+            "Text": "Are these internships remote or in-person?",
+            "Posted by": "Student_Shruti"
+          },
+          {
+            "Text": "Thanks for sharing! I’m definitely applying for this.",
+            "Posted by": "Student_Inga"
+          }
+        ],
+        "category": "Internships",
+        "tags": ["CSIS", "USA", "Paid"]
+      }
+    },
+    {
+      "Post 3": {
+        "ID": "post-003",
+        "Title": "WISE Summer 2025 Internships",
+        "Content": "Attention engineering students! The WISE Summer 2025 Internships application deadline is 1 February 2025. Ranked one of the best in the U.S. by The Princeton Review. Apply at wise-intern.org!",
+        "Image": "Internship_3.jpg",
+        "Author": "Admin_WISETeam",
+        "createdAt": "2025-03-20T15:00:00Z",
+        "Likes": 30,
+        "Comments": [
+          {
+            "Text": "This is perfect for engineering students! Any tips for the application?",
+            "Posted by": "Student_Kiran"
+          },
+          {
+            "Text": "I heard their program is top-notch. Excited to apply!",
+            "Posted by": "Student_Anita"
+          }
+        ],
+        "category": "Internships",
+        "tags": ["WISE", "Summer", "Engineering"]
+      }
+    },
+    {
+      "Post 4": {
+        "ID": "post-004",
+        "Title": "North South University MS in CSE Spring 2025",
+        "Content": "Pursue your Master of Science in Computer Science and Engineering at North South University! Apply for Spring 2025 by 27 November 2024. Admission test on 29 November 2024. Visit www.northsouth.edu for more info!",
+        "Image": "Admission_1.jpg",
+        "Author": "Admin_NSUAdmissions",
+        "createdAt": "2025-03-21T09:00:00Z",
+        "Likes": 12,
+        "Comments": [
+          {
+            "Text": "What’s the admission test like? Any preparation tips?",
+            "Posted by": "Student_Rahim"
+          },
+          {
+            "Text": "I’m so excited for this program! NSU has a great reputation.",
+            "Posted by": "Student_Fatima"
+          }
+        ],
+        "category": "Admissions",
+        "tags": ["North South University", "MS", "CSE", "Spring"]
+      }
+    },
+    {
+      "Post 5": {
+        "ID": "post-005",
+        "Title": "Hudson County Community College Open House Spring 2025",
+        "Content": "Join Hudson County Community College at their Spring 2025 Open House on 22 March and 26 April! Tour the campus, meet faculty, and explore programs. Register at www.hccc.edu/openhouse!",
+        "Image": "Scholarship_1.png",
+        "Author": "Admin_HCCC",
+        "createdAt": "2025-03-21T11:00:00Z",
+        "Likes": 20,
+        "Comments": [
+          {
+            "Text": "This is a great opportunity to explore HCCC! Will there be financial aid info?",
+            "Posted by": "Student_Aisha"
+          },
+          {
+            "Text": "I attended last year’s open house and loved it. Definitely going again!",
+            "Posted by": "Student_Maria"
+          }
+        ],
+        "category": "Scholarships",
+        "tags": ["Hudson County", "Open House", "Spring", "College"]
+      }
+    },
+    {
+      "Post 6": {
+        "ID": "post-006",
+        "Title": "North South University MPH Spring 2025",
+        "Content": "Advance your career with a Master of Public Health at North South University! Apply for Spring 2025 by 27 November 2024. Admission test on 29 November 2024. Learn more at www.northsouth.edu!",
+        "Image": "Admission_2.jpg",
+        "Author": "Admin_NSUAdmissions",
+        "createdAt": "2025-03-21T14:00:00Z",
+        "Likes": 15,
+        "Comments": [
+          {
+            "Text": "Does this program offer any scholarships?",
+            "Posted by": "Student_Samia"
+          },
+          {
+            "Text": "I’m interested in the Epidemiology track. Sounds amazing!",
+            "Posted by": "Student_Arif"
+          }
+        ],
+        "category": "Admissions",
+        "tags": ["North South University", "MPH", "Spring", "Public Health"]
+      }
+    },
+    {
+      "Post 7": {
+        "ID": "post-007",
+        "Title": "North South University EMPH Spring 2025",
+        "Content": "Elevate your expertise with the Executive Master of Public Health at North South University! Apply for Spring 2025 by 27 November 2024. Admission test on 29 November 2024. Visit www.northsouth.edu!",
+        "Image": "Admission_3.png",
+        "Author": "Admin_NSUAdmissions",
+        "createdAt": "2025-03-21T16:30:00Z",
+        "Likes": 10,
+        "Comments": [
+          {
+            "Text": "This is perfect for working professionals! What’s the class schedule like?",
+            "Posted by": "Student_Nadia"
+          },
+          {
+            "Text": "I’ve heard great things about NSU’s public health programs.",
+            "Posted by": "Student_Tanvir"
+          }
+        ],
+        "category": "Admissions",
+        "tags": ["North South University", "EMPH", "Spring", "Executive"]
+      }
+    },
+    {
+      "Post 8": {
+        "ID": "post-008",
+        "Title": "UCSI University Trust Scholarship 2025",
+        "Content": "UCSI University Trust Scholarship 2025 offers RM 30 million in funding! Open to undergraduate and postgraduate students. Apply by 15 March 2025 at www.ucsiuniversitytrust.com!",
+        "Image": "Scholarship3.jpg",
+        "Author": "Admin_UCSITrust",
+        "createdAt": "2025-03-22T08:00:00Z",
+        "Likes": 22,
+        "Comments": [
+          {
+            "Text": "RM 30 million is huge! What programs are eligible?",
+            "Posted by": "Student_Lina"
+          },
+          {
+            "Text": "I’m applying for this scholarship. Fingers crossed!",
+            "Posted by": "Student_Ahmed"
+          }
+        ],
+        "category": "Scholarships",
+        "tags": ["UCSI", "Trust", "Funding"]
+      }
+    },
+    {
+      "Post 9": {
+        "ID": "post-009",
+        "Title": "The Speakout Media Scholarship to America",
+        "Content": "Fully funded opportunity! The Speakout Media Scholarship to Tulane University in the USA is open. Apply by 5 December 2024. Don’t miss your chance to study in America!",
+        "Image": "Scholorship_2.jpeg",
+        "Author": "Admin_SpeakoutMedia",
+        "createdAt": "2025-03-22T10:00:00Z",
+        "Likes": 28,
+        "Comments": [
+          {
+            "Text": "A fully funded scholarship to the USA? This is incredible!",
+            "Posted by": "Student_Sara"
+          },
+          {
+            "Text": "What are the requirements for this scholarship?",
+            "Posted by": "Student_Ravi"
+          }
+        ],
+        "category": "Scholarships",
+        "tags": ["Speakout Media", "Tulane"]
+      }
+    }
+  ]
 }

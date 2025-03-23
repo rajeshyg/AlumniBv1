@@ -40,7 +40,8 @@
     "quill-image-resize-module-react": "^3.0.0",
     "tailwind-merge": "^2.2.1",
     "zod": "^3.22.4",
-    "zustand": "^4.5.2"
+    "zustand": "^4.5.2",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.4.2",

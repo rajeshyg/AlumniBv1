@@ -1,6 +1,8 @@
 export interface Comment {
   text: string;
   postedBy: string;
+  postedById: string; // Add studentId
+  createdAt: Date;
 }
 
 export interface Post {
@@ -8,11 +10,13 @@ export interface Post {
   title: string;
   content: string;
   author: string;
+  authorId: string; // Add studentId
   createdAt: Date;
+  updatedAt?: Date;
   likes: number;
-  image?: string; // Single image path
-  images?: string[]; // For backward compatibility and multiple image support
-  tags?: string[];
+  likedBy: string[]; // Array of studentIds who liked the post
   comments?: Comment[];
+  image?: string;
+  tags?: string[];
   category?: string;
 }

@@ -11,7 +11,7 @@ export function Header() {
   return (
     <header className="fixed top-0 left-0 right-0 h-16 bg-background/80 backdrop-blur-sm border-b border-border/40 z-50">
       <div className="container h-full mx-auto px-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold">Mobile App</h1>
+        <h1 className="text-xl font-bold">SGS Gita - Connect</h1>
         
         <div className="flex items-center gap-4">
           <DeviceToggle />

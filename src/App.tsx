@@ -1,8 +1,9 @@
 import React, { Suspense } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
-import { router } from './routes';
+import { router } from './routes/index'; // Update this import path
 import { LoadingSpinner } from './components/shared/LoadingSpinner';
+import { AuthProvider } from './context/AuthContext';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,9 +17,11 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Suspense fallback={<LoadingSpinner />}>
-        <RouterProvider router={router} />
-      </Suspense>
+      <AuthProvider>
+        <Suspense fallback={<LoadingSpinner />}>
+          <RouterProvider router={router} />
+        </Suspense>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

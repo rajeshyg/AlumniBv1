@@ -1,8 +1,19 @@
 import { Post, Comment } from '../models/Post';
+import { User } from '../models/User';
+// import { v4 as uuidv4 } from 'uuid'; - causing errors
 import initialPostsJsonData from '../data/posts.json';
 import { resolveImagePath } from '../lib/imageUtils';
 
+// Simple UUID generator function as fallback
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 const STORAGE_KEY = 'alumni-posts';
+const SAMPLE_POSTS: Post[] = [];
 
 export class PostService {
   // Add a reset function to force reload from JSON
@@ -124,6 +135,7 @@ export class PostService {
     title: string;
     content: string; 
     author: string;
+    authorId: string;
     images?: string[];
     tags?: string[];
     category?: string;
@@ -131,12 +143,14 @@ export class PostService {
     const posts = PostService.getPostsFromStorage();
     
     const newPost = {
-      id: String(Date.now()),
+      id: generateUUID(), // Use our fallback UUID generator instead of uuidv4()
       title: postData.title,
       content: postData.content,
       author: postData.author,
-      createdAt: new Date().toISOString(),
+      authorId: postData.authorId,
+      createdAt: new Date(),
       likes: 0,
+      likedBy: [],
       images: postData.images || [],
       tags: postData.tags || [],
       category: postData.category || 'General',
@@ -156,13 +170,23 @@ export class PostService {
     };
   }
 
-  static likePost(id: string): Post | undefined {
+  static likePost(id: string, userId: string): Post | undefined {
     const posts = PostService.getPostsFromStorage();
     let updatedPost: any = undefined;
     
     const updatedPosts = posts.map(post => {
       if (post.id === id) {
-        updatedPost = { ...post, likes: post.likes + 1 };
+        const alreadyLiked = post.likedBy?.includes(userId);
+      
+        if (alreadyLiked) {
+          post.likedBy = post.likedBy.filter(id => id !== userId);
+          post.likes--;
+        } else {
+          if (!post.likedBy) post.likedBy = [];
+          post.likedBy.push(userId);
+          post.likes++;
+        }
+        updatedPost = { ...post };
         return updatedPost;
       }
       return post;
@@ -178,14 +202,20 @@ export class PostService {
     } : undefined;
   }
 
-  static addComment(postId: string, text: string, postedBy: string): void {
+  static addComment(postId: string, text: string, user: User): void {
     const posts = PostService.getPostsFromStorage();
     const updatedPosts = posts.map(post => {
       if (post.id === postId) {
         const comments = post.comments || [];
+        const newComment: Comment = {
+          text,
+          postedBy: user.name, // Use full name directly
+          postedById: user.studentId,
+          createdAt: new Date()
+        };
         return {
           ...post,
-          comments: [...comments, { text, postedBy }]
+          comments: [...comments, newComment]
         };
       }
       return post;
@@ -193,5 +223,16 @@ export class PostService {
     
     // Save back to localStorage
     PostService.savePostsToStorage(updatedPosts);
+  }
+
+  static hasUserLikedPost(postId: string, userId: string): boolean {
+    const allPosts = this.getAllPosts();
+    const post = allPosts.find(p => p.id === postId);
+    return post?.likedBy?.includes(userId) || false;
+  }
+
+  static getPostsByUser(userId: string): Post[] {
+    const allPosts = this.getAllPosts();
+    return allPosts.filter(post => post.authorId === userId);
   }
 }
