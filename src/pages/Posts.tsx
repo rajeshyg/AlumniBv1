@@ -3,13 +3,13 @@ import { Post } from '../models/Post';
 import { PostService } from '../services/PostService';
 import { PostItem } from '../components/Posts/PostItem';
 import { PostForm } from '../components/Posts/PostForm';
-import { Search, PlusSquare, X, RefreshCw, LogOut } from 'lucide-react';
+import { Search, PlusSquare, X, RefreshCw } from 'lucide-react';
 import { TabNavigation, Tab } from '../components/shared/TabNavigation';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 export default function Posts() {
-  const { authState, logout } = useAuth();
+  const { authState } = useAuth();
   const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
   const [filteredPosts, setFilteredPosts] = useState<Post[]>([]);
@@ -93,18 +93,6 @@ export default function Posts() {
     setActiveTab(tabId);
   };
 
-  const handleLogout = () => {
-    console.log('Logout button clicked');
-    // First call logout to clear auth state
-    logout();
-    
-    // Then navigate after a brief delay to ensure state changes are processed
-    setTimeout(() => {
-      console.log('Navigating to login page');
-      navigate('/login');
-    }, 100);
-  };
-
   // Show loading state
   if (authState.loading) {
     return (
@@ -142,14 +130,6 @@ export default function Posts() {
               title="Reload posts from JSON data"
             >
               <RefreshCw className="w-4 h-4" />
-            </button>
-            
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1 px-2 py-1 bg-destructive/10 text-destructive hover:bg-destructive/20 rounded-md text-sm sm:ml-2"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </div>

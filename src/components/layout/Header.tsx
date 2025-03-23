@@ -3,6 +3,7 @@ import { Bell } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import { ThemeToggle } from '../theme-toggle';
 import { DeviceToggle } from '../device-toggle';
+import { ProfileToggle } from '../profile-toggle';
 
 export function Header() {
   const { notifications } = useNotifications();
@@ -24,6 +25,7 @@ export function Header() {
               </span>
             )}
           </button>
+          <ProfileToggle />
         </div>
       </div>
     </header>
