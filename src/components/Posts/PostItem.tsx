@@ -11,8 +11,8 @@ interface PostItemProps {
 
 export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) => {
   const [expanded, setExpanded] = useState(false);
-  // Auto-show comments if they exist
-  const [showComments, setShowComments] = useState(Boolean(post.comments && post.comments.length > 0));
+  // Always keep comments minimized by default
+  const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
   const [imageError, setImageError] = useState(false);
@@ -149,22 +149,15 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
         </div>
       </div>
       
-      {/* Show a message if comments exist but are hidden */}
-      {!showComments && post.comments && post.comments.length > 0 && (
-        <div className="text-xs text-muted-foreground italic">
-          {post.comments.length} comments available. Click the comments icon to view.
-        </div>
-      )}
-      
-      {/* Make comments more visible */}
-      {post.comments && post.comments.length > 0 && !showComments && (
+      {/* Make comment visibility indicator clearer */}
+      {post.comments && post.comments.length > 0 && (
         <div 
-          onClick={() => setShowComments(true)}
+          onClick={() => setShowComments(!showComments)}
           className="mt-2 p-2 bg-primary/5 rounded-md cursor-pointer text-center hover:bg-primary/10"
         >
           <p className="text-sm flex items-center justify-center gap-1">
             <MessageCircle className="w-4 h-4 text-primary" />
-            <span className="font-medium">{post.comments.length} comments</span> - Click to view
+            <span className="font-medium">{post.comments.length} comments</span> - Click to {showComments ? 'hide' : 'view'}
           </p>
         </div>
       )}
