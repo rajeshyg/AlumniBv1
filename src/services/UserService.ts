@@ -182,4 +182,34 @@ export class UserService {
   static logout(): void {
     localStorage.removeItem(this.STORAGE_KEY);
   }
+
+  async searchUsers(query: string): Promise<any[]> {
+    try {
+      console.log('Starting user search for:', query);
+      if (UserService.users.length === 0) {
+        await UserService.loadUsers();
+      }
+      
+      const searchQuery = query.toLowerCase();
+      console.log('Searching through users:', UserService.users.length);
+      
+      return UserService.users.filter(user => {
+        const matchEmail = user.email?.toLowerCase().includes(searchQuery);
+        const matchName = user.name?.toLowerCase().includes(searchQuery);
+        // You can add more fields to search through if needed
+        
+        return matchEmail || matchName;
+      }).map(user => ({
+        email: user.email || '',
+        name: user.name || '',
+        studentId: user.studentId || '',
+        centerName: user.centerName || '',
+        category: user.category || '',
+        batch: user.batch || ''
+      }));
+    } catch (error) {
+      console.error('Error in searchUsers:', error);
+      throw new Error('Failed to search users: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  }
 }

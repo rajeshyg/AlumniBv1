@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, User, Settings, FileText, Shield, ClipboardCheck } from 'lucide-react';
+import { Home, User, Settings, FileText, Shield, ClipboardCheck, Users } from 'lucide-react';
 import { useThemeStore } from '../../store/theme';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { CsvAdminRepository } from '../../infrastructure/repositories/csvAdminRepository';
-import { ValidateAdminEmail } from '../../domain/usecases/validateAdminEmail';
 
 interface NavigationProps {
   className?: string;
@@ -36,7 +35,9 @@ export function Navigation({ className }: NavigationProps) {
 
   const navItems = React.useMemo(() => [
     { to: '/home', icon: Home, label: 'Home' },
-    ...(adminData?.role === 'system_admin' ? [{ to: '/admin', icon: Shield, label: 'Admin' }] : []),
+    ...(adminData?.role === 'system_admin' ? [
+      { to: '/admin', icon: Shield, label: 'Admin' }
+    ] : []),
     { to: '/posts', icon: FileText, label: 'Posts' },
     ...(adminData?.role === 'system_admin' || adminData?.role === 'moderator' 
       ? [{ to: '/moderation', icon: ClipboardCheck, label: 'Moderation' }] 
