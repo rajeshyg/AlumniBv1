@@ -3,14 +3,21 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ProfileToggle } from './profile-toggle';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { UserService } from '../services/UserService';
 
-// Mock the required hooks and modules
+// Mock dependencies
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn()
 }));
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: vi.fn()
+}));
+
+vi.mock('../services/UserService', () => ({
+  UserService: {
+    login: vi.fn()
+  }
 }));
 
 // Mock Radix UI components
@@ -20,9 +27,7 @@ vi.mock('./ui/dropdown-menu', () => ({
   DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div data-testid="dropdown-content">{children}</div>,
   DropdownMenuItem: ({ children, onClick }: { children: React.ReactNode, onClick?: () => void }) => (
     <button onClick={onClick} data-testid="dropdown-item">{children}</button>
-  ),
-  DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div data-testid="dropdown-label">{children}</div>,
-  DropdownMenuSeparator: () => <hr data-testid="dropdown-separator" />
+  )
 }));
 
 describe('ProfileToggle', () => {
@@ -33,7 +38,25 @@ describe('ProfileToggle', () => {
     vi.mocked(useNavigate).mockReturnValue(mockNavigate);
   });
 
-  it('renders login option when not authenticated', () => {
+  it('should display user first name when authenticated', () => {
+    vi.mocked(useAuth).mockReturnValue({
+      authState: {
+        isAuthenticated: true,
+        currentUser: {
+          name: 'John Doe',
+          email: 'john@example.com'
+        },
+        loading: false,
+        error: null
+      },
+      logout: vi.fn()
+    });
+
+    render(<ProfileToggle />);
+    expect(screen.getByText('John')).toBeInTheDocument();
+  });
+
+  it('should display "U" when not authenticated', () => {
     vi.mocked(useAuth).mockReturnValue({
       authState: {
         isAuthenticated: false,
@@ -41,51 +64,14 @@ describe('ProfileToggle', () => {
         loading: false,
         error: null
       },
-      logout: vi.fn(),
-      login: vi.fn(),
-      selectProfile: vi.fn(),
-      resetAuthState: vi.fn()
+      logout: vi.fn()
     });
 
     render(<ProfileToggle />);
-    const trigger = screen.getByTestId('dropdown-trigger');
-    fireEvent.click(trigger);
-    
-    expect(screen.getByText(/login/i)).toBeInTheDocument();
+    expect(screen.getByText('U')).toBeInTheDocument();
   });
 
-  it('renders user information when authenticated', () => {
-    const mockUser = {
-      name: 'John Doe',
-      email: 'john@example.com',
-      centerName: 'Test Center',
-      batch: '2023'
-    };
-
-    vi.mocked(useAuth).mockReturnValue({
-      authState: {
-        isAuthenticated: true,
-        currentUser: mockUser,
-        loading: false,
-        error: null
-      },
-      logout: vi.fn(),
-      login: vi.fn(),
-      selectProfile: vi.fn(),
-      resetAuthState: vi.fn()
-    });
-
-    render(<ProfileToggle />);
-    const trigger = screen.getByTestId('dropdown-trigger');
-    fireEvent.click(trigger);
-
-    // Changed: Look for first name instead of initials
-    expect(screen.getByText('John')).toBeInTheDocument(); // First name in avatar
-    expect(screen.getByText(mockUser.name)).toBeInTheDocument(); // Full name in dropdown
-    expect(screen.getByText(mockUser.email)).toBeInTheDocument();
-  });
-
-  it('handles logout correctly', () => {
+  it('should handle logout correctly', () => {
     const mockLogout = vi.fn();
     vi.mocked(useAuth).mockReturnValue({
       authState: {
@@ -94,20 +80,67 @@ describe('ProfileToggle', () => {
         loading: false,
         error: null
       },
-      logout: mockLogout,
-      login: vi.fn(),
-      selectProfile: vi.fn(),
-      resetAuthState: vi.fn()
+      logout: mockLogout
     });
 
     render(<ProfileToggle />);
-    const trigger = screen.getByTestId('dropdown-trigger');
-    fireEvent.click(trigger);
-    
-    const logoutButton = screen.getByText(/logout/i);
+    const logoutButton = screen.getByText('Logout');
     fireEvent.click(logoutButton);
-    
+
     expect(mockLogout).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/login');
+  });
+
+  it('should handle profile switching correctly', async () => {
+    const mockUser = { name: 'John Doe', email: 'john@example.com' };
+    const mockProfiles = [mockUser];
+    
+    vi.mocked(useAuth).mockReturnValue({
+      authState: {
+        isAuthenticated: true,
+        currentUser: mockUser,
+        loading: false,
+        error: null
+      },
+      logout: vi.fn()
+    });
+
+    // Setup the mock to resolve immediately
+    vi.mocked(UserService.login).mockResolvedValueOnce({
+      success: true,
+      users: mockProfiles
+    });
+
+    render(<ProfileToggle />);
+    
+    // Find and click the switch profile button
+    const switchButton = screen.getByText('Switch Profile');
+    await fireEvent.click(switchButton);
+
+    // Wait for the async operations to complete
+    await vi.waitFor(() => {
+      expect(UserService.login).toHaveBeenCalledWith(mockUser.email, 'test');
+      expect(mockNavigate).toHaveBeenCalledWith('/login', {
+        state: {
+          switchProfile: true,
+          profiles: mockProfiles
+        }
+      });
+    });
+  });
+
+  it('should return null when loading', () => {
+    vi.mocked(useAuth).mockReturnValue({
+      authState: {
+        isAuthenticated: false,
+        currentUser: null,
+        loading: true,
+        error: null
+      },
+      logout: vi.fn()
+    });
+
+    const { container } = render(<ProfileToggle />);
+    expect(container.firstChild).toBeNull();
   });
 });

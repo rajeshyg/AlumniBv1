@@ -128,16 +128,15 @@ export class UserService {
     message?: string;
   }> {
     try {
-      // For prototype, password is always "test"
-      if (password !== 'test') {
-        return { success: false, message: 'Invalid password' };
-      }
-      
-      // Simple validation for empty email
+      // Simple validation for empty email or password
       if (!email || email.trim() === '') {
         return { success: false, message: 'Email is required' };
       }
       
+      if (!password || password.trim() === '') {
+        return { success: false, message: 'Password is required' };
+      }
+
       const matchingUsers = await this.findUsersByEmail(email);
       
       if (matchingUsers.length === 0) {

@@ -21,4 +21,5 @@ export interface AuthState {
   currentUser: User | null;
   loading: boolean;
   error: string | null;
+  awaitingProfileSelection: boolean;
 }

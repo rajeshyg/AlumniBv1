@@ -20,19 +20,22 @@ export function ProfileToggle() {
   };
  
   const handleSwitchProfile = async () => {
-    // Get all profiles for the current user's email
     const currentEmail = authState.currentUser?.email;
     if (currentEmail) {
-      // This should return all profiles associated with the email
-      const result = await UserService.login(currentEmail, 'test');
-      if (result.success && result.users) {
-        // Navigate to login form with profiles for selection
-        navigate('/login', { 
-          state: { 
-            switchProfile: true,
-            profiles: result.users
-          }
-        });
+      try {
+        const result = await UserService.login(currentEmail, 'test');
+        
+        if (result.success && result.users) {
+          // Ensure navigation happens after the successful API call
+          navigate('/login', { 
+            state: { 
+              switchProfile: true,
+              profiles: result.users
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Error switching profiles:", error);
       }
     }
   };

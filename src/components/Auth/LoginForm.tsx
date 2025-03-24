@@ -7,7 +7,7 @@ export const LoginForm: React.FC = () => {
   const location = useLocation();
   const { login, selectProfile } = useAuth();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('test'); // Default password for demo
+  const [password, setPassword] = useState('');  // Removed default 'test'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userOptions, setUserOptions] = useState<User[]>([]);
@@ -51,7 +51,8 @@ export const LoginForm: React.FC = () => {
         setError(result.message || 'Login failed');
       }
     } catch (err) {
-      setError('An unexpected error occurred');
+      setError('An error occurred during login');
+      console.error('Login error:', err);
     } finally {
       setLoading(false);
     }
@@ -123,9 +124,6 @@ export const LoginForm: React.FC = () => {
               placeholder="Password"
               required
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              For demo purposes, password is set to "test"
-            </p>
           </div>
           
           {error && (

@@ -2,27 +2,33 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LoginForm } from '../components/Auth/LoginForm';
 import { useAuth } from '../context/AuthContext';
+import { CsvAdminRepository } from '../infrastructure/repositories/csvAdminRepository';
+import { ValidateAdminEmail } from '../domain/usecases/validateAdminEmail';
 
 export default function Login() {
   const { authState } = useAuth();
   const navigate = useNavigate();
   
-  // Redirect if already logged in, but add a delay to ensure state is updated
   useEffect(() => {
-    console.log("Login page loaded, auth state:", 
-      JSON.stringify({
-        isAuthenticated: authState.isAuthenticated,
-        hasUser: !!authState.currentUser,
-        loading: authState.loading
-      })
-    );
-    
-    // Only redirect if definitely authenticated and has user data
-    if (authState.isAuthenticated && authState.currentUser) {
-      console.log("User is authenticated, redirecting to posts");
-      navigate('/posts');
+    // Only redirect if user is authenticated AND profile selection is complete
+    if (authState.isAuthenticated && authState.currentUser && !authState.awaitingProfileSelection) {
+      const validateAndRedirect = async () => {
+        try {
+          const adminRepo = new CsvAdminRepository();
+          const validateAdminEmail = new ValidateAdminEmail(adminRepo);
+          const isAdmin = await validateAdminEmail.execute(authState.currentUser.email);
+          
+          console.log('Auth validation result:', { isAdmin, email: authState.currentUser.email });
+          navigate(isAdmin ? '/admin' : '/posts');
+        } catch (error) {
+          console.error('Error during auth validation:', error);
+          navigate('/posts');
+        }
+      };
+      
+      validateAndRedirect();
     }
-  }, [authState.isAuthenticated, authState.currentUser, navigate]);
+  }, [authState.isAuthenticated, authState.currentUser, authState.awaitingProfileSelection, navigate]);
   
   return (
     <div className="min-h-screen flex items-center justify-center p-4">

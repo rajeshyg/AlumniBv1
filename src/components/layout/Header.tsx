@@ -5,12 +5,16 @@ import { ThemeToggle } from '../theme-toggle';
 import { DeviceToggle } from '../device-toggle';
 import { ProfileToggle } from '../profile-toggle';
 
-export function Header() {
+interface HeaderProps {
+  className?: string;
+}
+
+export const Header = ({ className }: HeaderProps) => {
   const { notifications } = useNotifications();
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 bg-background/80 backdrop-blur-sm border-b border-border/40 z-50">
+    <header className={`fixed top-0 left-0 right-0 h-16 bg-background/80 backdrop-blur-sm border-b border-border/40 z-50 ${className}`}>
       <div className="container h-full mx-auto px-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">SGS Gita - Connect</h1>
         

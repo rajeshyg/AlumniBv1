@@ -7,7 +7,8 @@ const defaultAuthState: AuthState = {
   isAuthenticated: false,
   currentUser: null,
   loading: true,
-  error: null
+  error: null,
+  awaitingProfileSelection: false
 };
 
 // Create context
@@ -47,39 +48,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Login function
   const login = async (email: string, password: string) => {
-    setAuthState(prev => ({ ...prev, loading: true, error: null }));
-    
+    setAuthState(prev => ({ ...prev, loading: true }));
     try {
       const result = await UserService.login(email, password);
-      
-      if (result.success && result.users?.length === 1) {
-        // Single user found - auto login
-        setAuthState({
-          isAuthenticated: true,
-          currentUser: result.users[0],
-          loading: false,
-          error: null
-        });
-      } else if (!result.success) {
-        // Login failed
-        setAuthState({
-          isAuthenticated: false,
-          currentUser: null,
-          loading: false,
-          error: result.message || 'Login failed'
-        });
+      if (result.success) {
+        if (result.users && result.users.length > 1) {
+          // Multiple profiles found, set awaiting selection
+          setAuthState({
+            isAuthenticated: true,
+            currentUser: null,
+            loading: false,
+            error: null,
+            awaitingProfileSelection: true
+          });
+        } else if (result.users?.[0]) {
+          // Single user, proceed with login
+          setAuthState({
+            isAuthenticated: true,
+            currentUser: result.users[0],
+            loading: false,
+            error: null,
+            awaitingProfileSelection: false
+          });
+        }
       }
-      
       return result;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
       setAuthState({
         isAuthenticated: false,
         currentUser: null,
         loading: false,
-        error: 'An unexpected error occurred'
+        error: errorMessage
       });
-      
-      return { success: false, message: 'An unexpected error occurred' };
+      return { success: false, message: errorMessage };
     }
   };
 
@@ -90,7 +92,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isAuthenticated: true,
       currentUser: user,
       loading: false,
-      error: null
+      error: null,
+      awaitingProfileSelection: false
     });
   };
 

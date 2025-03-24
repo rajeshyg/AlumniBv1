@@ -8,13 +8,14 @@ const Posts = lazy(() => import('../pages/Posts'));
 const Profile = lazy(() => import('../pages/Profile'));
 const Settings = lazy(() => import('../pages/Settings'));
 const NotFound = lazy(() => import('../pages/NotFound'));
-const Login = lazy(() => import('../pages/Login')); // Add Login page
+const Login = lazy(() => import('../pages/Login'));
+const Admin = lazy(() => import('../pages/Admin'));
+const ContentModeration = lazy(() => import('../pages/ContentModeration'));
 
 export const router = createBrowserRouter([
-  // Root redirect to login
   {
     path: '/',
-    element: <Navigate to="/login" replace />,
+    element: <Navigate to="/home" replace />,
   },
   {
     path: '/login',
@@ -39,6 +40,14 @@ export const router = createBrowserRouter([
       {
         path: 'settings',
         element: <Settings />,
+      },
+      {
+        path: 'admin',
+        element: <Admin />,
+      },
+      {
+        path: 'moderation',
+        element: <ContentModeration />,
       },
       {
         path: '*',
