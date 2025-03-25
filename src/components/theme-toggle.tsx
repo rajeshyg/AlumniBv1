@@ -7,9 +7,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { logger } from '../utils/logger';
 
 export function ThemeToggle() {
   const { theme, setTheme } = useThemeStore();
+  
+  const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
+    logger.info('User changed theme', { 
+      previousTheme: theme, 
+      newTheme 
+    });
+    setTheme(newTheme);
+  };
 
   return (
     <DropdownMenu>
@@ -21,15 +30,15 @@ export function ThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme('light')}>
+        <DropdownMenuItem onClick={() => handleThemeChange('light')}>
           <Sun className="mr-2 h-4 w-4" />
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('dark')}>
+        <DropdownMenuItem onClick={() => handleThemeChange('dark')}>
           <Moon className="mr-2 h-4 w-4" />
           Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('system')}>
+        <DropdownMenuItem onClick={() => handleThemeChange('system')}>
           <Monitor className="mr-2 h-4 w-4" />
           System
         </DropdownMenuItem>

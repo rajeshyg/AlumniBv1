@@ -1,4 +1,5 @@
 import { User } from '../models/User';
+import { logger } from '../utils/logger';
 
 export class UserService {
   private static users: User[] = [];
@@ -14,7 +15,7 @@ export class UserService {
       const cleanedLines = lines.filter(line => line.trim().length > 0);
       
       if (cleanedLines.length <= 1) {
-        console.warn('CSV file appears to be empty or has only headers');
+        logger.debug('CSV file appears to be empty or has only headers');
         return [];
       }
       
@@ -65,14 +66,14 @@ export class UserService {
           
           return user;
         } catch (err) {
-          console.error(`Error parsing CSV line ${index + 1}:`, err);
+          logger.error(`Error parsing CSV line ${index + 1}:`, err);
           return null;
         }
       }).filter(user => user !== null) as User[];
       
       return users;
     } catch (error) {
-      console.error('Error parsing CSV:', error);
+      logger.error('Error parsing CSV:', error);
       return [];
     }
   }
@@ -91,7 +92,7 @@ export class UserService {
       
       return this.users;
     } catch (error) {
-      console.error('Failed to load users:', error);
+      logger.error('Failed to load users:', error);
       this.users = [];
       return this.users;
     }
@@ -152,7 +153,7 @@ export class UserService {
       // Multiple users found, return the list for selection
       return { success: true, users: matchingUsers };
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       return { success: false, message: 'Login failed - ' + (error instanceof Error ? error.message : String(error)) };
     }
   }
@@ -185,13 +186,13 @@ export class UserService {
 
   async searchUsers(query: string): Promise<any[]> {
     try {
-      console.log('Starting user search for:', query);
+      logger.info('Starting user search for:', query);
       if (UserService.users.length === 0) {
         await UserService.loadUsers();
       }
       
       const searchQuery = query.toLowerCase();
-      console.log('Searching through users:', UserService.users.length);
+      logger.info('Searching through users:', UserService.users.length);
       
       return UserService.users.filter(user => {
         const matchEmail = user.email?.toLowerCase().includes(searchQuery);
@@ -208,7 +209,7 @@ export class UserService {
         batch: user.batch || ''
       }));
     } catch (error) {
-      console.error('Error in searchUsers:', error);
+      logger.error('Error in searchUsers:', error);
       throw new Error('Failed to search users: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }

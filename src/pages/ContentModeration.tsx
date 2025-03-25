@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CsvAdminRepository } from '../infrastructure/repositories/csvAdminRepository';
 import { Admin } from '../models/Admin';
+import { logger } from '../utils/logger'; // Import logger
 
 const ContentModeration: React.FC = () => {
   const { authState } = useAuth();
@@ -11,10 +12,15 @@ const ContentModeration: React.FC = () => {
 
   React.useEffect(() => {
     const loadAdminData = async () => {
-      if (authState.currentUser?.email) {
-        const adminRepo = new CsvAdminRepository();
-        const admin = await adminRepo.getAdminWithRole(authState.currentUser.email);
-        setAdminData(admin);
+      try {
+        if (authState.currentUser?.email) {
+          const adminRepo = new CsvAdminRepository();
+          const admin = await adminRepo.getAdminWithRole(authState.currentUser.email);
+          setAdminData(admin);
+        }
+      } catch (error) {
+        logger.error('Error fetching data:', error); // Use logger
+      } finally {
         setLoading(false);
       }
     };

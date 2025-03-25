@@ -9,12 +9,17 @@ import {
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { useNavigate } from 'react-router-dom';
+import { logger } from '../utils/logger';
 
 export function ProfileToggle() {
   const { authState, logout } = useAuth();
   const navigate = useNavigate();
  
   const handleLogout = () => {
+    logger.info('User logging out', { 
+      userId: authState.currentUser?.studentId,
+      email: authState.currentUser?.email 
+    });
     logout();
     navigate('/login');
   };
@@ -23,9 +28,15 @@ export function ProfileToggle() {
     const currentEmail = authState.currentUser?.email;
     if (currentEmail) {
       try {
+        logger.info('User requesting profile switch', { email: currentEmail });
         const result = await UserService.login(currentEmail, 'test');
         
         if (result.success && result.users) {
+          logger.info('Multiple profiles found for user', { 
+            email: currentEmail,
+            profileCount: result.users.length
+          });
+          
           // Ensure navigation happens after the successful API call
           navigate('/login', { 
             state: { 
@@ -33,10 +44,22 @@ export function ProfileToggle() {
               profiles: result.users
             }
           });
+        } else {
+          logger.error('Profile switch failed', { 
+            email: currentEmail,
+            reason: result.message || 'Unknown error' 
+          });
         }
       } catch (error) {
-        console.error("Error switching profiles:", error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error("Profile switch error", { 
+          email: currentEmail,
+          error: errorMessage,
+          stack: error instanceof Error ? error.stack : undefined
+        });
       }
+    } else {
+      logger.error("Cannot switch profile - no email available");
     }
   };
  

@@ -24,6 +24,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({
       {tabs.map((tab) => (
         <button
           key={tab.id}
+          data-testid={`tab-${tab.id}`}
           onClick={() => onTabChange(tab.id)}
           className={cn(
             "px-4 py-2 text-sm font-medium transition-colors flex-shrink-0",

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthState } from '../models/User';
 import { UserService } from '../services/UserService';
+import { logger } from '../utils/logger';
 
 // Default auth state
 const defaultAuthState: AuthState = {
@@ -35,6 +36,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Check for existing session on mount
   useEffect(() => {
     const currentUser = UserService.getCurrentUser();
+    logger.info('Auth initialization', { 
+      hasUser: !!currentUser,
+      userId: currentUser?.studentId 
+    });
+    
     setAuthState({
       isAuthenticated: !!currentUser,
       currentUser,
@@ -49,9 +55,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Login function
   const login = async (email: string, password: string) => {
     setAuthState(prev => ({ ...prev, loading: true }));
+    logger.info('Login attempt', { email });
+    
     try {
       const result = await UserService.login(email, password);
       if (result.success) {
+        logger.info('Login successful', { 
+          multipleProfiles: result.users && result.users.length > 1 
+        });
+        
         if (result.users && result.users.length > 1) {
           // Multiple profiles found, set awaiting selection
           setAuthState({
@@ -71,10 +83,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             awaitingProfileSelection: false
           });
         }
+      } else {
+        logger.error('Login failed', { message: result.message });
       }
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      logger.error('Login exception', { error: errorMessage });
+      
       setAuthState({
         isAuthenticated: false,
         currentUser: null,
@@ -87,6 +103,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Select profile function (for multi-profile emails)
   const selectProfile = (user: User) => {
+    logger.info('Profile selected', { 
+      userId: user.studentId,
+      name: user.name 
+    });
+    
     UserService.selectUserProfile(user);
     setAuthState({
       isAuthenticated: true,
@@ -99,7 +120,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Logout function
   const logout = () => {
-    console.log("Logging out user...");
+    logger.info("Logging out user...");
     // First clear the user from storage
     UserService.logout();
     
@@ -111,7 +132,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       error: null
     });
     
-    console.log("User logged out successfully");
+    logger.info("User logged out successfully");
   };
 
   return (

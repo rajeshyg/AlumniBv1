@@ -9,6 +9,8 @@ import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { CsvAdminRepository } from '../../infrastructure/repositories/csvAdminRepository';
 import { ValidateAdminEmail } from '../../domain/usecases/validateAdminEmail';
+import { logger } from '../../utils/logger';
+import { LogViewer } from '../Debug/LogViewer';
 
 export const AppLayout = () => {
   const { authState, logout } = useAuth();
@@ -21,27 +23,53 @@ export const AppLayout = () => {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authState.isAuthenticated && !authState.loading) {
-      console.log("AppLayout: User not authenticated, redirecting to login");
+      logger.info('User not authenticated, redirecting to login', {
+        path: location.pathname,
+        isLoading: authState.loading
+      });
       navigate('/login');
     }
-  }, [authState.isAuthenticated, authState.loading, navigate]);
+  }, [authState.isAuthenticated, authState.loading, navigate, location.pathname]);
 
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (authState.currentUser?.email) {
-        const adminRepo = new CsvAdminRepository();
-        const validateAdminEmail = new ValidateAdminEmail(adminRepo);
-        const adminStatus = await validateAdminEmail.execute(authState.currentUser.email);
-        setIsAdmin(adminStatus);
-        
-        // Redirect admin to admin page if on home
-        if (adminStatus && location.pathname === '/home') {
-          navigate('/admin');
+        try {
+          logger.debug('Checking admin status', { 
+            email: authState.currentUser.email,
+            currentPath: location.pathname
+          });
+          
+          const adminRepo = new CsvAdminRepository();
+          const validateAdminEmail = new ValidateAdminEmail(adminRepo);
+          const adminStatus = await validateAdminEmail.execute(authState.currentUser.email);
+          
+          setIsAdmin(adminStatus);
+          logger.info('Admin status checked', { 
+            email: authState.currentUser.email, 
+            isAdmin: adminStatus 
+          });
+          
+          // Redirect admin to admin page if on home
+          if (adminStatus && location.pathname === '/home') {
+            logger.info('Admin user detected on home page, redirecting to admin page');
+            navigate('/admin');
+          }
+        } catch (error) {
+          logger.error('Failed to check admin status', error);
         }
       }
     };
     checkAdminStatus();
   }, [authState.currentUser, location.pathname, navigate]);
+
+  // Add startup log to verify logger is working
+  useEffect(() => {
+    logger.info('AppLayout mounted', { 
+      path: location.pathname,
+      auth: authState.isAuthenticated 
+    });
+  }, []);
 
   return (
     <div className={cn(
@@ -71,6 +99,9 @@ export const AppLayout = () => {
       {isMobile && (
         <Navigation className="fixed bottom-0 left-0 right-0 bg-background border-t border-border/40 z-50" />
       )}
+      
+      {/* Add LogViewer component to see logs in the UI */}
+      <LogViewer />
     </div>
   );
 };

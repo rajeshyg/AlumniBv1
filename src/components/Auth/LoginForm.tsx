@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { User } from '../../models/User';
 import { useAuth } from '../../context/AuthContext';
+import { logger } from '../../utils/logger';
 
 export const LoginForm: React.FC = () => {
   const location = useLocation();
   const { login, selectProfile } = useAuth();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');  // Removed default 'test'
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userOptions, setUserOptions] = useState<User[]>([]);
@@ -17,6 +18,9 @@ export const LoginForm: React.FC = () => {
   useEffect(() => {
     const state = location.state as { switchProfile?: boolean; profiles?: User[] };
     if (state?.switchProfile && state.profiles) {
+      logger.info('Profile switch mode detected', { 
+        profileCount: state.profiles.length 
+      });
       setUserOptions(state.profiles);
       setShowOptions(true);
     }
@@ -26,6 +30,7 @@ export const LoginForm: React.FC = () => {
   useEffect(() => {
     const state = location.state as { switchProfile?: boolean; email?: string };
     if (state?.switchProfile && state.email) {
+      logger.info('Auto-login with stored email', { email: state.email });
       setEmail(state.email);
       // Automatically trigger login with stored email
       handleSubmit(new Event('submit') as any);
@@ -38,27 +43,51 @@ export const LoginForm: React.FC = () => {
     setError(null);
     
     try {
+      logger.info('Login attempt initiated', { email });
       const result = await login(email, password);
       
       if (result.success) {
+        logger.info('Login successful', { 
+          email, 
+          multipleProfiles: result.users && result.users.length > 1 
+        });
+        
         if (result.users && result.users.length > 1) {
           // Multiple profiles found, show selection
+          logger.debug('Multiple profiles found for email', { 
+            email, 
+            profileCount: result.users.length 
+          });
           setUserOptions(result.users);
           setShowOptions(true);
         }
         // If only one user, the auth context will auto-login
       } else {
+        logger.error('Login failed', { 
+          email, 
+          reason: result.message || 'Unknown error' 
+        });
         setError(result.message || 'Login failed');
       }
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      logger.error('Login process error', { 
+        email, 
+        error: errorMessage,
+        stack: err instanceof Error ? err.stack : undefined 
+      });
       setError('An error occurred during login');
-      console.error('Login error:', err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSelectProfile = (user: User) => {
+    logger.info('User profile selected', {
+      email: user.email,
+      studentId: user.studentId, 
+      name: user.name
+    });
     selectProfile(user);
     setShowOptions(false);
   };

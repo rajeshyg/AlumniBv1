@@ -8,6 +8,7 @@ import { ROLE_PERMISSIONS } from '../models/Admin';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { logger } from '../utils/logger';
 
 const Admin: React.FC = () => {
   const { authState } = useAuth();
@@ -18,6 +19,7 @@ const Admin: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [searchResults, setSearchResults] = React.useState<UserSearchResult[]>([]);
   const [existingModerators, setExistingModerators] = React.useState<UserSearchResult[]>([]);
+  const [refreshTrigger, setRefreshTrigger] = React.useState(0);
 
   React.useEffect(() => {
     const loadAdminData = async () => {
@@ -29,7 +31,7 @@ const Admin: React.FC = () => {
         }
       } catch (err) {
         setError('Failed to load admin data');
-        console.error('Admin page error:', err);
+        logger.error("Admin page error:", err);
       } finally {
         setLoading(false);
       }
@@ -43,12 +45,9 @@ const Admin: React.FC = () => {
       
       try {
         setLoading(true);
-        const repository = new CsvAdminRepository();
-        // Get all entries from admin-emails.csv
-        const response = await fetch('/admin-emails.csv');
+        const response = await fetch(`/admin-emails.csv?t=${Date.now()}`);
         const csvText = await response.text();
         
-        // Simple CSV parsing to extract moderators
         const lines = csvText.split('\n').map(line => line.trim()).filter(Boolean);
         const headers = lines[0].toLowerCase().split(',');
         const emailIndex = headers.indexOf('email');
@@ -73,17 +72,17 @@ const Admin: React.FC = () => {
             name: ''
           }));
         
-        console.log('Found moderators:', moderators);
+        logger.debug("Found moderators:", moderators);
         setExistingModerators(moderators);
       } catch (error) {
-        console.error('Error loading moderators:', error);
+        logger.error("Failed to load moderators:", error);
       } finally {
         setLoading(false);
       }
     };
     
     loadModerators();
-  }, [adminData]);
+  }, [adminData, refreshTrigger]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -92,12 +91,11 @@ const Admin: React.FC = () => {
     setError(null);
     try {
       const repository = new CsvAdminRepository();
-      console.log('Searching for:', searchQuery);
+      logger.info("Starting user search", { query: searchQuery });
       
       const users = await repository.searchUsers(searchQuery);
-      console.log('Search results:', users);
+      logger.info('Search results:', users);
       
-      // Get admin statuses for found users
       const userRoles = await Promise.all(
         users.map(async (user) => {
           const adminStatus = await repository.getAdminWithRole(user.email);
@@ -108,11 +106,11 @@ const Admin: React.FC = () => {
         })
       );
       
-      console.log('Users with roles:', userRoles);
+      logger.debug("Users with roles:", userRoles);
       setSearchResults(userRoles);
       setSearchResult(null);
     } catch (error) {
-      console.error('Search error:', error);
+      logger.error("Search failed:", error);
       setError(`Failed to search users: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setSearchResults([]);
     } finally {
@@ -126,11 +124,11 @@ const Admin: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('Starting moderator role assignment for:', email, 'studentId:', studentId);
+      logger.info("Assigning moderator role", { email, studentId });
       const repository = new CsvAdminRepository();
       await repository.updateUserRole(email, 'moderator', studentId);
       
-      console.log('Role assignment successful, updating UI');
+      logger.info("Moderator role assigned, updating UI");
       setSearchResults((prevResults) =>
         prevResults.map((user) =>
           user.email === email && (!studentId || user.id === studentId) 
@@ -138,8 +136,10 @@ const Admin: React.FC = () => {
             : user
         )
       );
+      
+      setRefreshTrigger(prev => prev + 1);
     } catch (error) {
-      console.error('Error in handleAssignModerator:', error);
+      logger.error("Failed to assign moderator role:", error);
       setError(error instanceof Error ? error.message : 'Failed to assign moderator role');
     } finally {
       setLoading(false);

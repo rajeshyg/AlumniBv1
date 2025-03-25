@@ -7,6 +7,7 @@ import { Search, PlusSquare, X, RefreshCw } from 'lucide-react';
 import { TabNavigation, Tab } from '../components/shared/TabNavigation';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { logger } from '../utils/logger';
 
 export default function Posts() {
   const { authState } = useAuth();
@@ -20,6 +21,7 @@ export default function Posts() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authState.isAuthenticated && !authState.loading) {
+      logger.info('User not authenticated, redirecting to login');
       navigate('/login');
     }
   }, [authState.isAuthenticated, authState.loading, navigate]);
@@ -34,29 +36,40 @@ export default function Posts() {
   ];
 
   useEffect(() => {
+    logger.info('Posts component mounted, loading posts');
     loadPosts();
   }, []);
 
   useEffect(() => {
+    logger.debug('Filter criteria changed, updating filtered posts', {
+      searchQuery,
+      activeTab,
+      totalPosts: posts.length
+    });
     filterPosts();
   }, [posts, searchQuery, activeTab]);
 
   const loadPosts = () => {
+    logger.info('Loading posts from service');
     const allPosts = PostService.getAllPosts();
+    logger.debug('Posts loaded successfully', { count: allPosts.length });
     setPosts(allPosts);
   };
 
   const filterPosts = () => {
+    logger.debug('Filtering posts', { activeTab, searchQueryLength: searchQuery.length });
     let filtered = [...posts];
     
     // Filter by category tab
     if (activeTab !== 'all') {
+      logger.debug(`Filtering by category: ${activeTab}`);
       filtered = filtered.filter(post => post.category === activeTab);
     }
     
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
+      logger.debug(`Filtering by search query: ${query}`);
       filtered = filtered.filter(post => 
         post.title?.toLowerCase().includes(query) || 
         post.content.toLowerCase().includes(query) ||
@@ -65,36 +78,52 @@ export default function Posts() {
       );
     }
     
+    logger.debug('Filter results', { 
+      beforeCount: posts.length, 
+      afterCount: filtered.length 
+    });
+    
     setFilteredPosts(filtered);
   };
 
   const handleCreatePost = (postData: any) => {
+    logger.info('Creating new post', { title: postData.title, category: postData.category });
     PostService.createPost(postData);
+    logger.debug('Post created successfully');
     loadPosts();
     setShowForm(false);
   };
 
   const handleLikePost = (id: string, userId: string) => {
+    logger.debug('Liking post', { postId: id, userId });
     PostService.likePost(id, userId);
     loadPosts();
   };
 
   const handleAddComment = (postId: string, text: string, user: any) => {
+    logger.debug('Adding comment to post', { 
+      postId, 
+      commentLength: text.length,
+      userId: user.studentId
+    });
     PostService.addComment(postId, text, user);
     loadPosts();
   };
 
   const handleResetPosts = () => {
+    logger.info('Resetting posts storage to default data');
     PostService.resetStorage();
     loadPosts();
   };
 
   const handleTabChange = (tabId: string) => {
+    logger.debug(`Changing active tab to: ${tabId}`);
     setActiveTab(tabId);
   };
 
   // Show loading state
   if (authState.loading) {
+    logger.debug('Auth state is loading, showing loading indicator');
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p>Loading...</p>

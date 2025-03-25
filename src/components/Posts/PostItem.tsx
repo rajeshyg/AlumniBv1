@@ -3,6 +3,7 @@ import { Post } from '../../models/Post';
 import { ThumbsUp, Tag, ChevronDown, ChevronUp, Share2, MessageCircle, Image as ImageIcon } from 'lucide-react';
 import { getCategoryFallbackImage } from '../../lib/imageUtils';
 import { useAuth } from '../../context/AuthContext';
+import { logger } from '../../utils/logger';
 
 interface PostItemProps {
   post: Post;
@@ -21,13 +22,14 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
   // Determine if current user has liked this post
   const hasLiked = post.likedBy?.includes(authState.currentUser?.studentId || '');
   
-  // Debug log when post is rendered
+  // Replace console.log with structured logger
   useEffect(() => {
-    // Check if post has comments
-    console.log(`Post ${post.id} (${post.title}) details:`, {
-      hasComments: Boolean(post.comments && post.comments.length > 0),
+    logger.debug(`Rendering post ${post.id}`, {
+      title: post.title,
+      author: post.author,
+      hasComments: post.comments && post.comments.length > 0,
       commentCount: post.comments?.length || 0,
-      comments: post.comments
+      category: post.category
     });
   }, [post]);
   
@@ -55,9 +57,13 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
     }
   };
 
-  // Handle image load error by using a fallback
+  // Handle image load error with proper logging
   const handleImageError = () => {
-    console.error(`Failed to load image: ${post.image}`);
+    logger.error(`Failed to load image for post ${post.id}`, { 
+      imageUrl: post.image,
+      postTitle: post.title,
+      fallbackCategory: post.category
+    });
     setImageError(true);
   };
 
@@ -70,7 +76,7 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
   };
 
   return (
-    <div className="space-y-4">
+    <div data-testid={`post-${post.id}`} className="space-y-4">
       <h2 className="text-xl font-semibold">{post.title}</h2>
       
       {/* Show image with error handling */}

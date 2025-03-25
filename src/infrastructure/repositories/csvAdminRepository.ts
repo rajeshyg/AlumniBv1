@@ -4,6 +4,7 @@ import { Admin } from '../../models/Admin';
 import { AssignMentorRoleRepository } from '../../domain/usecases/assignMentorRole';
 import { User } from '../../domain/entities/User';
 import { UserRepository, UserSearchResult } from '../../domain/repositories/userRepository';
+import { logger } from '../../utils/logger';
 
 export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepository, UserRepository {
   private readonly adminFilePath = '/admin-emails.csv';
@@ -57,7 +58,7 @@ export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepo
       
       return admin ? { email: admin.email, role: admin.role as Admin['role'] } : null;
     } catch (error) {
-      console.error('Error getting admin with role:', error);
+      logger.error("Failed to get admin role:", error);
       return null;
     }
   }
@@ -68,7 +69,7 @@ export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepo
       if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
       
       const csvText = await response.text();
-      console.log('Raw CSV text:', csvText);
+      logger.debug("Loaded admin CSV content:", csvText);
       
       const lines = csvText.split('\n').filter(line => line.trim());
       if (lines.length <= 1) return [];
@@ -91,7 +92,7 @@ export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepo
         })
         .filter(admin => admin.email && admin.role);
     } catch (error) {
-      console.error('Error loading admins:', error);
+      logger.error("Failed to load admins:", error);
       return [];
     }
   }
@@ -117,7 +118,7 @@ export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepo
         role: admin.role as UserRole
       };
     } catch (error) {
-      console.error('Error reading admin data:', error);
+      logger.error("Failed to get user by ID:", error);
       return {
         id: userId,
         email: userId,
@@ -128,64 +129,59 @@ export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepo
 
   async updateUserRole(userId: string, role: string, studentId?: string): Promise<void> {
     try {
-      console.log('Updating role for user:', userId, 'to:', role, 'with studentId:', studentId);
+      logger.info(`Updating role for ${userId} to ${role}`, { studentId: studentId || 'none' });
       
-      // First, get current admin list
-      console.log('Fetching current admin list from:', this.adminFilePath);
+      // Get current admin list
       const response = await fetch(this.adminFilePath);
       if (!response.ok) {
         throw new Error(`Failed to fetch admin list: ${response.status}`);
       }
-      
       const csvText = await response.text();
-      console.log('Current admin list CSV content:', csvText);
       
+      // Parse the CSV
       const admins = this.parseCsv(csvText);
-      // Look for exact match with email and studentId if provided
-      const existingIndex = studentId 
-        ? admins.findIndex(a => a.email.toLowerCase() === userId.toLowerCase() && a.studentId === studentId)
-        : admins.findIndex(a => a.email.toLowerCase() === userId.toLowerCase());
       
+      // Find if user already exists
+      const existingIndex = admins.findIndex(a => 
+        a.email.toLowerCase() === userId.toLowerCase() && 
+        (!studentId || a.studentId === studentId)
+      );
+      
+      // Update or add user
       if (existingIndex >= 0) {
-        console.log(`Updating existing user at index ${existingIndex}`);
+        logger.debug("Updating existing user", { index: existingIndex });
         admins[existingIndex].role = role;
         if (studentId) {
           admins[existingIndex].studentId = studentId;
         }
       } else {
-        console.log('Adding new user');
+        logger.debug("Adding new user", { userId, role, studentId });
         admins.push({ email: userId, role, studentId });
       }
-
-      const newCsvContent = this.stringifyCsv(admins);
-      console.log('New CSV content to be sent:', newCsvContent);
       
-      // Try PUT endpoint first (matches our server.js)
+      // Generate new CSV content
+      const newCsvContent = this.stringifyCsv(admins);
+      logger.debug("New CSV content created", { content: newCsvContent });
+      
+      // Try PUT endpoint first
       try {
-        console.log('Sending PUT request to update admin list');
-        const updateResponse = await fetch('/admin-emails.csv', {
+        // Send PUT request
+        const putResponse = await fetch('/admin-emails.csv', {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'text/plain', 
-          },
-          body: newCsvContent,
+          headers: { 'Content-Type': 'text/plain' },
+          body: newCsvContent
         });
-
-        // Log full response for debugging
-        console.log('Server response status:', updateResponse.status);
-        const responseText = await updateResponse.text();
-        console.log('Server response text:', responseText || "(empty response)");
-
-        if (!updateResponse.ok) {
-          throw new Error(`${updateResponse.status} - ${responseText || updateResponse.statusText}`);
+        
+        if (!putResponse.ok) {
+          throw new Error(`PUT request failed: ${putResponse.status}`);
         }
         
-        console.log('Role updated successfully via PUT');
+        logger.info("Role updated successfully");
       } catch (putError) {
-        console.error('PUT request failed:', putError);
+        logger.error("PUT request failed:", putError);
         
-        // Fallback to POST endpoint without /api prefix
-        console.log('Trying POST endpoint as fallback');
+        // Fallback to POST endpoint
+        logger.info("Falling back to POST request");
         const postResponse = await fetch('/update-admin-roles', {
           method: 'POST',
           headers: {
@@ -200,23 +196,21 @@ export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepo
         });
         
         if (!postResponse.ok) {
-          const errorText = await postResponse.text();
-          throw new Error(`POST fallback failed: ${postResponse.status} - ${errorText || postResponse.statusText}`);
+          throw new Error(`POST fallback failed: ${postResponse.status}`);
         }
-        console.log('Role updated successfully via POST fallback');
+        logger.info("Role updated successfully via POST fallback");
       }
     } catch (error) {
-      console.error('Error updating user role:', error);
-      // Rethrow with detailed message
-      throw new Error(`Failed to update role: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error("Failed to update user role:", error);
+      throw error;
     }
   }
 
   async searchUsers(query: string): Promise<UserSearchResult[]> {
     try {
-      console.log('Starting search with query:', query);
+      logger.info("Searching users", { query });
       const users = await this.userService.searchUsers(query);
-      console.log('Users found:', users);
+      logger.debug("Search results:", users);
       
       return users.map(user => ({
         id: user.studentId || user.email, // Use studentId as id if available
@@ -227,7 +221,7 @@ export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepo
         role: 'student' // Default role, will be updated if they're in admin list
       }));
     } catch (error) {
-      console.error('Error searching users:', error);
+      logger.error("Failed to search users:", error);
       throw new Error('Failed to search users: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }

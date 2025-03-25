@@ -5,6 +5,7 @@ import { useThemeStore } from '../../store/theme';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { CsvAdminRepository } from '../../infrastructure/repositories/csvAdminRepository';
+import { logger } from '../../utils/logger';
 
 interface NavigationProps {
   className?: string;
@@ -23,9 +24,9 @@ export function Navigation({ className }: NavigationProps) {
           const adminRepo = new CsvAdminRepository();
           const admin = await adminRepo.getAdminWithRole(authState.currentUser.email);
           setAdminData(admin);
-          console.log('Admin status check:', { email: authState.currentUser.email, role: admin?.role });
+          logger.info("Admin status checked", { email: authState.currentUser.email, role: admin?.role });
         } catch (error) {
-          console.error('Error checking admin status:', error);
+          logger.error("Admin status check failed:", error);
           setAdminData(null);
         }
       }
