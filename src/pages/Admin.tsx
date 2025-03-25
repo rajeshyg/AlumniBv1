@@ -17,6 +17,7 @@ const Admin: React.FC = () => {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [searchResults, setSearchResults] = React.useState<UserSearchResult[]>([]);
+  const [existingModerators, setExistingModerators] = React.useState<UserSearchResult[]>([]);
 
   React.useEffect(() => {
     const loadAdminData = async () => {
@@ -35,6 +36,54 @@ const Admin: React.FC = () => {
     };
     loadAdminData();
   }, [authState.currentUser]);
+
+  React.useEffect(() => {
+    const loadModerators = async () => {
+      if (!adminData || adminData.role !== 'system_admin') return;
+      
+      try {
+        setLoading(true);
+        const repository = new CsvAdminRepository();
+        // Get all entries from admin-emails.csv
+        const response = await fetch('/admin-emails.csv');
+        const csvText = await response.text();
+        
+        // Simple CSV parsing to extract moderators
+        const lines = csvText.split('\n').map(line => line.trim()).filter(Boolean);
+        const headers = lines[0].toLowerCase().split(',');
+        const emailIndex = headers.indexOf('email');
+        const roleIndex = headers.indexOf('role');
+        const studentIdIndex = headers.indexOf('studentid');
+        
+        const moderators = lines.slice(1)
+          .map(line => {
+            const values = line.split(',').map(v => v.trim());
+            return {
+              email: emailIndex >= 0 ? values[emailIndex].toLowerCase() : '',
+              role: roleIndex >= 0 ? values[roleIndex].toLowerCase() : '',
+              studentId: studentIdIndex >= 0 && studentIdIndex < values.length ? values[studentIdIndex] : undefined
+            };
+          })
+          .filter(admin => admin.role === 'moderator')
+          .map(moderator => ({
+            id: moderator.studentId || moderator.email,
+            email: moderator.email,
+            role: 'moderator',
+            studentId: moderator.studentId,
+            name: ''
+          }));
+        
+        console.log('Found moderators:', moderators);
+        setExistingModerators(moderators);
+      } catch (error) {
+        console.error('Error loading moderators:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadModerators();
+  }, [adminData]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -71,21 +120,27 @@ const Admin: React.FC = () => {
     }
   };
 
-  const handleAssignModerator = async (email: string) => {
+  const handleAssignModerator = async (email: string, studentId?: string) => {
     if (!authState.currentUser?.email) return;
 
     setLoading(true);
     setError(null);
     try {
+      console.log('Starting moderator role assignment for:', email, 'studentId:', studentId);
       const repository = new CsvAdminRepository();
-      await repository.updateUserRole(email, 'moderator');
+      await repository.updateUserRole(email, 'moderator', studentId);
+      
+      console.log('Role assignment successful, updating UI');
       setSearchResults((prevResults) =>
         prevResults.map((user) =>
-          user.email === email ? { ...user, role: 'moderator' } : user
+          user.email === email && (!studentId || user.id === studentId) 
+            ? { ...user, role: 'moderator' } 
+            : user
         )
       );
     } catch (error) {
-      setError('Failed to assign moderator role');
+      console.error('Error in handleAssignModerator:', error);
+      setError(error instanceof Error ? error.message : 'Failed to assign moderator role');
     } finally {
       setLoading(false);
     }
@@ -119,72 +174,107 @@ const Admin: React.FC = () => {
       </div>
 
       {adminData.role === 'system_admin' && (
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Moderator Management</h2>
-          <div className="flex gap-4 mb-6">
-            <Input
-              type="text"
-              placeholder="Search by email, phone, or name"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="max-w-md"
-            />
-            <Button 
-              onClick={handleSearch}
-              disabled={loading}
-            >
-              <Search className="w-4 h-4 mr-2" />
-              Search
-            </Button>
-          </div>
-
-          {error && (
-            <p className="text-destructive mb-4">{error}</p>
-          )}
-
-          {searchResults.length > 0 && (
-            <p className="text-sm text-muted-foreground mb-4">
-              Found {searchResults.length} user{searchResults.length === 1 ? '' : 's'}
-            </p>
-          )}
-
-          <div className="space-y-4">
-            {searchResults.map(user => (
-              <div key={user.email} className="border rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    {user.name && (
-                      <p className="font-medium">{user.name}</p>
-                    )}
-                    <p className="text-sm">{user.email}</p>
-                    {user.phone && (
-                      <p className="text-sm text-muted-foreground">{user.phone}</p>
-                    )}
-                    <p className="text-sm text-muted-foreground">
-                      Current role: {user.role}
-                    </p>
+        <>
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Existing Moderators</h2>
+            {existingModerators.length > 0 ? (
+              <div className="space-y-4">
+                {existingModerators.map(moderator => (
+                  <div key={moderator.id || moderator.email} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        {moderator.name && (
+                          <p className="font-medium">{moderator.name}</p>
+                        )}
+                        <p className="text-sm">{moderator.email}</p>
+                        {moderator.studentId && (
+                          <p className="text-sm text-muted-foreground">Student ID: {moderator.studentId}</p>
+                        )}
+                        <p className="text-sm text-muted-foreground">
+                          Role: Moderator
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  {user.role === 'student' && (
-                    <Button
-                      onClick={() => handleAssignModerator(user.email)}
-                      disabled={loading}
-                      variant="outline"
-                    >
-                      <ShieldCheck className="w-4 h-4 mr-2" />
-                      Assign Moderator Role
-                    </Button>
-                  )}
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            ) : (
+              <p className="text-muted-foreground text-center">
+                No moderators found.
+              </p>
+            )}
+          </Card>
 
-          {searchResults.length === 0 && !loading && !error && (
-            <p className="text-muted-foreground text-center">
-              No users found. Try searching by email, phone, or name.
-            </p>
-          )}
-        </Card>
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Moderator Management</h2>
+            <div className="flex gap-4 mb-6">
+              <Input
+                type="text"
+                placeholder="Search by email, phone, or name"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="max-w-md"
+              />
+              <Button 
+                onClick={handleSearch}
+                disabled={loading}
+              >
+                <Search className="w-4 h-4 mr-2" />
+                Search
+              </Button>
+            </div>
+
+            {error && (
+              <p className="text-destructive mb-4">{error}</p>
+            )}
+
+            {searchResults.length > 0 && (
+              <p className="text-sm text-muted-foreground mb-4">
+                Found {searchResults.length} user{searchResults.length === 1 ? '' : 's'}
+              </p>
+            )}
+
+            <div className="space-y-4">
+              {searchResults.map(user => (
+                <div key={user.id || user.email} className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      {user.name && (
+                        <p className="font-medium">{user.name}</p>
+                      )}
+                      <p className="text-sm">{user.email}</p>
+                      {user.id && user.id !== user.email && (
+                        <p className="text-sm text-muted-foreground">ID: {user.id}</p>
+                      )}
+                      {user.phone && (
+                        <p className="text-sm text-muted-foreground">{user.phone}</p>
+                      )}
+                      <p className="text-sm text-muted-foreground">
+                        Current role: {user.role}
+                      </p>
+                    </div>
+                    {user.role === 'student' && (
+                      <Button
+                        onClick={() => handleAssignModerator(user.email, user.id)}
+                        disabled={loading}
+                        variant="outline"
+                      >
+                        <ShieldCheck className="w-4 h-4 mr-2" />
+                        Assign Moderator Role
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {searchResults.length === 0 && !loading && !error && (
+              <p className="text-muted-foreground text-center">
+                No users found. Try searching by email, phone, or name.
+              </p>
+            )}
+          </Card>
+        </>
       )}
 
       <div className="grid gap-6">
