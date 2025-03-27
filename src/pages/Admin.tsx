@@ -124,20 +124,46 @@ const Admin: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      logger.info("Assigning moderator role", { email, studentId });
       const repository = new CsvAdminRepository();
       await repository.updateUserRole(email, 'moderator', studentId);
       
-      logger.info("Moderator role assigned, updating UI");
-      setSearchResults((prevResults) =>
-        prevResults.map((user) =>
-          user.email === email && (!studentId || user.id === studentId) 
-            ? { ...user, role: 'moderator' } 
-            : user
+      // Reload moderators list
+      const response = await fetch(`/admin-emails.csv?t=${Date.now()}`, {
+        cache: 'no-store'
+      });
+      const csvText = await response.text();
+      
+      // Parse and update moderators list
+      const lines = csvText.split('\n').map(line => line.trim()).filter(Boolean);
+      const headers = lines[0].toLowerCase().split(',');
+      const emailIndex = headers.indexOf('email');
+      const roleIndex = headers.indexOf('role');
+      const studentIdIndex = headers.indexOf('studentid');
+      
+      const moderators = lines.slice(1)
+        .map(line => {
+          const values = line.split(',').map(v => v.trim());
+          return {
+            email: values[emailIndex].toLowerCase(),
+            role: values[roleIndex].toLowerCase(),
+            studentId: studentIdIndex >= 0 ? values[studentIdIndex] : undefined
+          };
+        })
+        .filter(admin => admin.role === 'moderator')
+        .map(moderator => ({
+          id: moderator.studentId || moderator.email,
+          email: moderator.email,
+          role: 'moderator',
+          studentId: moderator.studentId,
+          name: ''
+        }));
+      
+      setExistingModerators(moderators);
+      setSearchResults(prev => 
+        prev.map(user => 
+          user.email === email ? { ...user, role: 'moderator' } : user
         )
       );
-      
-      setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       logger.error("Failed to assign moderator role:", error);
       setError(error instanceof Error ? error.message : 'Failed to assign moderator role');

@@ -114,7 +114,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       currentUser: user,
       loading: false,
       error: null,
-      awaitingProfileSelection: false
+      awaitingProfileSelection: false  // Make sure this is set to false
     });
   };
 

@@ -94,6 +94,7 @@ describe('ProfileToggle', () => {
   it('should handle profile switching correctly', async () => {
     const mockUser = { name: 'John Doe', email: 'john@example.com' };
     const mockProfiles = [mockUser];
+    const mockLogout = vi.fn();
     
     vi.mocked(useAuth).mockReturnValue({
       authState: {
@@ -102,28 +103,32 @@ describe('ProfileToggle', () => {
         loading: false,
         error: null
       },
-      logout: vi.fn()
+      logout: mockLogout
     });
 
     // Setup the mock to resolve immediately
-    vi.mocked(UserService.login).mockResolvedValueOnce({
+    const loginMock = vi.mocked(UserService.login);
+    loginMock.mockResolvedValueOnce({
       success: true,
       users: mockProfiles
     });
 
     render(<ProfileToggle />);
     
-    // Find and click the switch profile button
-    const switchButton = screen.getByText('Switch Profile');
+    // Find and click the switch profile button using the text content
+    const switchButton = screen.getByText('Switch Profile').closest('button');
+    if (!switchButton) throw new Error('Switch Profile button not found');
     await fireEvent.click(switchButton);
 
-    // Wait for the async operations to complete
+    // Wait for async operations to complete
     await vi.waitFor(() => {
-      expect(UserService.login).toHaveBeenCalledWith(mockUser.email, 'test');
+      expect(loginMock).toHaveBeenCalledWith(mockUser.email, 'test');
       expect(mockNavigate).toHaveBeenCalledWith('/login', {
+        replace: true,
         state: {
           switchProfile: true,
-          profiles: mockProfiles
+          profiles: mockProfiles,
+          email: mockUser.email
         }
       });
     });

@@ -37,29 +37,18 @@ export function ProfileToggle() {
             profileCount: result.users.length
           });
           
-          // Ensure navigation happens after the successful API call
           navigate('/login', { 
             state: { 
               switchProfile: true,
-              profiles: result.users
-            }
-          });
-        } else {
-          logger.error('Profile switch failed', { 
-            email: currentEmail,
-            reason: result.message || 'Unknown error' 
+              profiles: result.users,
+              email: currentEmail
+            },
+            replace: true
           });
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        logger.error("Profile switch error", { 
-          email: currentEmail,
-          error: errorMessage,
-          stack: error instanceof Error ? error.stack : undefined
-        });
+        logger.error('Profile switch error:', error);
       }
-    } else {
-      logger.error("Cannot switch profile - no email available");
     }
   };
  

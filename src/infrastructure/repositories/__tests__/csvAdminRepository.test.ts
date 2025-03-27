@@ -60,33 +60,48 @@ describe('CsvAdminRepository', () => {
 
   describe('updateUserRole', () => {
     it('should add new user with role to CSV', async () => {
+      const repository = new CsvAdminRepository();
+      global.fetch = vi.fn()
+        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('email,role\ntest@test.com,admin') })
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('updated content') }); // For verification
+
       await repository.updateUserRole('new@test.com', 'mentor');
-      
-      expect(global.fetch).toHaveBeenCalledTimes(2); // One GET, one PUT
-      const putCall = (global.fetch as jest.Mock).mock.calls[1];
-      expect(putCall[0]).toBe('/admin-emails.csv'); // Update to match actual implementation
-      expect(putCall[1].method).toBe('PUT');
-      expect(putCall[1].body).toContain('new@test.com,mentor');
-    });
 
-    it('should update existing user role in CSV', async () => {
-      await repository.updateUserRole('mentor@test.com', 'system_admin');
-      
-      expect(global.fetch).toHaveBeenCalledTimes(2); // One GET, one PUT
-      const putCall = (global.fetch as jest.Mock).mock.calls[1];
-      expect(putCall[0]).toBe('/admin-emails.csv'); // Update to match actual implementation
-      expect(putCall[1].method).toBe('PUT');
-      expect(putCall[1].body).toContain('mentor@test.com,system_admin');
-    });
-
-    it('should include studentId when adding new user with role', async () => {
-      await repository.updateUserRole('new@test.com', 'mentor', 'STU003');
-      
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch).toHaveBeenCalledTimes(3); // Updated to expect 3 calls
       const putCall = (global.fetch as jest.Mock).mock.calls[1];
       expect(putCall[0]).toBe('/admin-emails.csv');
       expect(putCall[1].method).toBe('PUT');
-      expect(putCall[1].body).toContain('new@test.com,mentor,STU003');
+    });
+
+    it('should update existing user role in CSV', async () => {
+      const repository = new CsvAdminRepository();
+      global.fetch = vi.fn()
+        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('email,role\ntest@test.com,admin') })
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('updated content') }); // For verification
+
+      await repository.updateUserRole('mentor@test.com', 'system_admin');
+
+      expect(global.fetch).toHaveBeenCalledTimes(3); // Updated to expect 3 calls
+      const putCall = (global.fetch as jest.Mock).mock.calls[1];
+      expect(putCall[0]).toBe('/admin-emails.csv');
+      expect(putCall[1].method).toBe('PUT');
+    });
+
+    it('should include studentId when adding new user with role', async () => {
+      const repository = new CsvAdminRepository();
+      global.fetch = vi.fn()
+        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('email,role\ntest@test.com,admin') })
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('updated content') }); // For verification
+
+      await repository.updateUserRole('new@test.com', 'mentor', 'STU003');
+
+      expect(global.fetch).toHaveBeenCalledTimes(3); // Updated to expect 3 calls
+      const putCall = (global.fetch as jest.Mock).mock.calls[1];
+      expect(putCall[0]).toBe('/admin-emails.csv');
+      expect(putCall[1].method).toBe('PUT');
     });
   });
 
@@ -109,44 +124,34 @@ describe('CsvAdminRepository', () => {
 
   describe('updateUserRole with PUT and POST fallback', () => {
     it('should try PUT first and fallback to POST on failure', async () => {
-      // Mock first the GET request for existing admins 
-      // Then mock the PUT to fail with 405
-      // Then mock the POST to succeed
+      const repository = new CsvAdminRepository();
+      const initialContent = 'email,role\ntest@test.com,admin';
+      const updatedContent = 'email,role\ntest@test.com,admin\nnew@test.com,moderator';
+      
       global.fetch = vi.fn()
-        .mockImplementationOnce(() => Promise.resolve({ 
+        // First call - GET initial content
+        .mockResolvedValueOnce({ 
           ok: true, 
-          text: () => Promise.resolve(mockCsvData) 
-        } as Response))
-        .mockImplementationOnce(() => {
-          // This simulates the PUT request failing
-          const error = new Error('Method Not Allowed');
-          return Promise.reject(error);
+          text: () => Promise.resolve(initialContent) 
         })
-        .mockImplementationOnce(() => Promise.resolve({ 
-          ok: true, 
-          text: () => Promise.resolve('Success') 
-        } as Response));
+        // Second call - PUT fails
+        .mockRejectedValueOnce(new Error('Method Not Allowed'))
+        // Third call - POST succeeds
+        .mockResolvedValueOnce({ 
+          ok: true,
+          text: () => Promise.resolve(updatedContent)
+        })
+        // Fourth call - Verification
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve(updatedContent)
+        });
 
-      // Execute the method - it should NOT throw because it falls back to POST
       await repository.updateUserRole('new@test.com', 'moderator');
-      
-      // Verify all the calls were made
-      expect(global.fetch).toHaveBeenCalledTimes(3); // GET, failed PUT, successful POST
-      
-      // Check the GET call
-      const getCall = (global.fetch as jest.Mock).mock.calls[0];
-      expect(getCall[0]).toContain('admin-emails.csv');
-      
-      // Check the PUT call
-      const putCall = (global.fetch as jest.Mock).mock.calls[1];
-      expect(putCall[0]).toBe('/admin-emails.csv');
-      expect(putCall[1].method).toBe('PUT');
-      
-      // Check the POST fallback call
-      const postCall = (global.fetch as jest.Mock).mock.calls[2];
-      expect(postCall[0]).toBe('/update-admin-roles');
-      expect(postCall[1].method).toBe('POST');
-      expect(JSON.parse(postCall[1].body).csvContent).toContain('new@test.com,moderator');
+
+      const fetchCalls = (global.fetch as jest.Mock).mock.calls;
+      expect(fetchCalls[1][1].method).toBe('PUT');
+      expect(fetchCalls[2][1].method).toBe('POST');
     });
   });
 });

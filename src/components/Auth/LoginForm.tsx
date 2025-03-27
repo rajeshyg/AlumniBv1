@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { User } from '../../models/User';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { User } from '../../models/User';
+import { AdminService } from '../../services/AdminService';
 import { logger } from '../../utils/logger';
 
 export const LoginForm: React.FC = () => {
+  const navigate = useNavigate();
   const location = useLocation();
-  const { login, selectProfile } = useAuth();
+  const { login, selectProfile } = useAuth(); // Add login from useAuth
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,37 +16,42 @@ export const LoginForm: React.FC = () => {
   const [userOptions, setUserOptions] = useState<User[]>([]);
   const [showOptions, setShowOptions] = useState(false);
 
-  // Handle direct profile selection mode
+  // Single useEffect to handle both profile switch scenarios
   useEffect(() => {
-    const state = location.state as { switchProfile?: boolean; profiles?: User[] };
-    if (state?.switchProfile && state.profiles) {
-      logger.info('Profile switch mode detected', { 
-        profileCount: state.profiles.length 
-      });
-      setUserOptions(state.profiles);
-      setShowOptions(true);
-    }
-  }, [location.state]);
+    const state = location.state as { 
+      switchProfile?: boolean; 
+      profiles?: User[];
+      email?: string;
+    };
 
-  // Set email if switching profiles
-  useEffect(() => {
-    const state = location.state as { switchProfile?: boolean; email?: string };
-    if (state?.switchProfile && state.email) {
-      logger.info('Auto-login with stored email', { email: state.email });
-      setEmail(state.email);
-      // Automatically trigger login with stored email
-      handleSubmit(new Event('submit') as any);
+    if (state?.switchProfile) {
+      logger.info('Profile switch mode detected', {
+        hasProfiles: !!state.profiles,
+        profileCount: state.profiles?.length
+      });
+
+      if (state.profiles) {
+        setUserOptions(state.profiles);
+        setShowOptions(true);
+      }
+      
+      if (state.email) {
+        setEmail(state.email);
+        // Don't auto-submit when switching profiles
+      }
     }
   }, [location.state]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+
     setLoading(true);
     setError(null);
     
     try {
       logger.info('Login attempt initiated', { email });
-      const result = await login(email, password);
+      const result = await login(email, password); // Now login is defined
       
       if (result.success) {
         logger.info('Login successful', { 
@@ -53,7 +60,6 @@ export const LoginForm: React.FC = () => {
         });
         
         if (result.users && result.users.length > 1) {
-          // Multiple profiles found, show selection
           logger.debug('Multiple profiles found for email', { 
             email, 
             profileCount: result.users.length 
@@ -61,7 +67,6 @@ export const LoginForm: React.FC = () => {
           setUserOptions(result.users);
           setShowOptions(true);
         }
-        // If only one user, the auth context will auto-login
       } else {
         logger.error('Login failed', { 
           email, 
@@ -82,14 +87,36 @@ export const LoginForm: React.FC = () => {
     }
   };
 
-  const handleSelectProfile = (user: User) => {
+  const handleSelectProfile = async (user: User) => {
     logger.info('User profile selected', {
       email: user.email,
       studentId: user.studentId, 
       name: user.name
     });
+    
+    // First, select the profile
     selectProfile(user);
-    setShowOptions(false);
+    
+    try {
+      const adminService = AdminService.getInstance();
+      const isAdmin = await adminService.validateAdminStatus(user.email);
+      
+      logger.info('Admin validation complete', { 
+        email: user.email, 
+        isAdmin 
+      });
+      
+      // Navigate based on admin status
+      navigate(isAdmin ? '/admin' : '/posts', { replace: true });
+    } catch (error) {
+      logger.error('Error during role validation:', { 
+        error,
+        email: user.email,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
+      // Navigate to posts on error
+      navigate('/posts', { replace: true });
+    }
   };
 
   return (
@@ -173,3 +200,6 @@ export const LoginForm: React.FC = () => {
     </div>
   );
 };
+
+// Remove the default export
+export default LoginForm;

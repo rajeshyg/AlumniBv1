@@ -2,8 +2,8 @@ import { AdminRepository } from '../../domain/repositories/adminRepository';
 import { UserService } from '../../services/UserService';
 import { Admin } from '../../models/Admin';
 import { AssignMentorRoleRepository } from '../../domain/usecases/assignMentorRole';
-import { User } from '../../domain/entities/User';
-import { UserRepository, UserSearchResult } from '../../domain/repositories/userRepository';
+import { User, UserRole } from '../../domain/entities/User';
+import { UserRepository } from '../../domain/repositories/userRepository';
 import { logger } from '../../utils/logger';
 
 export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepository, UserRepository {
@@ -47,18 +47,59 @@ export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepo
     return admins.map(admin => admin.email.toLowerCase());
   }
 
-  async getAdminWithRole(email: string): Promise<Admin | null> {
+  async getAdminWithRole(email: string): Promise<{ email: string; role: string } | null> {
     try {
-      const response = await fetch(this.adminFilePath);
-      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+      logger.debug('Fetching admin data', { url: this.adminFilePath });
+      
+      const response = await fetch(this.adminFilePath, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch admin data: ${response.status} ${response.statusText}`);
+      }
       
       const csvText = await response.text();
-      const admins = this.parseCsv(csvText);
-      const admin = admins.find(a => a.email.toLowerCase() === email.toLowerCase());
+      const lines = csvText.split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
       
-      return admin ? { email: admin.email, role: admin.role as Admin['role'] } : null;
+      if (lines.length === 0) {
+        logger.warn('Admin CSV file is empty');
+        return null;
+      }
+      
+      const headers = lines[0].toLowerCase().split(',');
+      const emailIndex = headers.indexOf('email');
+      const roleIndex = headers.indexOf('role');
+      
+      if (emailIndex === -1 || roleIndex === -1) {
+        throw new Error(`Invalid CSV headers: ${headers.join(',')}`);
+      }
+      
+      const adminLine = lines.slice(1).find(line => {
+        const values = line.split(',');
+        return values[emailIndex].trim().toLowerCase() === email.toLowerCase();
+      });
+      
+      if (!adminLine) {
+        return null;
+      }
+      
+      const values = adminLine.split(',');
+      return {
+        email: values[emailIndex].trim(),
+        role: values[roleIndex].trim()
+      };
     } catch (error) {
-      logger.error("Failed to get admin role:", error);
+      logger.error('Error in getAdminWithRole:', {
+        error,
+        email,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
       return null;
     }
   }
@@ -127,81 +168,91 @@ export class CsvAdminRepository implements AdminRepository, AssignMentorRoleRepo
     }
   }
 
-  async updateUserRole(userId: string, role: string, studentId?: string): Promise<void> {
+  async updateUserRole(email: string, role: string, studentId?: string): Promise<void> {
     try {
-      logger.info(`Updating role for ${userId} to ${role}`, { studentId: studentId || 'none' });
+      // First fetch current content
+      const currentResponse = await fetch(this.adminFilePath);
+      const currentContent = await currentResponse.text();
       
-      // Get current admin list
-      const response = await fetch(this.adminFilePath);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch admin list: ${response.status}`);
-      }
-      const csvText = await response.text();
+      // Parse current content
+      const lines = currentContent.split('\n').filter(line => line.trim());
+      const headers = lines[0];
       
-      // Parse the CSV
-      const admins = this.parseCsv(csvText);
-      
-      // Find if user already exists
-      const existingIndex = admins.findIndex(a => 
-        a.email.toLowerCase() === userId.toLowerCase() && 
-        (!studentId || a.studentId === studentId)
+      // Check if user already exists
+      const userLineIndex = lines.findIndex(line => 
+        line.toLowerCase().includes(email.toLowerCase())
       );
       
-      // Update or add user
-      if (existingIndex >= 0) {
-        logger.debug("Updating existing user", { index: existingIndex });
-        admins[existingIndex].role = role;
-        if (studentId) {
-          admins[existingIndex].studentId = studentId;
-        }
+      // Prepare new line
+      const newLine = `${email},${role},${studentId || ''}`;
+      
+      // Update or append
+      if (userLineIndex > 0) {
+        lines[userLineIndex] = newLine;
       } else {
-        logger.debug("Adding new user", { userId, role, studentId });
-        admins.push({ email: userId, role, studentId });
+        lines.push(newLine);
       }
       
-      // Generate new CSV content
-      const newCsvContent = this.stringifyCsv(admins);
-      logger.debug("New CSV content created", { content: newCsvContent });
+      // Join content back together
+      const newContent = lines.join('\n');
       
-      // Try PUT endpoint first
+      logger.debug('Updating admin roles', {
+        email,
+        role,
+        studentId,
+        currentLines: lines.length
+      });
+
+      let updateResponse;
+
       try {
-        // Send PUT request
-        const putResponse = await fetch('/admin-emails.csv', {
+        // Try PUT first
+        updateResponse = await fetch(this.adminFilePath, {
           method: 'PUT',
-          headers: { 'Content-Type': 'text/plain' },
-          body: newCsvContent
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+          body: newContent
         });
-        
-        if (!putResponse.ok) {
-          throw new Error(`PUT request failed: ${putResponse.status}`);
+
+        if (!updateResponse.ok) {
+          throw new Error(`PUT failed: ${updateResponse.status}`);
         }
-        
-        logger.info("Role updated successfully");
       } catch (putError) {
-        logger.error("PUT request failed:", putError);
-        
-        // Fallback to POST endpoint
-        logger.info("Falling back to POST request");
-        const postResponse = await fetch('/update-admin-roles', {
+        // If PUT fails, try POST
+        updateResponse = await fetch(this.adminFilePath, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'text/plain',
           },
-          body: JSON.stringify({ 
-            csvContent: newCsvContent,
-            email: userId, 
-            role: role,
-            studentId: studentId
-          }),
+          body: newContent
         });
-        
-        if (!postResponse.ok) {
-          throw new Error(`POST fallback failed: ${postResponse.status}`);
+
+        if (!updateResponse.ok) {
+          throw new Error(`Both PUT and POST failed: ${putError}`);
         }
-        logger.info("Role updated successfully via POST fallback");
       }
+
+      logger.info('Successfully updated admin role', {
+        email,
+        role,
+        status: updateResponse.status
+      });
+
+      // Verify update
+      const verifyResponse = await fetch(`${this.adminFilePath}?t=${Date.now()}`, {
+        cache: 'no-store'
+      });
+      const verifyContent = await verifyResponse.text();
+      
+      logger.debug('Verification response', {
+        status: verifyResponse.status,
+        contentLength: verifyContent.length,
+        includesNewEmail: verifyContent.includes(email)
+      });
+
     } catch (error) {
-      logger.error("Failed to update user role:", error);
+      logger.error('Failed to update admin role', error);
       throw error;
     }
   }

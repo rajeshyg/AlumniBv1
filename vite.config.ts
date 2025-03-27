@@ -2,7 +2,6 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
@@ -15,7 +14,11 @@ export default defineConfig({
     open: true,
     host: true,
     port: 3000,
-    // Add error overlay
+    proxy: {
+      '/admin-emails.csv': 'http://localhost:3000',
+      '/api': 'http://localhost:3000',
+      '/update-admin-roles': 'http://localhost:3000'
+    },
     hmr: {
       overlay: true,
     },
@@ -24,11 +27,6 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src')
     }
-  },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/setupTests.ts'],
-    include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-  },
+  }
 });
+
