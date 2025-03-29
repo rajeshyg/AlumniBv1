@@ -3,6 +3,7 @@ import { User } from '../models/User';
 // import { v4 as uuidv4 } from 'uuid'; - causing errors
 import initialPostsJsonData from '../data/posts.json';
 import { resolveImagePath } from '../lib/imageUtils';
+import { logger } from '../utils/logger';
 
 // Simple UUID generator function as fallback
 function generateUUID() {
@@ -20,20 +21,20 @@ export class PostService {
   static resetStorage(): void {
     localStorage.clear();
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
-    console.log('Storage reset to empty array');
+    logger.info('Storage reset to empty array');
   }
 
   private static initializeStorage(): void {
     if (!localStorage.getItem(STORAGE_KEY)) {
-      console.log('Initializing posts in localStorage');
+      logger.info('Initializing posts in localStorage');
       
       // Transform the complex JSON structure to our Post format
       const formattedPosts = PostService.transformJsonToPosts(initialPostsJsonData);
-      console.log(`Formatted ${formattedPosts.length} posts for storage`);
+      logger.debug(`Formatted ${formattedPosts.length} posts for storage`);
       
       // Debug first post comments
       if (formattedPosts.length > 0) {
-        console.log('First post comments:', formattedPosts[0].comments);
+        logger.debug('First post comments:', formattedPosts[0].comments);
       }
       
       localStorage.setItem(STORAGE_KEY, JSON.stringify(formattedPosts));
@@ -43,7 +44,7 @@ export class PostService {
   private static transformJsonToPosts(jsonData: any): Post[] {
     // Check if the data has the new structure with "Posts" array
     if (jsonData.Posts && Array.isArray(jsonData.Posts)) {
-      console.log(`Processing JSON data with ${jsonData.Posts.length} posts`);
+      logger.debug(`Processing JSON data with ${jsonData.Posts.length} posts`);
       
       return jsonData.Posts.map((postWrapper: any) => {
         // Each item contains a "Post X" object
@@ -51,9 +52,20 @@ export class PostService {
         const postData = postWrapper[postKey];
         
         // Debug logs
-        console.log(`${postKey} comments:`, postData.Comments);
-        console.log(`${postKey} image:`, postData.Image);
-        console.log(`${postKey} tags:`, postData.Tags || postData.tags);
+        logger.debug(`Processing post: ${postKey}`);
+        
+        // Extract tags from JSON data - check both capitalized and lowercase keys
+        // and ensure it's always an array
+        let tags: string[] = [];
+        if (Array.isArray(postData.Tags)) {
+          tags = [...postData.Tags];
+        } else if (Array.isArray(postData.tags)) {
+          tags = [...postData.tags];
+        } else if (postData.Tags && typeof postData.Tags === 'string') {
+          tags = postData.Tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+        } else if (postData.tags && typeof postData.tags === 'string') {
+          tags = postData.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+        }
         
         // Transform to our Post structure with camelCase properties
         const transformedPost: Post = {
@@ -61,7 +73,8 @@ export class PostService {
           title: postData.Title || '',
           content: postData.Content || '',
           author: postData.Author || '',
-          authorId: postData.AuthorId || '',
+          // Handle authorId from either property name
+          authorId: postData.authorId || postData.AuthorId || '',
           createdAt: new Date(postData.createdAt || new Date().toISOString()),
           updatedAt: postData.updatedAt ? new Date(postData.updatedAt) : undefined,
           likes: postData.Likes || 0,
@@ -70,12 +83,11 @@ export class PostService {
           image: resolveImagePath(postData.Image),
           // Handle both category and Category (prefer lowercase)
           category: postData.category || postData.Category || undefined,
-          // Extract tags from JSON data - check both capitalized and lowercase keys
-          tags: Array.isArray(postData.Tags) ? [...postData.Tags] : 
-               (Array.isArray(postData.tags) ? [...postData.tags] : undefined),
+          // Use the processed tags array
+          tags: tags,
           comments: [],
           // Convert status to lowercase and handle approval details
-          status: (postData.status || 'pending').toLowerCase() as PostStatus,
+          status: (postData.status || 'approved').toLowerCase() as PostStatus,
           approvalComments: [],
           approvedBy: undefined,
           approvedById: undefined,
@@ -85,21 +97,19 @@ export class PostService {
           expiresAt: undefined
         };
         
-        // Handle comments with extra care and debugging
+        // Handle comments with extra care
         if (Array.isArray(postData.Comments)) {
           const processedComments = postData.Comments.map((comment: any) => {
-            console.log('Processing comment:', comment);
             return {
               text: comment.Text || '',
               postedBy: comment["Posted by"] || '',
-              postedById: comment.PostedById || '',
+              // Handle postedById from either property name
+              postedById: comment.PostedById || comment["PostedById"] || '',
               createdAt: new Date()
             };
           });
           transformedPost.comments = processedComments;
-          console.log(`Processed ${processedComments.length} comments for ${postKey}`);
-        } else {
-          console.log(`No comments array found for ${postKey}`);
+          logger.debug(`Processed ${processedComments.length} comments for ${postKey}`);
         }
 
         // Handle approval details if present
@@ -130,7 +140,7 @@ export class PostService {
     }
     
     // If it's the old format or unrecognized, return as is
-    console.log('JSON data format not recognized or empty');
+    logger.info('JSON data format not recognized or empty');
     return Array.isArray(jsonData) ? jsonData : [];
   }
 
@@ -141,12 +151,14 @@ export class PostService {
   }
 
   private static savePostsToStorage(posts: any[]): void {
-    console.log('Saving posts to localStorage:', posts);
+    logger.debug('Saving posts to localStorage');
     localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
   }
 
   static getAllPosts(): Post[] {
     const posts = PostService.getPostsFromStorage();
+    logger.debug(`Retrieved ${posts.length} posts from storage`);
+    
     // Convert date strings to Date objects and sort by date (newest first)
     return posts
       .map((post: any) => ({
@@ -173,12 +185,23 @@ export class PostService {
     author: string;
     authorId: string;
     images?: string[];
-    tags?: string[];
+    tags?: string[] | string;
     category?: string;
     status: PostStatus;
   }): Post {
     const posts = PostService.getPostsFromStorage();
     
+    // Ensure tags is always an array
+    let processedTags: string[] = [];
+    if (postData.tags) {
+      if (Array.isArray(postData.tags)) {
+        processedTags = postData.tags;
+      } else if (typeof postData.tags === 'string') {
+        // Handle case where tags is a comma-separated string
+        processedTags = postData.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+      }
+    }
+
     const newPost = {
       id: generateUUID(),
       title: postData.title,
@@ -190,7 +213,7 @@ export class PostService {
       likes: 0,
       likedBy: [],
       images: postData.images || [],
-      tags: postData.tags || [],
+      tags: processedTags,
       category: postData.category || 'General',
       comments: [],
       status: postData.status,
@@ -202,12 +225,70 @@ export class PostService {
     
     // Save back to localStorage
     PostService.savePostsToStorage(updatedPosts);
+    logger.debug('Created new post', { id: newPost.id, title: newPost.title, tags: newPost.tags });
     
     // Return with proper Date object
     return {
       ...newPost,
       createdAt: new Date(newPost.createdAt),
       updatedAt: new Date(newPost.updatedAt)
+    };
+  }
+
+  static updatePost(id: string, postData: any): Post | undefined {
+    const posts = this.getPostsFromStorage();
+    const postIndex = posts.findIndex(p => p.id === id);
+    
+    if (postIndex === -1) {
+      logger.info(`Post with ID ${id} not found for update`);
+      return undefined;
+    }
+    
+    // Get the existing post
+    const existingPost = posts[postIndex];
+    logger.debug(`Updating post: ${id}`, existingPost);
+    
+    // Process tags consistently
+    let processedTags: string[] = existingPost.tags || [];
+    if (postData.tags !== undefined) {
+      if (Array.isArray(postData.tags)) {
+        processedTags = postData.tags;
+      } else if (typeof postData.tags === 'string') {
+        // Handle case where tags is a comma-separated string
+        processedTags = postData.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+      } else {
+        // If tags is set to null or another invalid type, use an empty array
+        processedTags = [];
+      }
+    }
+    
+    // Create the updated post, preserving fields not included in the update
+    const updatedPost = {
+      ...existingPost,
+      title: postData.title,
+      content: postData.content,
+      category: postData.category || existingPost.category,
+      tags: processedTags,
+      updatedAt: new Date()
+    };
+    
+    // Update the post in the array
+    posts[postIndex] = updatedPost;
+    
+    // Save back to storage
+    this.savePostsToStorage(posts);
+    logger.info(`Post ${id} updated successfully`);
+    logger.debug('Updated post details', { 
+      title: updatedPost.title, 
+      tags: updatedPost.tags,
+      category: updatedPost.category 
+    });
+    
+    // Return the updated post with proper Date objects
+    return {
+      ...updatedPost,
+      createdAt: new Date(updatedPost.createdAt),
+      updatedAt: new Date(updatedPost.updatedAt)
     };
   }
 
@@ -376,7 +457,37 @@ export class PostService {
   }
 
   static getPostsByUser(userId: string): Post[] {
+    logger.debug(`Getting posts for user: ${userId}`);
     const allPosts = this.getAllPosts();
-    return allPosts.filter(post => post.authorId === userId);
+    const userPosts = allPosts.filter(post => post.authorId === userId);
+    logger.debug(`Found ${userPosts.length} posts for user ${userId}`);
+    return userPosts;
+  }
+
+  // Add a utility method to save a backup of the posts
+  static downloadPostsBackup(): void {
+    try {
+      const posts = this.getPostsFromStorage();
+      const dataStr = JSON.stringify({ Posts: posts }, null, 2);
+      
+      // Create a temporary a element to download the file
+      const element = document.createElement('a');
+      const file = new Blob([dataStr], {type: 'application/json'});
+      element.href = URL.createObjectURL(file);
+      element.download = `alumni-posts-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      
+      document.body.appendChild(element);
+      element.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(element);
+        URL.revokeObjectURL(element.href);
+      }, 100);
+      
+      logger.info('Posts backup downloaded successfully');
+    } catch (error) {
+      logger.error('Failed to download posts backup:', error);
+    }
   }
 }

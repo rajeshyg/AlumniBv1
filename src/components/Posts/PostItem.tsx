@@ -4,6 +4,7 @@ import { ThumbsUp, Tag, ChevronDown, ChevronUp, Share2, MessageCircle, Image as 
 import { getCategoryFallbackImage } from '../../lib/imageUtils';
 import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
+import { formatDistanceToNow } from 'date-fns';
 
 interface PostItemProps {
   post: Post;
@@ -18,6 +19,9 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
   const [commentText, setCommentText] = useState('');
   const [imageError, setImageError] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
+  const [showAllComments, setShowAllComments] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+  const PREVIEW_COMMENTS_COUNT = 2;
   
   // Determine if current user has liked this post
   const hasLiked = post.likedBy?.includes(authState.currentUser?.studentId || '');
@@ -74,6 +78,20 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
     }
     return post.image;
   };
+
+  // Sort comments by date - newest first
+  const sortedComments = post.comments 
+    ? [...post.comments].sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+    : [];
+
+  // Get comments to display based on preview state
+  const commentsToShow = showAllComments 
+    ? sortedComments 
+    : sortedComments.slice(0, PREVIEW_COMMENTS_COUNT);
+
+  const hasMoreComments = sortedComments.length > PREVIEW_COMMENTS_COUNT;
 
   return (
     <div data-testid={`post-${post.id}`} className="space-y-4">
@@ -157,8 +175,8 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
           </span>
         )}
         
-        {/* Show tags if available */}
-        {post.tags && post.tags.length > 0 && (
+        {/* Show tags if available - safely handle when tags is not an array */}
+        {post.tags && Array.isArray(post.tags) && post.tags.length > 0 && (
           post.tags.map(tag => (
             <span key={tag} className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded-full text-xs">
               <Tag className="w-3 h-3" />
@@ -211,22 +229,55 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
       {/* Comments section */}
       {showComments && (
         <div className="mt-4 space-y-4 border-t border-border/40 pt-4">
-          <h3 className="text-sm font-semibold">Comments ({post.comments?.length || 0})</h3>
+          <h3 className="text-sm font-semibold">
+            Comments ({sortedComments.length})
+          </h3>
           
           <div className="space-y-3">
-            {post.comments && post.comments.length > 0 ? (
-              post.comments.map((comment, index) => (
-                <div key={index} className="bg-background p-3 rounded-md border border-border/40">
-                  <p className="text-sm">{comment.text}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Posted by {comment.postedBy}</p>
-                </div>
-              ))
+            {sortedComments.length > 0 ? (
+              <>
+                {commentsToShow.map((comment, index) => (
+                  <div 
+                    key={index} 
+                    className="bg-background p-3 rounded-md border border-border/40"
+                    data-testid={`comment-${index}`}
+                  >
+                    <p className="text-sm">{comment.text}</p>
+                    <div className="flex justify-between items-center mt-1">
+                      <p className="text-xs text-muted-foreground">
+                        Posted by {comment.postedBy}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(comment.createdAt))} ago
+                      </p>
+                    </div>
+                  </div>
+                ))}
+
+                {hasMoreComments && (
+                  <button
+                    onClick={() => setShowAllComments(!showAllComments)}
+                    className="w-full mt-2 p-2 text-sm text-primary hover:bg-primary/5 rounded-md flex items-center justify-center gap-1"
+                  >
+                    {showAllComments ? (
+                      <>
+                        <ChevronUp className="w-4 h-4" /> Show fewer comments
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4" /> 
+                        View all {sortedComments.length} comments
+                      </>
+                    )}
+                  </button>
+                )}
+              </>
             ) : (
               <p className="text-sm text-muted-foreground">No comments yet</p>
             )}
           </div>
-          
-          {/* Add comment form - No author field needed */}
+
+          {/* Comment form */}
           {onComment && authState.isAuthenticated && (
             <form onSubmit={handleSubmitComment} className="space-y-3 mt-4">
               <div>
@@ -250,9 +301,9 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
               </div>
             </form>
           )}
-          
+
           {/* Show login message if not authenticated */}
-          {showComments && !authState.isAuthenticated && (
+          {!authState.isAuthenticated && (
             <div className="mt-4 p-3 bg-muted rounded-md">
               <p className="text-sm text-center">Please log in to comment</p>
             </div>

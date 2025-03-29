@@ -1,5 +1,5 @@
 import React from 'react';
-import { Post } from '../../models/Post';
+import { Post, PostStatus } from '../../models/Post';
 import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -13,28 +13,38 @@ interface PostReviewListProps {
   onReject: (postId: string, comment: string) => Promise<void>;
 }
 
+const statusColors: Record<PostStatus, string> = {
+  pending: 'bg-yellow-500',
+  approved: 'bg-green-500',
+  rejected: 'bg-red-500',
+  expired: 'bg-gray-500'
+};
+
+const statusLabels: Record<PostStatus, string> = {
+  pending: 'Pending Approval',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  expired: 'Expired'
+};
+
 export function PostReviewList({ posts, onApprove, onReject }: PostReviewListProps) {
   const { authState } = useAuth();
 
-  const pendingPosts = posts.filter(post => post.status === 'pending');
-
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold">Posts Pending Review</h2>
-      
-      {pendingPosts.length === 0 ? (
+      {posts.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
-          No posts pending review
+          No posts to display
         </div>
       ) : (
         <div className="space-y-4">
-          {pendingPosts.map(post => (
+          {posts.map(post => (
             <Card key={post.id}>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>{post.title}</CardTitle>
-                  <Badge className="bg-yellow-500">
-                    Pending Approval
+                  <Badge className={statusColors[post.status]}>
+                    {statusLabels[post.status]}
                   </Badge>
                 </div>
               </CardHeader>
@@ -47,11 +57,27 @@ export function PostReviewList({ posts, onApprove, onReject }: PostReviewListPro
                     <p>{post.content}</p>
                   </div>
 
-                  <PostApprovalForm
-                    post={post}
-                    onApprove={onApprove}
-                    onReject={onReject}
-                  />
+                  {post.status === 'pending' && (
+                    <PostApprovalForm
+                      post={post}
+                      onApprove={onApprove}
+                      onReject={onReject}
+                    />
+                  )}
+
+                  {post.approvalComments && post.approvalComments.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <h4 className="font-semibold">Review Comments:</h4>
+                      {post.approvalComments.map((comment, index) => (
+                        <div key={index} className="bg-muted p-2 rounded">
+                          <p className="text-sm">{comment.text}</p>
+                          <p className="text-xs text-muted-foreground">
+                            By {comment.postedBy} on {formatDistanceToNow(comment.createdAt)} ago
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

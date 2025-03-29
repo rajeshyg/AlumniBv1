@@ -29,8 +29,14 @@ const statusColors: Record<PostStatus, string> = {
 export function MyPosts({ posts, onUpdatePost }: MyPostsProps) {
   const { authState } = useAuth();
   const [activeStatus, setActiveStatus] = useState<PostStatus>('pending');
+  const [localPosts, setLocalPosts] = useState<Post[]>(posts);
 
-  const filteredPosts = posts.filter(post => post.status === activeStatus);
+  // Update local posts when props change
+  useEffect(() => {
+    setLocalPosts(posts);
+  }, [posts]);
+
+  const filteredPosts = localPosts.filter(post => post.status === activeStatus);
 
   const handleStatusChange = (status: string) => {
     setActiveStatus(status as PostStatus);

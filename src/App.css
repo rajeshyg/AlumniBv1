@@ -1,0 +1,18 @@
+/* Custom scrollbar styles - place these at the end of the file to ensure they take precedence */
+.scrollable-content {
+  overflow-y: auto !important; /* Added !important to override any conflicting styles */
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+.scrollable-content::-webkit-scrollbar {
+  display: none !important;  /* Chrome, Safari and Opera */
+  width: 0 !important;  /* Added width 0 for extra measure */
+}
+
+/* Remove any other scrollbar-related styles in this file */
+
+
+
+
+

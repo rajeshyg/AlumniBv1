@@ -4,10 +4,18 @@ import { PostService } from '../services/PostService';
 import { PostItem } from '../components/Posts/PostItem';
 import { PostForm } from '../components/Posts/PostForm';
 import { Search, PlusSquare, X, RefreshCw } from 'lucide-react';
-import { TabNavigation, Tab } from '../components/shared/TabNavigation';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { logger } from '../utils/logger';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+
+const categoryLabels = {
+  all: 'All Categories',
+  Internships: 'Internships',
+  Admissions: 'Admissions',
+  Scholarships: 'Scholarships',
+  General: 'General'
+};
 
 export default function Posts() {
   const { authState } = useAuth();
@@ -16,7 +24,7 @@ export default function Posts() {
   const [filteredPosts, setFilteredPosts] = useState<Post[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState('all'); // Keep track of the active tab value
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -25,15 +33,6 @@ export default function Posts() {
       navigate('/login');
     }
   }, [authState.isAuthenticated, authState.loading, navigate]);
-
-  // Define category tabs
-  const categoryTabs: Tab[] = [
-    { id: 'all', label: 'All Categories' },
-    { id: 'Internships', label: 'Internships' },
-    { id: 'Admissions', label: 'Admissions' },
-    { id: 'Scholarships', label: 'Scholarships' },
-    { id: 'General', label: 'General' }
-  ];
 
   useEffect(() => {
     logger.info('Posts component mounted, loading posts');
@@ -54,6 +53,7 @@ export default function Posts() {
     const allPosts = PostService.getAllPosts();
     logger.debug('Posts loaded successfully', { count: allPosts.length });
     setPosts(allPosts);
+    setFilteredPosts(allPosts); // Initialize filtered posts with all posts
   };
 
   const filterPosts = () => {
@@ -131,10 +131,15 @@ export default function Posts() {
     );
   }
 
+  // Determine the posts to display based on the active tab
+  const postsToDisplay = filteredPosts; // Already filtered by search and category in filterPosts
+
   return (
-    <div className="flex flex-col min-h-screen max-w-full">
-      {/* Sticky header section */}
-      <div className="sticky top-0 z-10 bg-background pt-4 pb-2 px-2 space-y-4 shadow-sm">
+    // Use a container that allows the header to be sticky and content to scroll
+    <div className="flex flex-col h-screen max-w-full"> 
+      {/* Sticky header section: Contains title, buttons, search, and tabs list */}
+      <div className="sticky top-0 z-20 bg-background pt-4 pb-2 px-2 space-y-4 shadow-sm border-b border-border/40">
+        {/* Top row: Title and buttons */}
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Community Posts</h1>
           <div className="flex items-center gap-2">
@@ -163,16 +168,7 @@ export default function Posts() {
           </div>
         </div>
 
-        {/* Tab navigation with overflow scroll */}
-        <div className="overflow-x-auto -mx-2 px-2">
-          <TabNavigation 
-            tabs={categoryTabs} 
-            activeTab={activeTab} 
-            onTabChange={handleTabChange} 
-          />
-        </div>
-
-        {/* Search bar - standalone without dropdown */}
+        {/* Search bar */}
         <div className="relative w-full">
           <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-muted-foreground" />
@@ -185,34 +181,45 @@ export default function Posts() {
             className="w-full pl-10 pr-4 py-2 border border-border/40 bg-background rounded-md"
           />
         </div>
+
+        {/* Tabs List - Part of the sticky header */}
+        {/* Use Tabs component for state management but only render TabsList here */}
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+          <TabsList className="grid w-full grid-cols-5">
+            {Object.entries(categoryLabels).map(([id, label]) => (
+              <TabsTrigger key={id} value={id}>
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
 
-      {/* Scrollable content area */}
-      <div className="flex-1 overflow-y-auto px-2 pt-4 pb-20">
+      {/* Scrollable content area - Takes remaining height */}
+      <div className="flex-1 scrollable-content px-2 pt-4 pb-20"> 
+        {/* Conditionally render the PostForm */}
         {showForm && (
           <div className="bg-card p-4 rounded-lg border border-border/40 mb-6">
             <PostForm onSubmit={handleCreatePost} onCancel={() => setShowForm(false)} />
           </div>
         )}
 
-        <div>
-          <h2 className="text-lg font-semibold mb-4">Recent Posts</h2>
-          {filteredPosts.length > 0 ? (
-            <div className="space-y-4">
-              {filteredPosts.map((post) => (
-                <div key={post.id} className="bg-card p-4 rounded-lg border border-border/40">
-                  <PostItem 
-                    post={post} 
-                    onLike={handleLikePost} 
-                    onComment={handleAddComment}
-                  />
-                </div>
-              ))}
-            </div>
+        {/* Render the filtered posts */}
+        <div className="space-y-4">
+          {/* Removed the h2 "Recent Posts" as it was inside TabsContent before */}
+          {postsToDisplay.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              {searchQuery ? 'No posts match your search.' : `No posts found in ${categoryLabels[activeTab as keyof typeof categoryLabels]}.`}
+            </p>
           ) : (
-            <div className="bg-card p-4 rounded-lg border border-border/40 text-center">
-              <p className="text-muted-foreground">No posts found. Try adjusting your search or filters.</p>
-            </div>
+            postsToDisplay.map(post => (
+              <PostItem
+                key={post.id}
+                post={post}
+                onLike={handleLikePost}
+                onComment={handleAddComment}
+              />
+            ))
           )}
         </div>
       </div>

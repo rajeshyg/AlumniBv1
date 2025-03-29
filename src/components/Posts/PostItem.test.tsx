@@ -118,3 +118,67 @@ describe('PostItem', () => {
     expect(screen.getByText('Test Post Title')).toBeInTheDocument();
   });
 });
+
+describe('PostItem Comments Preview', () => {
+  const mockPost = {
+    id: '1',
+    title: 'Test Post',
+    content: 'Test content',
+    author: 'Test Author',
+    authorId: '123',
+    createdAt: new Date(),
+    comments: [
+      { text: 'Comment 1', postedBy: 'User 1', postedById: '1', createdAt: new Date() },
+      { text: 'Comment 2', postedBy: 'User 2', postedById: '2', createdAt: new Date() },
+      { text: 'Comment 3', postedBy: 'User 3', postedById: '3', createdAt: new Date() },
+      { text: 'Comment 4', postedBy: 'User 4', postedById: '4', createdAt: new Date() }
+    ],
+    // ... other required properties
+  };
+
+  it('should show preview of comments initially', () => {
+    render(
+      <PostItem 
+        post={mockPost}
+        onLike={() => {}}
+        onComment={() => {}}
+      />
+    );
+
+    // Click to show comments
+    fireEvent.click(screen.getByText(/2 comments/i));
+
+    // Should show only first 2 comments
+    expect(screen.getByText('Comment 1')).toBeInTheDocument();
+    expect(screen.getByText('Comment 2')).toBeInTheDocument();
+    expect(screen.queryByText('Comment 3')).not.toBeInTheDocument();
+
+    // Should show "View all comments" button
+    expect(screen.getByText(/View all 4 comments/i)).toBeInTheDocument();
+  });
+
+  it('should show all comments when "View all" is clicked', () => {
+    render(
+      <PostItem 
+        post={mockPost}
+        onLike={() => {}}
+        onComment={() => {}}
+      />
+    );
+
+    // Click to show comments
+    fireEvent.click(screen.getByText(/2 comments/i));
+
+    // Click to show all comments
+    fireEvent.click(screen.getByText(/View all 4 comments/i));
+
+    // Should show all comments
+    expect(screen.getByText('Comment 1')).toBeInTheDocument();
+    expect(screen.getByText('Comment 2')).toBeInTheDocument();
+    expect(screen.getByText('Comment 3')).toBeInTheDocument();
+    expect(screen.getByText('Comment 4')).toBeInTheDocument();
+
+    // Should show "Show less" button
+    expect(screen.getByText(/Show less/i)).toBeInTheDocument();
+  });
+});

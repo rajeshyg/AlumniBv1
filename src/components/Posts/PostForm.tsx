@@ -5,30 +5,35 @@ import { Tag } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { PostStatus } from '../../models/Post';
 
-interface PostFormProps {
-  onSubmit: (post: {
+type PostFormProps = {
+  onSubmit: (data: any) => void;
+  onCancel: () => void;
+  initialValues?: {
     title: string;
     content: string;
-    author: string;
-    authorId: string;
-    images?: string[];
-    tags?: string[];
-    category?: string;
-    status: PostStatus;
-  }) => void;
-  onCancel?: () => void;
-  initialStatus?: PostStatus;
-}
+    category: string;
+    tags: string;
+  };
+  submitLabel?: string;
+};
 
-export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, initialStatus = 'pending' }) => {
+export function PostForm({ 
+  onSubmit, 
+  onCancel, 
+  initialValues = { title: '', content: '', category: 'General', tags: '' },
+  submitLabel = 'Submit for Approval'
+}: PostFormProps) {
   const { authState } = useAuth();
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+  const [title, setTitle] = useState(initialValues.title);
+  const [content, setContent] = useState(initialValues.content);
   const [images, setImages] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
-  const [category, setCategory] = useState('');
-  const [status, setStatus] = useState<PostStatus>(initialStatus);
+  // Parse initial tags string into array
+  const [tags, setTags] = useState<string[]>(
+    initialValues.tags ? initialValues.tags.split(',').map(tag => tag.trim()) : []
+  );
+  const [category, setCategory] = useState(initialValues.category);
+  const [status, setStatus] = useState<PostStatus>('pending');
 
   // Predefined categories matching the updated categories
   const categories = ['Internships', 'Admissions', 'Scholarships', 'General'];
@@ -48,7 +53,7 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, initialS
         author: authState.currentUser.name,
         authorId: authState.currentUser.studentId,
         images: images.length > 0 ? images : undefined,
-        tags: tags.length > 0 ? tags : undefined,
+        tags: tags.length > 0 ? tags.join(', ') : undefined,
         category: category || 'General',
         status
       });
@@ -58,8 +63,8 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, initialS
       setContent('');
       setImages([]);
       setTags([]);
-      setCategory('');
-      setStatus(initialStatus);
+      setCategory('General');
+      setStatus('pending');
     }
   };
 
@@ -139,7 +144,7 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, initialS
           Tags
         </label>
         <div className="flex flex-wrap gap-2 mb-2">
-          {tags.map(tag => (
+          {tags.map((tag: string) => (
             <span key={tag} className="flex items-center gap-1 bg-primary/20 text-primary px-2 py-1 rounded-full text-sm">
               <Tag className="w-3 h-3" />
               {tag}
@@ -181,22 +186,20 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, initialS
       </div>
       
       <div className="flex justify-end gap-2">
-        {onCancel && (
-          <button 
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 border border-border/40 rounded-md"
-          >
-            Cancel
-          </button>
-        )}
-        <button 
-          type="submit" 
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 border border-border rounded-md hover:bg-accent text-sm"
         >
-          {status === 'pending' ? 'Submit for Approval' : 'Create Post'}
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
+        >
+          {submitLabel}
         </button>
       </div>
     </form>
   );
-};
+}
