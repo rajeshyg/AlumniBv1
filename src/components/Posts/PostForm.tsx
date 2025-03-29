@@ -3,6 +3,7 @@ import { RichTextEditor } from './RichTextEditor';
 import { ImageUploader } from './ImageUploader';
 import { Tag } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { PostStatus } from '../../models/Post';
 
 interface PostFormProps {
   onSubmit: (post: {
@@ -13,11 +14,13 @@ interface PostFormProps {
     images?: string[];
     tags?: string[];
     category?: string;
+    status: PostStatus;
   }) => void;
   onCancel?: () => void;
+  initialStatus?: PostStatus;
 }
 
-export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
+export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, initialStatus = 'pending' }) => {
   const { authState } = useAuth();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -25,6 +28,7 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [category, setCategory] = useState('');
+  const [status, setStatus] = useState<PostStatus>(initialStatus);
 
   // Predefined categories matching the updated categories
   const categories = ['Internships', 'Admissions', 'Scholarships', 'General'];
@@ -41,11 +45,12 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
       onSubmit({
         title,
         content,
-        author: authState.currentUser.name, // Use full name directly
+        author: authState.currentUser.name,
         authorId: authState.currentUser.studentId,
         images: images.length > 0 ? images : undefined,
         tags: tags.length > 0 ? tags : undefined,
-        category: category || 'General'
+        category: category || 'General',
+        status
       });
       
       // Reset form
@@ -54,6 +59,7 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
       setImages([]);
       setTags([]);
       setCategory('');
+      setStatus(initialStatus);
     }
   };
 
@@ -94,7 +100,6 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
           Content
         </label>
         <RichTextEditor 
-          id="content"
           value={content} 
           onChange={setContent} 
           placeholder="Write your post content here..."
@@ -153,6 +158,27 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
           className="w-full px-3 py-2 border border-border/40 bg-background rounded-md"
         />
       </div>
+
+      <div>
+        <label htmlFor="status" className="block text-sm font-medium mb-1">
+          Post Status
+        </label>
+        <select
+          id="status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as PostStatus)}
+          className="w-full px-3 py-2 border border-border/40 bg-background rounded-md"
+          aria-label="Post Status"
+        >
+          <option value="pending">Request Approval</option>
+          <option value="approved">Post Immediately</option>
+        </select>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {status === 'pending' 
+            ? 'Your post will be reviewed by a moderator before being published'
+            : 'Your post will be published immediately'}
+        </p>
+      </div>
       
       <div className="flex justify-end gap-2">
         {onCancel && (
@@ -168,7 +194,7 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel }) => {
           type="submit" 
           className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
         >
-          Create Post
+          {status === 'pending' ? 'Submit for Approval' : 'Create Post'}
         </button>
       </div>
     </form>

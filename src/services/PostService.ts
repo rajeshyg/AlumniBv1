@@ -1,4 +1,4 @@
-import { Post, Comment } from '../models/Post';
+import { Post, Comment, PostStatus, ApprovalComment } from '../models/Post';
 import { User } from '../models/User';
 // import { v4 as uuidv4 } from 'uuid'; - causing errors
 import initialPostsJsonData from '../data/posts.json';
@@ -18,11 +18,9 @@ const SAMPLE_POSTS: Post[] = [];
 export class PostService {
   // Add a reset function to force reload from JSON
   static resetStorage(): void {
-    localStorage.removeItem(STORAGE_KEY);
-    console.log('Storage reset, reloading from JSON file');
-    // Force initialization
-    this.initializeStorage();
-    console.log('Storage initialized with JSON data');
+    localStorage.clear();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+    console.log('Storage reset to empty array');
   }
 
   private static initializeStorage(): void {
@@ -42,7 +40,7 @@ export class PostService {
     }
   }
 
-  private static transformJsonToPosts(jsonData: any): any[] {
+  private static transformJsonToPosts(jsonData: any): Post[] {
     // Check if the data has the new structure with "Posts" array
     if (jsonData.Posts && Array.isArray(jsonData.Posts)) {
       console.log(`Processing JSON data with ${jsonData.Posts.length} posts`);
@@ -58,13 +56,16 @@ export class PostService {
         console.log(`${postKey} tags:`, postData.Tags || postData.tags);
         
         // Transform to our Post structure with camelCase properties
-        const transformedPost = {
+        const transformedPost: Post = {
           id: postData.ID || `post-${Date.now()}`,
           title: postData.Title || '',
           content: postData.Content || '',
           author: postData.Author || '',
-          createdAt: postData.createdAt || new Date().toISOString(),
+          authorId: postData.AuthorId || '',
+          createdAt: new Date(postData.createdAt || new Date().toISOString()),
+          updatedAt: postData.updatedAt ? new Date(postData.updatedAt) : undefined,
           likes: postData.Likes || 0,
+          likedBy: [],
           // Resolve image path correctly
           image: resolveImagePath(postData.Image),
           // Handle both category and Category (prefer lowercase)
@@ -72,21 +73,56 @@ export class PostService {
           // Extract tags from JSON data - check both capitalized and lowercase keys
           tags: Array.isArray(postData.Tags) ? [...postData.Tags] : 
                (Array.isArray(postData.tags) ? [...postData.tags] : undefined),
-          comments: []
+          comments: [],
+          // Convert status to lowercase and handle approval details
+          status: (postData.status || 'pending').toLowerCase() as PostStatus,
+          approvalComments: [],
+          approvedBy: undefined,
+          approvedById: undefined,
+          rejectedBy: undefined,
+          rejectedById: undefined,
+          lastApprovalDate: undefined,
+          expiresAt: undefined
         };
         
         // Handle comments with extra care and debugging
         if (Array.isArray(postData.Comments)) {
-          transformedPost.comments = postData.Comments.map((comment: any) => {
+          const processedComments = postData.Comments.map((comment: any) => {
             console.log('Processing comment:', comment);
             return {
               text: comment.Text || '',
-              postedBy: comment["Posted by"] || ''
+              postedBy: comment["Posted by"] || '',
+              postedById: comment.PostedById || '',
+              createdAt: new Date()
             };
           });
-          console.log(`Processed ${transformedPost.comments.length} comments for ${postKey}`);
+          transformedPost.comments = processedComments;
+          console.log(`Processed ${processedComments.length} comments for ${postKey}`);
         } else {
           console.log(`No comments array found for ${postKey}`);
+        }
+
+        // Handle approval details if present
+        if (postData.approvalDetails) {
+          const approvalComment: ApprovalComment = {
+            text: postData.approvalDetails.comments || '',
+            postedBy: postData.approvalDetails.reviewerName || '',
+            postedById: postData.approvalDetails.reviewedBy || '',
+            createdAt: postData.approvalDetails.reviewedAt ? new Date(postData.approvalDetails.reviewedAt) : new Date(),
+            status: transformedPost.status
+          };
+          transformedPost.approvalComments = [approvalComment];
+          
+          // Set approval/rejection metadata
+          if (transformedPost.status === 'approved') {
+            transformedPost.approvedBy = postData.approvalDetails.reviewerName;
+            transformedPost.approvedById = postData.approvalDetails.reviewedBy;
+            transformedPost.lastApprovalDate = new Date(postData.approvalDetails.reviewedAt);
+          } else if (transformedPost.status === 'rejected') {
+            transformedPost.rejectedBy = postData.approvalDetails.reviewerName;
+            transformedPost.rejectedById = postData.approvalDetails.reviewedBy;
+            transformedPost.lastApprovalDate = new Date(postData.approvalDetails.reviewedAt);
+          }
         }
         
         return transformedPost;
@@ -139,22 +175,26 @@ export class PostService {
     images?: string[];
     tags?: string[];
     category?: string;
+    status: PostStatus;
   }): Post {
     const posts = PostService.getPostsFromStorage();
     
     const newPost = {
-      id: generateUUID(), // Use our fallback UUID generator instead of uuidv4()
+      id: generateUUID(),
       title: postData.title,
       content: postData.content,
       author: postData.author,
       authorId: postData.authorId,
       createdAt: new Date(),
+      updatedAt: new Date(),
       likes: 0,
       likedBy: [],
       images: postData.images || [],
       tags: postData.tags || [],
       category: postData.category || 'General',
-      comments: []
+      comments: [],
+      status: postData.status,
+      approvalComments: []
     };
     
     // Add the new post to the beginning of the array
@@ -166,20 +206,125 @@ export class PostService {
     // Return with proper Date object
     return {
       ...newPost,
-      createdAt: new Date(newPost.createdAt)
+      createdAt: new Date(newPost.createdAt),
+      updatedAt: new Date(newPost.updatedAt)
     };
+  }
+
+  static approvePost(postId: string, moderator: User, comment: string): Post | undefined {
+    const posts = PostService.getPostsFromStorage();
+    let updatedPost: Post | undefined;
+    
+    const updatedPosts = posts.map(post => {
+      if (post.id === postId) {
+        const approvalComment: ApprovalComment = {
+          text: comment,
+          postedBy: moderator.name,
+          postedById: moderator.studentId,
+          createdAt: new Date(),
+          status: 'approved'
+        };
+        
+        updatedPost = {
+          ...post,
+          status: 'approved',
+          lastApprovalDate: new Date(),
+          approvedBy: moderator.name,
+          approvedById: moderator.studentId,
+          approvalComments: [...(post.approvalComments || []), approvalComment],
+          updatedAt: new Date()
+        };
+        return updatedPost;
+      }
+      return post;
+    });
+    
+    // Save back to localStorage
+    PostService.savePostsToStorage(updatedPosts);
+    
+    // Return the updated post with proper Date objects
+    return updatedPost ? {
+      ...updatedPost,
+      createdAt: new Date(updatedPost.createdAt),
+      updatedAt: updatedPost.updatedAt ? new Date(updatedPost.updatedAt) : undefined,
+      lastApprovalDate: updatedPost.lastApprovalDate ? new Date(updatedPost.lastApprovalDate) : undefined
+    } : undefined;
+  }
+
+  static rejectPost(postId: string, moderator: User, comment: string): Post | undefined {
+    const posts = PostService.getPostsFromStorage();
+    let updatedPost: Post | undefined;
+    
+    const updatedPosts = posts.map(post => {
+      if (post.id === postId) {
+        const approvalComment: ApprovalComment = {
+          text: comment,
+          postedBy: moderator.name,
+          postedById: moderator.studentId,
+          createdAt: new Date(),
+          status: 'rejected'
+        };
+        
+        updatedPost = {
+          ...post,
+          status: 'rejected',
+          lastApprovalDate: new Date(),
+          rejectedBy: moderator.name,
+          rejectedById: moderator.studentId,
+          approvalComments: [...(post.approvalComments || []), approvalComment],
+          updatedAt: new Date()
+        };
+        return updatedPost;
+      }
+      return post;
+    });
+    
+    // Save back to localStorage
+    PostService.savePostsToStorage(updatedPosts);
+    
+    // Return the updated post with proper Date objects
+    return updatedPost ? {
+      ...updatedPost,
+      createdAt: new Date(updatedPost.createdAt),
+      updatedAt: updatedPost.updatedAt ? new Date(updatedPost.updatedAt) : undefined,
+      lastApprovalDate: updatedPost.lastApprovalDate ? new Date(updatedPost.lastApprovalDate) : undefined
+    } : undefined;
+  }
+
+  static getPostsByStatus(status: PostStatus): Post[] {
+    const posts = PostService.getPostsFromStorage();
+    return posts
+      .filter(post => post.status === status)
+      .map(post => ({
+        ...post,
+        createdAt: new Date(post.createdAt),
+        updatedAt: post.updatedAt ? new Date(post.updatedAt) : undefined
+      }))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  static getPostsByUserAndStatus(userId: string, status?: PostStatus): Post[] {
+    const posts = PostService.getPostsFromStorage();
+    return posts
+      .filter(post => post.authorId === userId && (!status || post.status === status))
+      .map(post => ({
+        ...post,
+        createdAt: new Date(post.createdAt),
+        updatedAt: post.updatedAt ? new Date(post.updatedAt) : undefined
+      }))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   static likePost(id: string, userId: string): Post | undefined {
     const posts = PostService.getPostsFromStorage();
-    let updatedPost: any = undefined;
+    let updatedPost: Post | undefined;
     
     const updatedPosts = posts.map(post => {
       if (post.id === id) {
         const alreadyLiked = post.likedBy?.includes(userId);
       
         if (alreadyLiked) {
-          post.likedBy = post.likedBy.filter(id => id !== userId);
+          post.likedBy = post.likedBy.filter((likedById: string) => likedById !== userId);
           post.likes--;
         } else {
           if (!post.likedBy) post.likedBy = [];
@@ -225,10 +370,9 @@ export class PostService {
     PostService.savePostsToStorage(updatedPosts);
   }
 
-  static hasUserLikedPost(postId: string, userId: string): boolean {
-    const allPosts = this.getAllPosts();
-    const post = allPosts.find(p => p.id === postId);
-    return post?.likedBy?.includes(userId) || false;
+  static hasUserLikedPost(id: string, userId: string): boolean {
+    const post = PostService.getPostById(id);
+    return post?.likedBy.includes(userId) || false;
   }
 
   static getPostsByUser(userId: string): Post[] {

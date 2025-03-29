@@ -6,21 +6,34 @@
         "Title": "Yale University Summer Internship 2025",
         "Content": "Exciting opportunity! Apply for the Yale University Summer Internship 2025 in Senator Warnock’s Office. Study in the USA and gain valuable experience. Visit www.scholarshipsads.com for more details!",
         "Image": "Internship_1.png",
-        "Author": "Admin_ScholarshipTeam",
+        "Author": "Deepa Jaivadivel",
+        "AuthorId": "10008",
         "createdAt": "2025-03-20T10:00:00Z",
+        "updatedAt": "2025-03-20T10:00:00Z",
         "Likes": 25,
         "Comments": [
           {
             "Text": "This looks amazing! Does anyone know the eligibility criteria?",
-            "Posted by": "Student_Harsha"
+            "Posted by": "Vedanth Sundaresh",
+            "PostedById": "10010"
           },
           {
             "Text": "I applied last year and it was a life-changing experience! Highly recommend.",
-            "Posted by": "Alumni_Naga"
+            "Posted by": "Meenakshi Prabu",
+            "PostedById": "10014"
           }
         ],
         "category": "Internships",
-        "tags": ["Yale", "Summer", "USA"]
+        "tags": ["Yale", "Summer", "USA"],
+        "status": "APPROVED",
+        "approvalDetails": {
+          "requestedAt": "2025-03-19T15:00:00Z",
+          "reviewedAt": "2025-03-20T09:00:00Z",
+          "reviewedBy": "moderator-001",
+          "reviewerName": "Dr. Smith",
+          "comments": "Approved. Information verified with Yale University.",
+          "expiresAt": "2025-06-20T00:00:00Z"
+        }
       }
     },
     {
@@ -29,13 +42,16 @@
         "Title": "CSIS Internships 2025 in USA",
         "Content": "Don’t miss out on the CSIS Internships 2025 in USA! These are paid opportunities open to students from different countries. Deadlines vary, so check out www.opportunitiescircle.com to apply now!",
         "Image": "Internship_2.png",
-        "Author": "Admin_OpportunitiesCircle",
+        "Author": "Student_Jane",
+        "AuthorId": "student-002",
         "createdAt": "2025-03-20T12:30:00Z",
+        "updatedAt": "2025-03-20T12:30:00Z",
         "Likes": 18,
         "Comments": [
           {
             "Text": "Are these internships remote or in-person?",
-            "Posted by": "Student_Shruti"
+            "Posted by": "Student_Shruti",
+            "PostedById": "student-003"
           },
           {
             "Text": "Thanks for sharing! I’m definitely applying for this.",
@@ -43,7 +59,17 @@
           }
         ],
         "category": "Internships",
-        "tags": ["CSIS", "USA", "Paid"]
+        "tags": ["CSIS", "USA", "Paid"],
+        "status": "PENDING",
+        "approvalDetails": {
+          "requestedAt": "2025-03-20T12:30:00Z",
+          "requestNotes": "Please review the internship details. All information has been verified from the official website.",
+          "reviewedAt": null,
+          "reviewedBy": null,
+          "reviewerName": null,
+          "comments": null,
+          "expiresAt": null
+        }
       }
     },
     {
@@ -52,8 +78,10 @@
         "Title": "WISE Summer 2025 Internships",
         "Content": "Attention engineering students! The WISE Summer 2025 Internships application deadline is 1 February 2025. Ranked one of the best in the U.S. by The Princeton Review. Apply at wise-intern.org!",
         "Image": "Internship_3.jpg",
-        "Author": "Admin_WISETeam",
+        "Author": "Student_Mike",
+        "AuthorId": "student-004",
         "createdAt": "2025-03-20T15:00:00Z",
+        "updatedAt": "2025-03-21T10:00:00Z",
         "Likes": 30,
         "Comments": [
           {
@@ -66,7 +94,17 @@
           }
         ],
         "category": "Internships",
-        "tags": ["WISE", "Summer", "Engineering"]
+        "tags": ["WISE", "Summer", "Engineering"],
+        "status": "REJECTED",
+        "approvalDetails": {
+          "requestedAt": "2025-03-20T15:00:00Z",
+          "requestNotes": "New internship opportunity for engineering students",
+          "reviewedAt": "2025-03-21T10:00:00Z",
+          "reviewedBy": "moderator-002",
+          "reviewerName": "Prof. Johnson",
+          "comments": "Please provide official link to the program and verification of ranking claim.",
+          "expiresAt": null
+        }
       }
     },
     {
@@ -205,6 +243,102 @@
         ],
         "category": "Scholarships",
         "tags": ["Speakout Media", "Tulane"]
+      }
+    },
+    {
+      "Post 10": {
+        "ID": "post-010",
+        "Title": "Research Assistant Position at MIT Labs",
+        "Content": "MIT Labs is seeking Research Assistants for Fall 2025. Full funding available for selected candidates. Areas: AI, Machine Learning, and Quantum Computing.",
+        "Image": "research_mit.png",
+        "Author": "Adrith Sai",
+        "AuthorId": "10031",
+        "createdAt": "2025-03-22T14:30:00Z",
+        "updatedAt": "2025-03-22T14:30:00Z",
+        "Likes": 12,
+        "Comments": [
+          {
+            "Text": "What are the minimum GPA requirements?",
+            "Posted by": "Bhavish Alapati",
+            "PostedById": "10051"
+          }
+        ],
+        "category": "Research",
+        "tags": ["MIT", "Research", "AI", "Quantum Computing"],
+        "status": "PENDING",
+        "approvalDetails": {
+          "requestedAt": "2025-03-22T14:30:00Z",
+          "requestNotes": "Information verified from MIT's official website",
+          "reviewedAt": null,
+          "reviewedBy": null,
+          "reviewerName": null,
+          "comments": null,
+          "expiresAt": null
+        }
+      }
+    },
+    {
+      "Post 11": {
+        "ID": "post-011",
+        "Title": "Stanford Summer Research Program 2025",
+        "Content": "Apply for Stanford's prestigious summer research program. Stipend: $8000. Duration: 10 weeks.",
+        "Image": "stanford_research.jpg",
+        "Author": "Varnika Hagalwadi",
+        "AuthorId": "10038",
+        "createdAt": "2025-03-21T09:15:00Z",
+        "updatedAt": "2025-03-21T16:20:00Z",
+        "Likes": 8,
+        "Comments": [
+          {
+            "Text": "Is this open to international students?",
+            "Posted by": "Sahasra Gongidi",
+            "PostedById": "10068"
+          }
+        ],
+        "category": "Research",
+        "tags": ["Stanford", "Research", "Summer"],
+        "status": "REJECTED",
+        "approvalDetails": {
+          "requestedAt": "2025-03-21T09:15:00Z",
+          "requestNotes": "Program details verified from department website",
+          "reviewedAt": "2025-03-21T16:20:00Z",
+          "reviewedBy": "moderator-002",
+          "reviewerName": "Prof. Johnson",
+          "comments": "Please include application deadline and eligibility criteria. Also need verification of stipend amount.",
+          "expiresAt": null
+        }
+      }
+    },
+    {
+      "Post 12": {
+        "ID": "post-012",
+        "Title": "Google Summer Internship 2025",
+        "Content": "Google is accepting applications for Summer 2025 internships. Multiple positions available across different teams.",
+        "Image": "google_intern.png",
+        "Author": "Siddhant Peddi",
+        "AuthorId": "10048",
+        "createdAt": "2025-03-23T11:00:00Z",
+        "updatedAt": "2025-03-23T11:00:00Z",
+        "Likes": 15,
+        "Comments": [
+          {
+            "Text": "When is the application deadline?",
+            "Posted by": "Vahni Kurra",
+            "PostedById": "10007"
+          }
+        ],
+        "category": "Internships",
+        "tags": ["Google", "Tech", "Summer"],
+        "status": "PENDING",
+        "approvalDetails": {
+          "requestedAt": "2025-03-23T11:00:00Z",
+          "requestNotes": "Details from Google Careers page",
+          "reviewedAt": null,
+          "reviewedBy": null,
+          "reviewerName": null,
+          "comments": null,
+          "expiresAt": null
+        }
       }
     }
   ]

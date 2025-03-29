@@ -10,7 +10,13 @@ describe('useThemeStore', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    document.documentElement.classList = mockClassList as any;
+    // Clear persisted state
+    localStorage.removeItem('theme-storage');
+    // Mock classList methods
+    Object.defineProperty(document.documentElement, 'classList', {
+      value: mockClassList,
+      writable: true
+    });
   });
 
   it('should set theme correctly', () => {
@@ -21,7 +27,7 @@ describe('useThemeStore', () => {
     });
 
     expect(result.current.theme).toBe('dark');
-    expect(mockClassList.remove).toHaveBeenCalledWith('light');
+    expect(mockClassList.remove).toHaveBeenCalledWith('light', 'dark');
     expect(mockClassList.add).toHaveBeenCalledWith('dark');
   });
 

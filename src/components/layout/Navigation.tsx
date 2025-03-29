@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, User, Settings, FileText, Shield, ClipboardCheck, Users } from 'lucide-react';
+import { Home, User, Settings, FileText, Shield, ClipboardCheck, Users, FileEdit, ClipboardList } from 'lucide-react';
 import { useThemeStore } from '../../store/theme';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { CsvAdminRepository } from '../../infrastructure/repositories/csvAdminRepository';
 import { logger } from '../../utils/logger';
+import { Admin } from '../../models/Admin';
 
 interface NavigationProps {
   className?: string;
@@ -22,9 +23,13 @@ export function Navigation({ className }: NavigationProps) {
       if (authState.currentUser?.email) {
         try {
           const adminRepo = new CsvAdminRepository();
-          const admin = await adminRepo.getAdminWithRole(authState.currentUser.email);
-          setAdminData(admin);
-          logger.info("Admin status checked", { email: authState.currentUser.email, role: admin?.role });
+          const adminData = await adminRepo.getAdminWithRole(authState.currentUser.email);
+          if (adminData && (adminData.role === 'system_admin' || adminData.role === 'moderator')) {
+            setAdminData(adminData as Admin);
+            logger.info("Admin status checked", { email: authState.currentUser.email, role: adminData.role });
+          } else {
+            setAdminData(null);
+          }
         } catch (error) {
           logger.error("Admin status check failed:", error);
           setAdminData(null);
@@ -40,8 +45,12 @@ export function Navigation({ className }: NavigationProps) {
       { to: '/admin', icon: Shield, label: 'Admin' }
     ] : []),
     { to: '/posts', icon: FileText, label: 'Posts' },
+    { to: '/my-posts', icon: FileEdit, label: 'My Posts' },
     ...(adminData?.role === 'system_admin' || adminData?.role === 'moderator' 
-      ? [{ to: '/moderation', icon: ClipboardCheck, label: 'Moderation' }] 
+      ? [
+          { to: '/moderation', icon: ClipboardCheck, label: 'Moderation' },
+          { to: '/post-review', icon: ClipboardList, label: 'Review Posts' }
+        ] 
       : []
     ),
     { to: '/profile', icon: User, label: 'Profile' },

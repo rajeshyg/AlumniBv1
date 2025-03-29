@@ -11,6 +11,8 @@ const NotFound = lazy(() => import('../pages/NotFound'));
 const Login = lazy(() => import('../pages/Login'));
 const Admin = lazy(() => import('../pages/Admin'));
 const ContentModeration = lazy(() => import('../pages/ContentModeration'));
+const MyPosts = lazy(() => import('../pages/MyPosts'));
+const PostReview = lazy(() => import('../pages/PostReview'));
 
 export const router = createBrowserRouter([
   {
@@ -48,6 +50,14 @@ export const router = createBrowserRouter([
       {
         path: 'moderation',
         element: <ContentModeration />,
+      },
+      {
+        path: 'my-posts',
+        element: <MyPosts />,
+      },
+      {
+        path: 'post-review',
+        element: <PostReview />,
       },
       {
         path: '*',

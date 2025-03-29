@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Post } from '../models/Post';
+import { Post, PostStatus } from '../models/Post';
 import { PostItem } from '../components/Posts/PostItem';
 import { PostForm } from '../components/Posts/PostForm';
 import { useAuth } from '../context/AuthContext';
@@ -24,10 +24,13 @@ import { PostService } from '../services/PostService';
 
 // Mock the components that use rich text editor
 vi.mock('../components/Posts/RichTextEditor', () => ({
-  RichTextEditor: ({ value, onChange, placeholder, id }) => (
+  RichTextEditor: ({ value, onChange, placeholder }: { 
+    value: string; 
+    onChange: (value: string) => void; 
+    placeholder?: string;
+  }) => (
     <textarea 
       data-testid="rich-text-editor"
-      id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
@@ -36,9 +39,17 @@ vi.mock('../components/Posts/RichTextEditor', () => ({
 }));
 
 vi.mock('../components/Posts/ImageUploader', () => ({
-  ImageUploader: ({ images, onChange }) => (
+  ImageUploader: ({ images, onChange }: { 
+    images: string[]; 
+    onChange: (images: string[]) => void;
+  }) => (
     <div data-testid="image-uploader">
-      <button type="button">Add Image</button>
+      <button 
+        type="button"
+        onClick={() => onChange([...images, 'test-image.jpg'])}
+      >
+        Add Image ({images.length})
+      </button>
     </div>
   )
 }));
@@ -56,7 +67,7 @@ describe('Tags Integration', () => {
   };
 
   // Sample post data
-  const mockPostsData = [
+  const mockPostsData: Post[] = [
     {
       id: '1',
       title: 'Test Post with Tags',
@@ -67,7 +78,8 @@ describe('Tags Integration', () => {
       likes: 0,
       likedBy: [],
       category: 'Internships',
-      tags: ['internship', 'career', 'opportunity']
+      tags: ['internship', 'career', 'opportunity'],
+      status: 'approved' as PostStatus
     }
   ];
 
@@ -96,7 +108,7 @@ describe('Tags Integration', () => {
     const mockLike = vi.fn();
     
     // Step 1: Render PostForm and add tags
-    const { rerender } = render(<PostForm onSubmit={mockSubmit} />);
+    const { rerender } = render(<PostForm onSubmit={mockSubmit} initialStatus="approved" />);
     
     // Fill in the form title and content
     fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Test Post with Tags' } });
@@ -120,11 +132,12 @@ describe('Tags Integration', () => {
     expect(mockSubmit).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Test Post with Tags',
       content: 'This is a test post content.',
-      tags: ['react', 'testing']
+      tags: ['react', 'testing'],
+      status: 'approved'
     }));
     
     // Step 2: Verify tags display in PostItem
-    const mockPost = {
+    const mockPost: Post = {
       id: 'test-post-id',
       title: 'Test Post with Tags',
       content: 'This is a test post content.',
@@ -133,7 +146,8 @@ describe('Tags Integration', () => {
       createdAt: new Date(),
       likes: 0,
       likedBy: [],
-      tags: ['react', 'testing']
+      tags: ['react', 'testing'],
+      status: 'approved' as PostStatus
     };
     
     rerender(<PostItem post={mockPost} onLike={mockLike} />);
@@ -165,7 +179,8 @@ describe('Tags Integration', () => {
       likes: 0,
       likedBy: [],
       category: 'Internships',
-      tags: ['yale', 'summer', 'internship', 'usa']
+      tags: ['yale', 'summer', 'internship', 'usa'],
+      status: 'approved' as PostStatus
     };
     
     // Render the post item

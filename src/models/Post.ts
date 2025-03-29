@@ -5,6 +5,16 @@ export interface Comment {
   createdAt: Date;
 }
 
+export type PostStatus = 'pending' | 'approved' | 'rejected' | 'expired';
+
+export interface ApprovalComment {
+  text: string;
+  postedBy: string;
+  postedById: string;
+  createdAt: Date;
+  status: PostStatus;
+}
+
 export interface Post {
   id: string;
   title: string;
@@ -19,4 +29,12 @@ export interface Post {
   image?: string;
   tags?: string[];
   category?: string;
+  status: PostStatus;
+  approvalComments?: ApprovalComment[];
+  lastApprovalDate?: Date;
+  approvedBy?: string;
+  approvedById?: string;
+  rejectedBy?: string;
+  rejectedById?: string;
+  expiresAt?: Date;
 }

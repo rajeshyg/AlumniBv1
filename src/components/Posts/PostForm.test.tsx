@@ -11,10 +11,13 @@ vi.mock('../../context/AuthContext', () => ({
 
 // Mock the nested components
 vi.mock('./RichTextEditor', () => ({
-  RichTextEditor: ({ value, onChange, placeholder, id }) => (
+  RichTextEditor: ({ value, onChange, placeholder }: { 
+    value: string; 
+    onChange: (value: string) => void; 
+    placeholder?: string;
+  }) => (
     <textarea 
       data-testid="rich-text-editor"
-      id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
@@ -23,9 +26,17 @@ vi.mock('./RichTextEditor', () => ({
 }));
 
 vi.mock('./ImageUploader', () => ({
-  ImageUploader: ({ images, onChange }) => (
+  ImageUploader: ({ images, onChange }: { 
+    images: string[]; 
+    onChange: (images: string[]) => void;
+  }) => (
     <div data-testid="image-uploader">
-      <button type="button">Add Image</button>
+      <button 
+        type="button"
+        onClick={() => onChange([...images, 'test-image.jpg'])}
+      >
+        Add Image ({images.length})
+      </button>
     </div>
   )
 }));
@@ -74,7 +85,7 @@ describe('PostForm', () => {
   });
 
   it('submits form with entered data', () => {
-    render(<PostForm onSubmit={mockSubmit} />);
+    render(<PostForm onSubmit={mockSubmit} initialStatus="approved" />);
     
     // Fill out the form
     fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Test Title' } });
@@ -92,7 +103,32 @@ describe('PostForm', () => {
       title: 'Test Title',
       content: 'Test Content',
       author: mockUser.name,
-      authorId: mockUser.studentId
+      authorId: mockUser.studentId,
+      status: 'approved'
+    }));
+  });
+
+  it('submits form for approval when status is pending', () => {
+    render(<PostForm onSubmit={mockSubmit} initialStatus="pending" />);
+    
+    // Fill out the form
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Test Title' } });
+    
+    // Use getByTestId for the mocked rich text editor
+    const contentEditor = screen.getByTestId('rich-text-editor');
+    fireEvent.change(contentEditor, { target: { value: 'Test Content' } });
+    
+    // Submit the form
+    fireEvent.submit(screen.getByText(/submit for approval/i));
+    
+    // Check that onSubmit was called with the correct data
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+    expect(mockSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Test Title',
+      content: 'Test Content',
+      author: mockUser.name,
+      authorId: mockUser.studentId,
+      status: 'pending'
     }));
   });
 
