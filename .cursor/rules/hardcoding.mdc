@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# hardcoding
+
+- Only place we hardcode is in the default password "test" in the Login screen temporarily as mentioned in the rule file of users
+- Other than that we can not hardcode anything like studentids, names, post ids etc etc.

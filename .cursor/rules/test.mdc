@@ -1,0 +1,11 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+1. Note that The project is already using Vitest as the primary test runner (test script in [package.json](mdc:package.json))
+2. Do not create Jest or other kinds of test automation files without strategic plan and approvals
+3. Always create create the test files under the __test__ subfolder. For example test file [Posts.test.tsx](mdc:src/pages/__tests__/Posts.test.tsx) of the [Posts.tsx](mdc:src/pages/Posts.tsx) file is in __test__ subfolder 
+4. - All test configurations MUST be in `src/setupTests.ts`

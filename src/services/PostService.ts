@@ -16,6 +16,58 @@ function generateUUID() {
 const STORAGE_KEY = 'alumni-posts';
 const SAMPLE_POSTS: Post[] = [];
 
+// Debug check for initialization - will run once when the module is loaded
+(function debugInitialData() {
+  try {
+    logger.debug('=== DEBUG Initial Posts Data ===');
+    if (!initialPostsJsonData) {
+      logger.error('initialPostsJsonData is undefined or null!');
+      return;
+    }
+    
+    logger.debug('Initial posts JSON structure:', {
+      type: typeof initialPostsJsonData,
+      isArray: Array.isArray(initialPostsJsonData),
+      topLevelKeys: typeof initialPostsJsonData === 'object' ? Object.keys(initialPostsJsonData) : [],
+      hasPostsArray: initialPostsJsonData.Posts ? true : false,
+      postsArrayType: initialPostsJsonData.Posts ? typeof initialPostsJsonData.Posts : 'undefined',
+      postsArrayIsArray: initialPostsJsonData.Posts ? Array.isArray(initialPostsJsonData.Posts) : false,
+      postsLength: initialPostsJsonData.Posts && Array.isArray(initialPostsJsonData.Posts) ? initialPostsJsonData.Posts.length : 0
+    });
+    
+    // Check first post structure if available
+    if (initialPostsJsonData.Posts && 
+        Array.isArray(initialPostsJsonData.Posts) && 
+        initialPostsJsonData.Posts.length > 0) {
+      const firstPostWrapper = initialPostsJsonData.Posts[0];
+      const firstPostKey = Object.keys(firstPostWrapper)[0]; // e.g., "Post 1"
+      logger.debug('First post wrapper structure:', {
+        keys: Object.keys(firstPostWrapper),
+        firstKey: firstPostKey,
+        hasFirstKey: !!firstPostKey
+      });
+      
+      if (firstPostKey && firstPostWrapper[firstPostKey]) {
+        const firstPost = firstPostWrapper[firstPostKey];
+        logger.debug('First post data structure:', {
+          keys: Object.keys(firstPost),
+          id: firstPost.ID,
+          title: firstPost.Title,
+          tagsType: typeof firstPost.tags,
+          tagsIsArray: Array.isArray(firstPost.Tags),
+          hasComments: !!firstPost.Comments,
+          commentsIsArray: firstPost.Comments ? Array.isArray(firstPost.Comments) : false,
+          commentsLength: firstPost.Comments && Array.isArray(firstPost.Comments) ? firstPost.Comments.length : 0
+        });
+      }
+    }
+    
+    logger.debug('=== END DEBUG Initial Posts Data ===');
+  } catch (error) {
+    logger.error('Error in debug check for initial posts data:', error);
+  }
+})();
+
 export class PostService {
   // Add a reset function to force reload from JSON
   static resetStorage(): void {
@@ -25,129 +77,273 @@ export class PostService {
   }
 
   private static initializeStorage(): void {
-    if (!localStorage.getItem(STORAGE_KEY)) {
-      logger.info('Initializing posts in localStorage');
+    try {
+      // Check if we already have data in localStorage
+      const existingData = localStorage.getItem(STORAGE_KEY);
       
-      // Transform the complex JSON structure to our Post format
+      if (!existingData) {
+        logger.debug('No existing data found in localStorage. Initializing from JSON data...');
+        
+        // Check if our initialPostsJsonData is properly structured
+        if (!initialPostsJsonData) {
+          logger.error('initialPostsJsonData is undefined or null! This is a critical error.');
+          return;
+        }
+        
+        logger.debug('Initial JSON data structure:', {
+          hasPostsArray: initialPostsJsonData && initialPostsJsonData.Posts ? true : false,
+          isPostsArray: initialPostsJsonData && initialPostsJsonData.Posts ? Array.isArray(initialPostsJsonData.Posts) : false,
+          postsLength: initialPostsJsonData && initialPostsJsonData.Posts && Array.isArray(initialPostsJsonData.Posts) 
+            ? initialPostsJsonData.Posts.length : 0,
+          firstPostKeys: initialPostsJsonData && initialPostsJsonData.Posts && 
+            Array.isArray(initialPostsJsonData.Posts) && initialPostsJsonData.Posts.length > 0
+            ? Object.keys(initialPostsJsonData.Posts[0]) : [],
+          isInitialDataArray: Array.isArray(initialPostsJsonData),
+          topLevelKeys: typeof initialPostsJsonData === 'object' ? Object.keys(initialPostsJsonData) : []
+        });
+        
+        // Format the initial data
       const formattedPosts = PostService.transformJsonToPosts(initialPostsJsonData);
-      logger.debug(`Formatted ${formattedPosts.length} posts for storage`);
-      
-      // Debug first post comments
-      if (formattedPosts.length > 0) {
-        logger.debug('First post comments:', formattedPosts[0].comments);
-      }
-      
+        logger.debug(`Formatted ${formattedPosts.length} posts from initial data`);
+        
+        if (formattedPosts.length === 0) {
+          logger.error('No posts were formatted from the initial data!');
+          
+          // Dump the first post object if available for debugging
+          if (initialPostsJsonData && initialPostsJsonData.Posts && 
+              Array.isArray(initialPostsJsonData.Posts) && initialPostsJsonData.Posts.length > 0) {
+            const firstPost = initialPostsJsonData.Posts[0];
+            logger.debug('First post object from JSON:', firstPost);
+          }
+        } else {
+          // Log the first formatted post for debugging
+          logger.debug('First formatted post:', formattedPosts[0]);
+        }
+        
+        // Save the formatted posts to localStorage
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(formattedPosts));
+        logger.info(`Initialized localStorage with ${formattedPosts.length} posts`);
+      } else {
+        logger.debug('Existing data found in localStorage. Checking if it needs to be refreshed...');
+        
+        try {
+          const parsedData = JSON.parse(existingData);
+          logger.debug(`Found ${Array.isArray(parsedData) ? parsedData.length : 'non-array'} items in localStorage`);
+          
+          // Check if we have post data
+          if (!Array.isArray(parsedData) || parsedData.length === 0) {
+            logger.info('Existing localStorage data is empty or invalid. Reinitializing...');
+            
+            // Format the initial data
+            const formattedPosts = PostService.transformJsonToPosts(initialPostsJsonData);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(formattedPosts));
+            logger.info(`Reinitialized localStorage with ${formattedPosts.length} posts`);
+          }
+        } catch (error) {
+          // If we can't parse the existing data, it might be corrupted
+          logger.error('Error parsing existing localStorage data:', error);
+          logger.info('Reinitializing localStorage due to corrupted data');
+          
+          // Format and save new data
+          const formattedPosts = PostService.transformJsonToPosts(initialPostsJsonData);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(formattedPosts));
+          logger.info(`Reinitialized localStorage with ${formattedPosts.length} posts`);
+        }
+      }
+    } catch (error) {
+      logger.error('Error initializing storage:', error);
     }
   }
 
   private static transformJsonToPosts(jsonData: any): Post[] {
-    // Check if the data has the new structure with "Posts" array
-    if (jsonData.Posts && Array.isArray(jsonData.Posts)) {
-      logger.debug(`Processing JSON data with ${jsonData.Posts.length} posts`);
+    try {
+      logger.debug('transformJsonToPosts called with data:', jsonData);
       
-      return jsonData.Posts.map((postWrapper: any) => {
+      // Check if the data has the new structure with "Posts" array
+      if (jsonData && jsonData.Posts && Array.isArray(jsonData.Posts)) {
+        logger.debug(`Processing JSON data with ${jsonData.Posts.length} posts`);
+        
+        const transformedPosts = jsonData.Posts.map((postWrapper: any, index: number) => {
+          try {
         // Each item contains a "Post X" object
         const postKey = Object.keys(postWrapper)[0]; // e.g., "Post 1"
+            
+            if (!postKey) {
+              logger.error(`Post at index ${index} has no key!`, postWrapper);
+              return null;
+            }
+            
         const postData = postWrapper[postKey];
+            
+            if (!postData) {
+              logger.error(`Post data missing for "${postKey}"!`);
+              return null;
+            }
         
         // Debug logs
-        logger.debug(`Processing post: ${postKey}`);
-        
-        // Extract tags from JSON data - check both capitalized and lowercase keys
-        // and ensure it's always an array
-        let tags: string[] = [];
-        if (Array.isArray(postData.Tags)) {
-          tags = [...postData.Tags];
-        } else if (Array.isArray(postData.tags)) {
-          tags = [...postData.tags];
-        } else if (postData.Tags && typeof postData.Tags === 'string') {
-          tags = postData.Tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
-        } else if (postData.tags && typeof postData.tags === 'string') {
-          tags = postData.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
-        }
+            logger.debug(`Processing post: ${postKey}`);
+            
+            // Extract tags from JSON data - check both capitalized and lowercase keys
+            // and ensure it's always an array
+            let tags: string[] = [];
+            if (Array.isArray(postData.Tags)) {
+              tags = [...postData.Tags];
+            } else if (Array.isArray(postData.tags)) {
+              tags = [...postData.tags];
+            } else if (postData.Tags && typeof postData.Tags === 'string') {
+              tags = postData.Tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+            } else if (postData.tags && typeof postData.tags === 'string') {
+              tags = postData.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+            }
         
         // Transform to our Post structure with camelCase properties
-        const transformedPost: Post = {
-          id: postData.ID || `post-${Date.now()}`,
+            const transformedPost: Post = {
+              id: postData.ID || `post-${Date.now()}-${index}`,
           title: postData.Title || '',
           content: postData.Content || '',
           author: postData.Author || '',
-          // Handle authorId from either property name
-          authorId: postData.authorId || postData.AuthorId || '',
-          createdAt: new Date(postData.createdAt || new Date().toISOString()),
-          updatedAt: postData.updatedAt ? new Date(postData.updatedAt) : undefined,
+              // Handle authorId from either property name
+              authorId: postData.authorId || postData.AuthorId || '',
+              createdAt: new Date(postData.createdAt || new Date().toISOString()),
+              updatedAt: postData.updatedAt ? new Date(postData.updatedAt) : undefined,
           likes: postData.Likes || 0,
-          likedBy: [],
+              likedBy: [],
           // Resolve image path correctly
           image: resolveImagePath(postData.Image),
           // Handle both category and Category (prefer lowercase)
           category: postData.category || postData.Category || undefined,
-          // Use the processed tags array
-          tags: tags,
-          comments: [],
-          // Convert status to lowercase and handle approval details
-          status: (postData.status || 'approved').toLowerCase() as PostStatus,
-          approvalComments: [],
-          approvedBy: undefined,
-          approvedById: undefined,
-          rejectedBy: undefined,
-          rejectedById: undefined,
-          lastApprovalDate: undefined,
-          expiresAt: undefined
-        };
-        
-        // Handle comments with extra care
+              // Use the processed tags array
+              tags: tags,
+              comments: [],
+              // Convert status to lowercase and handle approval details
+              status: (postData.status || 'approved').toLowerCase() as PostStatus,
+              approvalComments: [],
+              approvedBy: undefined,
+              approvedById: undefined,
+              rejectedBy: undefined,
+              rejectedById: undefined,
+              lastApprovalDate: undefined,
+              expiresAt: undefined
+            };
+            
+            // Handle comments with extra care
         if (Array.isArray(postData.Comments)) {
-          const processedComments = postData.Comments.map((comment: any) => {
+              try {
+                const processedComments = postData.Comments.map((comment: any, comIndex: number) => {
+                  if (!comment) {
+                    logger.error(`Comment at index ${comIndex} for post "${postKey}" is null or undefined!`);
+                    return null;
+                  }
+                  
             return {
               text: comment.Text || '',
-              postedBy: comment["Posted by"] || '',
-              // Handle postedById from either property name
-              postedById: comment.PostedById || comment["PostedById"] || '',
-              createdAt: new Date()
-            };
-          });
-          transformedPost.comments = processedComments;
-          logger.debug(`Processed ${processedComments.length} comments for ${postKey}`);
-        }
+                    postedBy: comment["Posted by"] || '',
+                    // Handle postedById from either property name
+                    postedById: comment.PostedById || comment["PostedById"] || '',
+                    createdAt: new Date()
+                  };
+                }).filter(Boolean); // Remove any null comments
+                
+                transformedPost.comments = processedComments;
+                logger.debug(`Processed ${processedComments.length} comments for ${postKey}`);
+              } catch (commentError) {
+                logger.error(`Error processing comments for post "${postKey}":`, commentError);
+                transformedPost.comments = [];
+              }
+            }
 
-        // Handle approval details if present
-        if (postData.approvalDetails) {
-          const approvalComment: ApprovalComment = {
-            text: postData.approvalDetails.comments || '',
-            postedBy: postData.approvalDetails.reviewerName || '',
-            postedById: postData.approvalDetails.reviewedBy || '',
-            createdAt: postData.approvalDetails.reviewedAt ? new Date(postData.approvalDetails.reviewedAt) : new Date(),
-            status: transformedPost.status
-          };
-          transformedPost.approvalComments = [approvalComment];
-          
-          // Set approval/rejection metadata
-          if (transformedPost.status === 'approved') {
-            transformedPost.approvedBy = postData.approvalDetails.reviewerName;
-            transformedPost.approvedById = postData.approvalDetails.reviewedBy;
-            transformedPost.lastApprovalDate = new Date(postData.approvalDetails.reviewedAt);
-          } else if (transformedPost.status === 'rejected') {
-            transformedPost.rejectedBy = postData.approvalDetails.reviewerName;
-            transformedPost.rejectedById = postData.approvalDetails.reviewedBy;
-            transformedPost.lastApprovalDate = new Date(postData.approvalDetails.reviewedAt);
-          }
+            // Handle approval details if present
+            if (postData.approvalDetails) {
+              try {
+                const approvalComment: ApprovalComment = {
+                  text: postData.approvalDetails.comments || '',
+                  postedBy: postData.approvalDetails.reviewerName || '',
+                  postedById: postData.approvalDetails.reviewedBy || '',
+                  createdAt: postData.approvalDetails.reviewedAt ? new Date(postData.approvalDetails.reviewedAt) : new Date(),
+                  status: transformedPost.status
+                };
+                
+                transformedPost.approvalComments = [approvalComment];
+                
+                // Set approval/rejection metadata
+                if (transformedPost.status === 'approved') {
+                  transformedPost.approvedBy = postData.approvalDetails.reviewerName;
+                  transformedPost.approvedById = postData.approvalDetails.reviewedBy;
+                  transformedPost.lastApprovalDate = new Date(postData.approvalDetails.reviewedAt);
+                } else if (transformedPost.status === 'rejected') {
+                  transformedPost.rejectedBy = postData.approvalDetails.reviewerName;
+                  transformedPost.rejectedById = postData.approvalDetails.reviewedBy;
+                  transformedPost.lastApprovalDate = new Date(postData.approvalDetails.reviewedAt);
+                }
+              } catch (approvalError) {
+                logger.error(`Error processing approval details for post "${postKey}":`, approvalError);
+              }
         }
         
         return transformedPost;
-      });
+          } catch (postError) {
+            logger.error(`Error processing post at index ${index}:`, postError);
+            return null;
+          }
+        }).filter(Boolean); // Filter out any null posts
+        
+        logger.info(`Successfully transformed ${transformedPosts.length} posts`);
+        return transformedPosts;
     }
     
     // If it's the old format or unrecognized, return as is
-    logger.info('JSON data format not recognized or empty');
+      logger.info('JSON data format not recognized or empty');
     return Array.isArray(jsonData) ? jsonData : [];
+    } catch (error) {
+      logger.error('Error transforming JSON posts:', error);
+      return [];
+    }
   }
 
   private static getPostsFromStorage(): any[] {
+    logger.debug('Getting posts from storage...');
+    
+    // Ensure storage is initialized
     PostService.initializeStorage();
+    
+    // Get the data from localStorage
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    logger.debug(`Raw localStorage data length: ${data ? data.length : 0} characters`);
+    
+    if (!data) {
+      logger.error('No data found in localStorage after initialization! This is unexpected.');
+      // Force reinitialization from initial data
+      logger.debug('Forcing reinitialization from initial data...');
+      const initialPosts = PostService.transformJsonToPosts(initialPostsJsonData);
+      PostService.savePostsToStorage(initialPosts);
+      logger.debug(`Force reinitialized storage with ${initialPosts.length} posts`);
+      return initialPosts;
+    }
+    
+    try {
+      const parsedData = JSON.parse(data);
+      logger.debug(`Retrieved ${Array.isArray(parsedData) ? parsedData.length : 'non-array'} items from localStorage`);
+      
+      if (Array.isArray(parsedData) && parsedData.length === 0) {
+        logger.info('localStorage contains an empty array! This is unexpected after initialization.');
+        // Force reinitialization
+        logger.debug('Empty array found. Forcing reinitialization from initial data...');
+        const initialPosts = PostService.transformJsonToPosts(initialPostsJsonData);
+        PostService.savePostsToStorage(initialPosts);
+        logger.debug(`Force reinitialized storage with ${initialPosts.length} posts`);
+        return initialPosts;
+      }
+      
+      return parsedData;
+    } catch (error) {
+      logger.error('Error parsing data from localStorage:', error);
+      // Handle corrupt data by reinitializing
+      logger.debug('Data corruption detected. Reinitializing from initial data...');
+      const initialPosts = PostService.transformJsonToPosts(initialPostsJsonData);
+      PostService.savePostsToStorage(initialPosts);
+      logger.debug(`Reinitialized storage with ${initialPosts.length} posts due to data corruption`);
+      return initialPosts;
+    }
   }
 
   private static savePostsToStorage(posts: any[]): void {
@@ -201,7 +397,7 @@ export class PostService {
         processedTags = postData.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
       }
     }
-
+    
     const newPost = {
       id: generateUUID(),
       title: postData.title,
@@ -488,6 +684,39 @@ export class PostService {
       logger.info('Posts backup downloaded successfully');
     } catch (error) {
       logger.error('Failed to download posts backup:', error);
+    }
+  }
+
+  // Add this after the resetStorage method
+  static forceReloadFromJson(): Post[] {
+    logger.info('Force reloading posts from JSON data file');
+    
+    try {
+      // Check if initialPostsJsonData is valid
+      if (!initialPostsJsonData) {
+        logger.error('Initial posts JSON data is undefined or null');
+        return [];
+      }
+      
+      // Log what we have in the JSON data
+      logger.debug('JSON data structure:', {
+        hasPostsArray: initialPostsJsonData && initialPostsJsonData.Posts ? true : false,
+        postsLength: initialPostsJsonData && initialPostsJsonData.Posts ? initialPostsJsonData.Posts.length : 0,
+        topLevelKeys: typeof initialPostsJsonData === 'object' ? Object.keys(initialPostsJsonData) : []
+      });
+      
+      // Transform the data
+      const formattedPosts = PostService.transformJsonToPosts(initialPostsJsonData);
+      
+      // Save to localStorage
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(formattedPosts));
+      
+      logger.info(`Force loaded ${formattedPosts.length} posts from JSON`);
+      
+      return formattedPosts;
+    } catch (error) {
+      logger.error('Error force loading from JSON:', error);
+      return [];
     }
   }
 }

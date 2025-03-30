@@ -7,17 +7,54 @@ import { Search, PlusSquare, X, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { logger } from '../utils/logger';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { TabNavigation } from '../components/shared/TabNavigation';
+import { ErrorBoundary } from '../components/common/ErrorBoundary';
 
 const categoryLabels = {
-  all: 'All Categories',
-  Internships: 'Internships',
-  Admissions: 'Admissions',
-  Scholarships: 'Scholarships',
-  General: 'General'
+  all: { label: 'All Categories', value: 'all' },
+  internships: { label: 'Internships', value: 'Internships' },
+  admissions: { label: 'Admissions', value: 'Admissions' },
+  scholarships: { label: 'Scholarships', value: 'Scholarships' },
+  general: { label: 'General', value: 'General' }
 };
 
-export default function Posts() {
+const getCategoryLabel = (value: string): string => {
+  // First try to find category by value
+  const category = Object.values(categoryLabels).find(cat => 
+    cat.value.toLowerCase() === value.toLowerCase());
+  
+  if (category) {
+    return category.label;
+  }
+  
+  // Then try to find by key
+  const key = Object.keys(categoryLabels).find(key => 
+    key.toLowerCase() === value.toLowerCase());
+  
+  if (key) {
+    return categoryLabels[key as keyof typeof categoryLabels].label;
+  }
+  
+  // If all else fails, just return the value
+  return value;
+};
+
+const Posts: React.FC = () => {
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      // Add the code that's likely causing the error
+      const tabs = Object.values(categoryLabels);
+      logger.debug('Tab values:', { 
+        tabValues: tabs.map(tab => typeof tab === 'object' ? JSON.stringify(tab) : tab)
+      });
+    } catch (error) {
+      logger.error('Error in Posts component:', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    }
+  }
+
   const { authState } = useAuth();
   const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -48,22 +85,40 @@ export default function Posts() {
     filterPosts();
   }, [posts, searchQuery, activeTab]);
 
-  const loadPosts = () => {
+  const loadPosts = async () => {
     logger.info('Loading posts from service');
-    const allPosts = PostService.getAllPosts();
-    logger.debug('Posts loaded successfully', { count: allPosts.length });
-    setPosts(allPosts);
-    setFilteredPosts(allPosts); // Initialize filtered posts with all posts
+    try {
+      let allPosts = await PostService.getAllPosts();
+      if (allPosts.length === 0) {
+        logger.info('No posts found in storage, attempting to force reload from JSON');
+        allPosts = await PostService.forceReloadFromJson();
+      }
+      logger.debug('Posts loaded successfully', { count: allPosts.length });
+      setPosts(allPosts);
+      setFilteredPosts(allPosts);
+    } catch (error) {
+      logger.error('Error loading posts:', error);
+      setPosts([]);
+      setFilteredPosts([]);
+    }
   };
 
   const filterPosts = () => {
-    logger.debug('Filtering posts', { activeTab, searchQueryLength: searchQuery.length });
+    if (!Array.isArray(posts)) {
+      logger.error('Posts is not an array, cannot filter');
+      setFilteredPosts([]);
+      return;
+    }
     let filtered = [...posts];
     
     // Filter by category tab
     if (activeTab !== 'all') {
-      logger.debug(`Filtering by category: ${activeTab}`);
-      filtered = filtered.filter(post => post.category === activeTab);
+      logger.debug(`Filtering by category: ${activeTab}`, { activeTab, postsLength: filtered.length });
+      filtered = filtered.filter(post => {
+        const postCategory = post.category?.toString() || '';
+        const tabValue = activeTab?.toString() || '';
+        return postCategory.toLowerCase() === tabValue.toLowerCase();
+      });
     }
     
     // Filter by search query
@@ -112,16 +167,25 @@ export default function Posts() {
 
   const handleResetPosts = () => {
     logger.info('Resetting posts storage to default data');
+    // Reset storage and force reload from JSON
     PostService.resetStorage();
-    loadPosts();
+    const posts = PostService.forceReloadFromJson();
+    setPosts(posts);
+    setFilteredPosts(posts);
+    logger.debug('Posts reset successfully', { count: posts.length });
   };
 
-  const handleTabChange = (tabId: string) => {
-    logger.debug(`Changing active tab to: ${tabId}`);
-    setActiveTab(tabId);
+  const handleTabChange = (value: string) => {
+    logger.debug('Tab changed:', {
+      newValue: value,
+      previousTab: activeTab,
+      categoryLabel: getCategoryLabel(value)
+    });
+    
+    setActiveTab(typeof value === 'string' ? value : 'all');
   };
 
-  // Show loading state
+  // Show loading stateebug 
   if (authState.loading) {
     logger.debug('Auth state is loading, showing loading indicator');
     return (
@@ -133,6 +197,26 @@ export default function Posts() {
 
   // Determine the posts to display based on the active tab
   const postsToDisplay = filteredPosts; // Already filtered by search and category in filterPosts
+
+  logger.debug('Rendering Posts with tabs', {
+    tabsCount: Object.values(categoryLabels).length,
+    activeTab: typeof activeTab === 'string' ? activeTab : 'unknown'
+  });
+
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      // Add the code that's likely causing the error
+      const tabs = Object.values(categoryLabels);
+      logger.debug('Tab values:', { 
+        tabValues: tabs.map(tab => typeof tab === 'object' ? JSON.stringify(tab) : tab)
+      });
+    } catch (error) {
+      logger.error('Error in Posts component:', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    }
+  }
 
   return (
     // Use a container that allows the header to be sticky and content to scroll
@@ -184,15 +268,14 @@ export default function Posts() {
 
         {/* Tabs List - Part of the sticky header */}
         {/* Use Tabs component for state management but only render TabsList here */}
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
-            {Object.entries(categoryLabels).map(([id, label]) => (
-              <TabsTrigger key={id} value={id}>
-                {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <TabNavigation 
+          tabs={Object.values(categoryLabels).map(category => ({
+            label: category.label,
+            value: category.value,
+          }))}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+        />
       </div>
 
       {/* Scrollable content area - Takes remaining height */}
@@ -209,7 +292,10 @@ export default function Posts() {
           {/* Removed the h2 "Recent Posts" as it was inside TabsContent before */}
           {postsToDisplay.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">
-              {searchQuery ? 'No posts match your search.' : `No posts found in ${categoryLabels[activeTab as keyof typeof categoryLabels]}.`}
+              {searchQuery 
+                ? 'No posts match your search.' 
+                : `No posts found in ${getCategoryLabel(activeTab)}.`
+              }
             </p>
           ) : (
             postsToDisplay.map(post => (
@@ -224,5 +310,14 @@ export default function Posts() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Export a wrapped version of the component
+export default function PostsWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <Posts />
+    </ErrorBoundary>
   );
 }

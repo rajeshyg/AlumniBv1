@@ -1,0 +1,13 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Users, authentication and user roles
+
+- We haven't implemented the full fledged authentication yet, for now users database is csv file [users.csv](mdc:public/data/users.csv)
+- Users can login with emailid from the [users.csv](mdc:public/data/users.csv) and will chose the profile (i.e. studentId) to get into the application
+- [Login.tsx](mdc:src/pages/Login.tsx) allows any user from the users database to login with the default password "test" for now until we implement proper authentication.
+- Once email can have will have multiple profiles to authenticate through [LoginForm.tsx](mdc:src/components/Auth/LoginForm.tsx) (i.e. the profile selection/switch screen)
+- [admin-emails.csv](mdc:public/admin-emails.csv) is the role management database, user (studentId) with sys-admin role can manage the moderator, but not all students under same email id. Similarly students/users with Moderator role can access the Moderation functionality i.e. [PostReview.tsx](mdc:src/pages/PostReview.tsx) where he/she can review and approve the posts

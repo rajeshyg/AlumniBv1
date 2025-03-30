@@ -7,6 +7,10 @@
 const logHistory: {level: string, message: string, timestamp: string, args: any[]}[] = [];
 const MAX_LOG_HISTORY = 100;
 
+// Check if we're in test mode
+const isTestEnv = typeof process !== 'undefined' && 
+  (process.env.NODE_ENV === 'test' || process.env.VITEST || import.meta.env?.MODE === 'test');
+
 // Add visible logging
 const addToLogHistory = (level: string, message: string, args: any[]) => {
   const logEntry = {
@@ -27,8 +31,10 @@ export const logger = {
    * Log debug information (implementation details)
    */
   debug: (message: string, ...args: any[]) => {
-    // Force log to be visible in browser console with styling
-    console.log(`%c[app:debug] ${message}`, 'color: blue; font-weight: bold;', ...args);
+    // Only log debug messages in non-test environments unless VERBOSE_TEST_LOGS is set
+    if (!isTestEnv || process.env.VERBOSE_TEST_LOGS) {
+      console.log(`%c[app:debug] ${message}`, 'color: blue; font-weight: bold;', ...args);
+    }
     addToLogHistory('debug', message, args);
   },
   
@@ -36,8 +42,10 @@ export const logger = {
    * Log informational messages (general app status)
    */
   info: (message: string, ...args: any[]) => {
-    // Always show info logs with styling
-    console.log(`%c[app:info] ${message}`, 'color: green; font-weight: bold;', ...args);
+    // Reduce info logs in test environment
+    if (!isTestEnv || process.env.VERBOSE_TEST_LOGS) {
+      console.log(`%c[app:info] ${message}`, 'color: green; font-weight: bold;', ...args);
+    }
     addToLogHistory('info', message, args);
   },
   

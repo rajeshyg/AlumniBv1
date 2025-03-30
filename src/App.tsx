@@ -4,6 +4,7 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { router } from './routes/index';
 import { LoadingSpinner } from './components/shared/LoadingSpinner';
 import { AuthProvider } from './context/AuthContext';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,13 +17,15 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Suspense fallback={<LoadingSpinner />}>
-          <RouterProvider router={router} />
-        </Suspense>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Suspense fallback={<LoadingSpinner />}>
+            <RouterProvider router={router} />
+          </Suspense>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -1,13 +1,22 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { PostItem } from './PostItem';
-import { Post } from '../../models/Post';
-import { useAuth } from '../../context/AuthContext';
+import { PostItem } from '../PostItem';
+import { Post } from '../../../models/Post';
+import { useAuth } from '../../../context/AuthContext';
 
 // Mock the auth context
-vi.mock('../../context/AuthContext', () => ({
-  useAuth: vi.fn()
+vi.mock('../../../context/AuthContext', () => ({
+  useAuth: vi.fn().mockReturnValue({
+    authState: {
+      currentUser: { 
+        studentId: 'test-user-id',
+        name: 'Test User'
+      },
+      isAuthenticated: true,
+      loading: false
+    }
+  })
 }));
 
 describe('PostItem', () => {
@@ -21,7 +30,8 @@ describe('PostItem', () => {
     likes: 5,
     likedBy: [],
     category: 'Internships',
-    tags: ['internship', 'opportunity']
+    tags: ['internship', 'opportunity'],
+    status: 'approved' as const
   };
   
   const mockOnLike = vi.fn();
@@ -127,14 +137,29 @@ describe('PostItem Comments Preview', () => {
     author: 'Test Author',
     authorId: '123',
     createdAt: new Date(),
+    likes: 0,
+    likedBy: [],
+    status: 'approved' as const,
     comments: [
       { text: 'Comment 1', postedBy: 'User 1', postedById: '1', createdAt: new Date() },
       { text: 'Comment 2', postedBy: 'User 2', postedById: '2', createdAt: new Date() },
       { text: 'Comment 3', postedBy: 'User 3', postedById: '3', createdAt: new Date() },
       { text: 'Comment 4', postedBy: 'User 4', postedById: '4', createdAt: new Date() }
-    ],
-    // ... other required properties
+    ]
   };
+
+  beforeEach(() => {
+    (useAuth as any).mockReturnValue({
+      authState: {
+        currentUser: { 
+          studentId: 'test-user-id',
+          name: 'Test User'
+        },
+        isAuthenticated: true,
+        loading: false
+      }
+    });
+  });
 
   it('should show preview of comments initially', () => {
     render(
@@ -146,7 +171,10 @@ describe('PostItem Comments Preview', () => {
     );
 
     // Click to show comments
-    fireEvent.click(screen.getByText(/2 comments/i));
+    const commentButton = screen.getByRole('button', { 
+      name: /comments/i 
+    });
+    fireEvent.click(commentButton);
 
     // Should show only first 2 comments
     expect(screen.getByText('Comment 1')).toBeInTheDocument();
@@ -167,7 +195,10 @@ describe('PostItem Comments Preview', () => {
     );
 
     // Click to show comments
-    fireEvent.click(screen.getByText(/2 comments/i));
+    const commentButton = screen.getByRole('button', { 
+      name: /comments/i 
+    });
+    fireEvent.click(commentButton);
 
     // Click to show all comments
     fireEvent.click(screen.getByText(/View all 4 comments/i));
