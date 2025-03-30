@@ -8,7 +8,6 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { logger } from '../utils/logger';
 import { TabNavigation } from '../components/shared/TabNavigation';
-import { ErrorBoundary } from '../components/common/ErrorBoundary';
 
 const categoryLabels = {
   all: { label: 'All Categories', value: 'all' },
@@ -40,21 +39,6 @@ const getCategoryLabel = (value: string): string => {
 };
 
 const Posts: React.FC = () => {
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      // Add the code that's likely causing the error
-      const tabs = Object.values(categoryLabels);
-      logger.debug('Tab values:', { 
-        tabValues: tabs.map(tab => typeof tab === 'object' ? JSON.stringify(tab) : tab)
-      });
-    } catch (error) {
-      logger.error('Error in Posts component:', { 
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-    }
-  }
-
   const { authState } = useAuth();
   const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -203,21 +187,6 @@ const Posts: React.FC = () => {
     activeTab: typeof activeTab === 'string' ? activeTab : 'unknown'
   });
 
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      // Add the code that's likely causing the error
-      const tabs = Object.values(categoryLabels);
-      logger.debug('Tab values:', { 
-        tabValues: tabs.map(tab => typeof tab === 'object' ? JSON.stringify(tab) : tab)
-      });
-    } catch (error) {
-      logger.error('Error in Posts component:', { 
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-    }
-  }
-
   return (
     // Use a container that allows the header to be sticky and content to scroll
     <div className="flex flex-col h-screen max-w-full"> 
@@ -313,11 +282,4 @@ const Posts: React.FC = () => {
   );
 }
 
-// Export a wrapped version of the component
-export default function PostsWithErrorBoundary() {
-  return (
-    <ErrorBoundary>
-      <Posts />
-    </ErrorBoundary>
-  );
-}
+export default Posts;
