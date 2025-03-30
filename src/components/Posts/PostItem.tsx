@@ -13,6 +13,16 @@ interface PostItemProps {
 }
 
 export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) => {
+  // Add safety check for invalid post object
+  if (!post || typeof post !== 'object') {
+    logger.error('Invalid post object received', { post });
+    return (
+      <div className="p-4 border border-red-300 bg-red-50 rounded-md">
+        <p className="text-red-500">Error: Invalid post data</p>
+      </div>
+    );
+  }
+
   const { authState } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -29,11 +39,11 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
   // Replace console.log with structured logger
   useEffect(() => {
     logger.debug(`Rendering post ${post.id}`, {
-      title: post.title,
-      author: post.author,
+      title: post.title || 'No title',
+      author: post.author || 'Unknown',
       hasComments: post.comments && post.comments.length > 0,
       commentCount: post.comments?.length || 0,
-      category: post.category
+      category: post.category || 'Uncategorized'
     });
   }, [post]);
   
@@ -41,11 +51,11 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
     return new Date(date).toLocaleDateString();
   };
 
-  // Determine if the content needs to be truncated
-  const hasLongContent = post.content.length > 200;
+  // Determine if the content needs to be truncated - add null check for content
+  const hasLongContent = post.content?.length > 200 || false;
   const displayContent = expanded || !hasLongContent 
-    ? post.content 
-    : post.content.substring(0, 200) + '...';
+    ? post.content || '' 
+    : (post.content || '').substring(0, 200) + '...';
 
   const handleLike = () => {
     if (authState.currentUser) {
@@ -79,8 +89,8 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
     return post.image;
   };
 
-  // Sort comments by date - newest first
-  const sortedComments = post.comments 
+  // Filter posts that have sortable comments
+  const sortedComments = post.comments && Array.isArray(post.comments) && post.comments.length > 0
     ? [...post.comments].sort((a, b) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )
@@ -146,7 +156,7 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
 
       <div 
         className={`text-muted-foreground ${expanded ? '' : 'line-clamp-3'}`}
-        dangerouslySetInnerHTML={{ __html: displayContent }}
+        dangerouslySetInnerHTML={{ __html: displayContent || '' }}
       />
       
       {hasLongContent && (
@@ -166,7 +176,7 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
         </button>
       )}
       
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" data-testid="post-tags">
         {/* Show category if available */}
         {post.category && (
           <span className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded-full text-xs">
@@ -175,15 +185,15 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
           </span>
         )}
         
-        {/* Show tags if available - safely handle when tags is not an array */}
-        {post.tags && Array.isArray(post.tags) && post.tags.length > 0 && (
+        {/* Show tags if available */}
+        {post.tags && Array.isArray(post.tags) && post.tags.length > 0 ? (
           post.tags.map(tag => (
             <span key={tag} className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded-full text-xs">
               <Tag className="w-3 h-3" />
               {tag}
             </span>
           ))
-        )}
+        ) : null}
       </div>
       
       <div className="flex justify-between items-center pt-2 border-t border-border/40">
@@ -200,11 +210,13 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
             <span>{post.likes}</span>
           </button>
           <button 
-            className={`text-sm hover:text-primary flex items-center gap-1 ${post.comments && post.comments.length > 0 ? 'text-primary font-medium' : ''}`}
+            className={`text-sm hover:text-primary flex items-center gap-1 ${showComments ? 'text-primary font-medium' : ''}`}
             onClick={() => setShowComments(!showComments)}
+            aria-label={`${post.comments?.length || 0} comments`}
+            data-testid="comments-button"
           >
-            <MessageCircle className={`w-4 h-4 ${post.comments && post.comments.length > 0 ? 'text-primary' : ''}`} />
-            <span>{post.comments?.length || 0}</span>
+            <MessageCircle className={`w-4 h-4 ${(post.comments && post.comments.length > 0) ? 'text-primary' : ''}`} />
+            <span>{post.comments?.length || 0} Comments</span>
           </button>
           <button className="text-sm hover:text-primary flex items-center gap-1">
             <Share2 className="w-4 h-4" />

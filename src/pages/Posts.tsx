@@ -110,10 +110,10 @@ const Posts: React.FC = () => {
       const query = searchQuery.toLowerCase();
       logger.debug(`Filtering by search query: ${query}`);
       filtered = filtered.filter(post => 
-        post.title?.toLowerCase().includes(query) || 
-        post.content.toLowerCase().includes(query) ||
-        post.author.toLowerCase().includes(query) ||
-        post.tags?.some(tag => tag.toLowerCase().includes(query))
+        (post.title ? post.title.toLowerCase().includes(query) : false) || 
+        (post.content ? post.content.toLowerCase().includes(query) : false) ||
+        (post.author ? post.author.toLowerCase().includes(query) : false) ||
+        (post.tags && Array.isArray(post.tags) ? post.tags.some(tag => tag && tag.toLowerCase().includes(query)) : false)
       );
     }
     

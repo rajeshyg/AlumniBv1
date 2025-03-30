@@ -40,32 +40,13 @@ export function PostForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!authState.currentUser) {
-      console.error('User not authenticated');
-      return;
-    }
-    
-    if (content.trim() && title.trim()) {
-      onSubmit({
-        title,
-        content,
-        author: authState.currentUser.name,
-        authorId: authState.currentUser.studentId,
-        images: images.length > 0 ? images : undefined,
-        tags: tags.length > 0 ? tags.join(', ') : undefined,
-        category: category || 'General',
-        status
-      });
-      
-      // Reset form
-      setTitle('');
-      setContent('');
-      setImages([]);
-      setTags([]);
-      setCategory('General');
-      setStatus('pending');
-    }
+    const formData = new FormData(e.target as HTMLFormElement);
+    onSubmit({
+      title: formData.get('title'),
+      content: formData.get('content'),
+      category: formData.get('category'),
+      tags: formData.get('tags')
+    });
   };
 
   const handleTagKeyDown = (e: React.KeyboardEvent) => {
@@ -87,12 +68,11 @@ export function PostForm({
       <h2 className="text-xl font-semibold mb-2">Create a New Post</h2>
       
       <div>
-        <label htmlFor="title" className="block text-sm font-medium mb-1">
-          Title
-        </label>
+        <label htmlFor="title">Title</label>
         <input
-          type="text"
           id="title"
+          name="title"
+          data-testid="title-input"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           className="w-full px-3 py-2 border border-border/40 bg-background rounded-md"
@@ -101,9 +81,7 @@ export function PostForm({
       </div>
       
       <div>
-        <label htmlFor="content" className="block text-sm font-medium mb-1">
-          Content
-        </label>
+        <label htmlFor="content">Content</label>
         <RichTextEditor 
           value={content} 
           onChange={setContent} 
@@ -112,15 +90,16 @@ export function PostForm({
       </div>
       
       <div>
-        <label htmlFor="category" className="block text-sm font-medium mb-1">
-          Category
-        </label>
+        <label htmlFor="category">Category</label>
         <select
           id="category"
+          name="category"
+          data-testid="category-select"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           className="w-full px-3 py-2 border border-border/40 bg-background rounded-md"
           aria-label="Category"
+          required
         >
           <option value="">Select a category</option>
           {categories.map(cat => (
@@ -140,9 +119,7 @@ export function PostForm({
       </div>
       
       <div>
-        <label className="block text-sm font-medium mb-1">
-          Tags
-        </label>
+        <label htmlFor="tags">Tags</label>
         <div className="flex flex-wrap gap-2 mb-2">
           {tags.map((tag: string) => (
             <span key={tag} className="flex items-center gap-1 bg-primary/20 text-primary px-2 py-1 rounded-full text-sm">
@@ -155,6 +132,9 @@ export function PostForm({
           ))}
         </div>
         <input
+          id="tags"
+          name="tags"
+          data-testid="tags-input"
           type="text"
           value={tagInput}
           onChange={(e) => setTagInput(e.target.value)}

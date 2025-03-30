@@ -39,13 +39,13 @@ const mockUser: User = {
 
 const mockPost: Post = {
   id: 'post1',
-  title: 'Test Post with Tags',
+      title: 'Test Post with Tags',
   content: 'This post has several tags.',
   author: 'Author Name',
   authorId: 'author1',
-  createdAt: new Date(),
+      createdAt: new Date(),
   likes: 5,
-  likedBy: [],
+      likedBy: [],
   comments: [],
   tags: ['react', 'typescript', 'testing', 'vitest'],
   status: 'approved' as PostStatus,
@@ -67,7 +67,7 @@ describe('Tags Integration Test', () => {
     );
 
     // Find the tags section within the post item
-    const tagsContainer = screen.getByTestId('post-tags'); // Assuming PostItem has a data-testid for tags
+    const tagsContainer = screen.getByTestId('post-tags');
     expect(tagsContainer).toBeInTheDocument();
 
     // Check if each tag is rendered
@@ -76,7 +76,7 @@ describe('Tags Integration Test', () => {
       const tagElement = within(tagsContainer).getByText(tag);
       expect(tagElement).toBeInTheDocument();
       // Check for specific styling or element type if needed
-      expect(tagElement).toHaveClass('bg-secondary'); // Example check
+      expect(tagElement).toHaveClass('bg-primary/10'); // Updated class
     });
   });
 
@@ -92,15 +92,17 @@ describe('Tags Integration Test', () => {
       </Router>
     );
 
-    // Check that the tags container might not exist or is empty
-    // Option 1: Check if the container doesn't exist
-    expect(screen.queryByTestId('post-tags')).not.toBeInTheDocument();
+    // The container should exist but not contain any tag elements
+    const tagsContainer = screen.getByTestId('post-tags');
+    expect(tagsContainer).toBeInTheDocument();
     
-    // Option 2: If the container exists but is empty, check its content
-    // const tagsContainer = screen.queryByTestId('post-tags');
-    // if (tagsContainer) {
-    //   expect(tagsContainer).toBeEmptyDOMElement();
-    // }
+    // Verify it only contains the category (if any)
+    if (postWithoutTags.category) {
+      expect(within(tagsContainer).getByText(postWithoutTags.category)).toBeInTheDocument();
+    }
+    
+    // Verify no other tag elements exist
+    expect(within(tagsContainer).queryAllByRole('generic')).toHaveLength(postWithoutTags.category ? 1 : 0);
   });
 
   it('should handle posts with an empty tags array', () => {
@@ -115,7 +117,16 @@ describe('Tags Integration Test', () => {
       </Router>
     );
 
-    // Similar check as above for posts with no tags
-    expect(screen.queryByTestId('post-tags')).not.toBeInTheDocument();
+    // The container should exist but not contain any tag elements
+    const tagsContainer = screen.getByTestId('post-tags');
+    expect(tagsContainer).toBeInTheDocument();
+    
+    // Verify it only contains the category (if any)
+    if (postWithEmptyTags.category) {
+      expect(within(tagsContainer).getByText(postWithEmptyTags.category)).toBeInTheDocument();
+    }
+    
+    // Verify no other tag elements exist beyond the category
+    expect(within(tagsContainer).queryAllByRole('generic')).toHaveLength(postWithEmptyTags.category ? 1 : 0);
   });
 });

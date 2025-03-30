@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import Profile from './Profile';
+import Profile from '../Profile';
 import { useAuth } from '../context/AuthContext';
 
 // Mock the auth context
