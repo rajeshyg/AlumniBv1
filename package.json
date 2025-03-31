@@ -17,8 +17,7 @@
     "test:failed": "vitest run --reporter=failing",
     "test:brief": "vitest run --reporter=basic",
     "test:compact": "vitest run --reporter=junit",
-    "test:only-failures": "vitest run --reporter=basic --mode=skip-pass"
-  },
+    "test:only-failures": "vitest run --reporter=basic --mode=skip-pass"  },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.3",
     "@radix-ui/react-dialog": "^1.0.5",

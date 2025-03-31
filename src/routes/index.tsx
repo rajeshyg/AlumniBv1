@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { lazy } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
+import ProjectStatusViewer from '../project/ProjectStatusViewer';
 
 // Lazy-loaded route components
 const Home = lazy(() => import('../pages/Home'));
@@ -58,6 +59,10 @@ export const router = createBrowserRouter([
       {
         path: 'post-review',
         element: <PostReview />,
+      },
+      {
+        path: 'project',
+        element: <ProjectStatusViewer />,
       },
       {
         path: '*',

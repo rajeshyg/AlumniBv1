@@ -1,0 +1,340 @@
+:root {
+  --primary-color: #60a5fa;
+  --primary-hover: #93c5fd;
+  --bg-color: #111827;
+  --card-bg: #1f2937;
+  --text-color: #e5e7eb;
+  --text-muted: #9ca3af;
+  --border-color: #374151;
+  --hover-bg: #2d3748;
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  --input-bg: #374151;
+
+  /* Status colors */
+  --pending-bg: #450a0a;
+  --pending-color: #fca5a5;
+  --pending-border: #7f1d1d;
+  --in-progress-bg: #422006;
+  --in-progress-color: #fcd34d;
+  --in-progress-border: #854d0e;
+  --completed-bg: #064e3b;
+  --completed-color: #6ee7b7;
+  --completed-border: #047857;
+  --failed-bg: #7f1d1d;
+  --failed-color: #fecaca;
+  --failed-border: #b91c1c;
+  --na-bg: #1f2937;
+  --na-color: #9ca3af;
+  --na-border: #4b5563;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: transparent;
+  padding: 0;
+}
+
+h1 {
+  text-align: left;
+  color: var(--text-color);
+  font-size: 28px;
+  margin-bottom: 32px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 16px;
+  letter-spacing: 0.5px;
+}
+
+.controls {
+  background: var(--card-bg);
+  margin-bottom: 32px;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 8px 16px var(--shadow-color);
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 24px;
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.controls::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary-color), #818cf8);
+}
+
+.controls label {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.controls input, 
+.controls select {
+  padding: 14px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-color);
+  background: var(--input-bg);
+  transition: all 0.2s ease;
+  width: 100%;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 40px;
+}
+
+.controls input:focus, 
+.controls select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+.controls input::placeholder {
+  color: var(--text-muted);
+}
+
+.phase, .iteration, .task {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px var(--shadow-color);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.phase:hover, .iteration:hover, .task:hover {
+  box-shadow: 0 6px 8px var(--shadow-color);
+  transform: translateY(-1px);
+}
+
+.iteration {
+  margin-left: 24px;
+  margin-bottom: 12px;
+  border-left: 3px solid #8b5cf6;
+  border-radius: 8px;
+}
+
+.task {
+  margin-left: 24px;
+  margin-bottom: 10px;
+  border-left: 3px solid #ec4899;
+  border-radius: 6px;
+}
+
+.phase h2::before, 
+.iteration h3::before,
+.task strong::before {
+  content: '▶';
+  display: inline-block;
+  margin-right: 12px;
+  font-size: 12px;
+  transition: transform 0.3s ease;
+}
+
+.phase h2::before {
+  color: #3b82f6;
+}
+
+.iteration h3::before {
+  color: #8b5cf6;
+}
+
+.task strong::before {
+  color: #ec4899;
+}
+
+.phase h2, 
+.iteration h3,
+.task strong {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  margin: 0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  color: var(--text-color);
+  background: linear-gradient(180deg, var(--card-bg), var(--hover-bg));
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.phase h2 {
+  font-size: 17px;
+  letter-spacing: 0.5px;
+}
+
+.iteration h3 {
+  font-size: 15px;
+  letter-spacing: 0.3px;
+}
+
+.task strong {
+  font-size: 14px;
+  letter-spacing: 0.2px;
+  background: linear-gradient(180deg, #2a374b, #263141);
+}
+
+.status {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 8px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.not-started, .Pending { 
+  background-color: var(--pending-bg); 
+  color: var(--pending-color);
+  border: 1px solid var(--pending-border);
+}
+
+.in-progress, .In-progress { 
+  background-color: var(--in-progress-bg); 
+  color: var(--in-progress-color);
+  border: 1px solid var(--in-progress-border);
+}
+
+.completed, .Completed { 
+  background-color: var(--completed-bg); 
+  color: var(--completed-color);
+  border: 1px solid var(--completed-border);
+}
+
+.Failed {
+  background-color: var(--failed-bg);
+  color: var(--failed-color);
+  border: 1px solid var(--failed-border);
+}
+
+.N-A {
+  background-color: var(--na-bg);
+  color: var(--na-color);
+  border: 1px solid var(--na-border);
+}
+
+.subtask {
+  padding: 14px 18px 14px 44px;
+  position: relative;
+  font-size: 14px;
+}
+
+.subtask::before {
+  content: '•';
+  position: absolute;
+  left: 22px;
+  color: #9ca3af;
+}
+
+.subtask:hover {
+  background-color: var(--hover-bg);
+}
+
+.subtask:last-child {
+  border-bottom: none;
+}
+
+.phase-content,
+.iteration-content,
+.task-content {
+  padding: 0;
+  background-color: #283548;
+}
+
+.phase-content {
+  background-color: #1e293b;
+}
+
+.iteration-content {
+  background-color: #242f41;
+}
+
+.task-content {
+  background-color: #1e2734;
+}
+
+.phase-content.hidden,
+.iteration-content.hidden,
+.task-content.hidden {
+  display: none;
+}
+
+.task .status {
+  font-size: 9px;
+}
+
+.subtask .status {
+  font-size: 8px;
+  padding: 2px 5px;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.status-details {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 10px;
+}
+
+.status-item {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+
+.status-label {
+  color: var(--text-muted);
+  font-size: 9px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.task-id {
+  font-size: 10px;
+  background-color: var(--card-bg);
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 8px;
+  font-family: monospace;
+  border: 1px solid var(--border-color);
+}
+
+.phase-content.expanded,
+.iteration-content.expanded,
+.task-content.expanded {
+  display: block;
+}
+
+.status-details.all-completed {
+  display: none;
+}
+
+.status-details.visible {
+  display: flex;
+}
