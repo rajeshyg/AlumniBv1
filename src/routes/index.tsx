@@ -14,6 +14,7 @@ const Admin = lazy(() => import('../pages/Admin'));
 const ContentModeration = lazy(() => import('../pages/ContentModeration'));
 const MyPosts = lazy(() => import('../pages/MyPosts'));
 const PostReview = lazy(() => import('../pages/PostReview'));
+const Chat = lazy(() => import('../components/Chat/ChatPage').then(module => ({ default: module.ChatPage })));
 
 export const router = createBrowserRouter([
   {
@@ -63,6 +64,10 @@ export const router = createBrowserRouter([
       {
         path: 'project',
         element: <ProjectStatusViewer />,
+      },
+      {
+        path: 'chat',
+        element: <Chat />,
       },
       {
         path: '*',

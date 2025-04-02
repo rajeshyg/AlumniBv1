@@ -54,14 +54,25 @@ export class UserService {
           // Add the last value
           values.push(currentValue.trim());
           
-          // Create user object
+          // Split name into first and last name
+          const fullName = nameIndex >= 0 && values[nameIndex] ? values[nameIndex].replace(/"/g, '') : 'Unknown User';
+          const nameParts = fullName.split(' ');
+          const firstName = nameParts[0] || 'Unknown';
+          const lastName = nameParts.slice(1).join(' ') || 'User';
+          
+          // Create user object with all required properties
           const user: User = {
             studentId: studentIdIndex >= 0 && values[studentIdIndex] ? values[studentIdIndex].replace(/"/g, '') : `unknown-${index}`,
-            name: nameIndex >= 0 && values[nameIndex] ? values[nameIndex].replace(/"/g, '') : 'Unknown User',
+            name: fullName,
+            firstName,
+            lastName,
             email: emailIndex >= 0 && values[emailIndex] ? values[emailIndex].replace(/"/g, '') : '',
             centerName: centerNameIndex >= 0 && values[centerNameIndex] ? values[centerNameIndex].replace(/"/g, '') : undefined,
             category: categoryIndex >= 0 && values[categoryIndex] ? values[categoryIndex].replace(/"/g, '') : undefined,
             batch: batchIndex >= 0 && values[batchIndex] ? values[batchIndex].replace(/"/g, '') : undefined,
+            role: 'student',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
           };
           
           return user;
@@ -104,11 +115,23 @@ export class UserService {
       await this.loadUsers();
     }
     
-    // Find matching users
+    // Normalize email for comparison
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    // Find matching users with case-insensitive comparison
     const matchingUsers = this.users.filter(user => 
       user.email && 
-      user.email.trim().toLowerCase() === email.trim().toLowerCase()
+      user.email.trim().toLowerCase() === normalizedEmail
     );
+    
+    if (matchingUsers.length === 0) {
+      logger.debug('No users found for email', { email: normalizedEmail });
+    } else {
+      logger.debug('Found users for email', { 
+        email: normalizedEmail, 
+        count: matchingUsers.length 
+      });
+    }
     
     return matchingUsers;
   }
@@ -129,8 +152,11 @@ export class UserService {
     message?: string;
   }> {
     try {
+      // Normalize email
+      const normalizedEmail = email.trim().toLowerCase();
+      
       // Simple validation for empty email or password
-      if (!email || email.trim() === '') {
+      if (!normalizedEmail) {
         return { success: false, message: 'Email is required' };
       }
       
@@ -138,23 +164,35 @@ export class UserService {
         return { success: false, message: 'Password is required' };
       }
 
-      const matchingUsers = await this.findUsersByEmail(email);
+      const matchingUsers = await this.findUsersByEmail(normalizedEmail);
       
       if (matchingUsers.length === 0) {
-        return { success: false, message: 'Email not found' };
+        logger.warn('Login attempt with non-existent email', { email: normalizedEmail });
+        return { success: false, message: 'Email not found. Please check your email and try again.' };
       }
       
       if (matchingUsers.length === 1) {
         // Single user found, auto-login
         this.setCurrentUser(matchingUsers[0]);
+        logger.info('Single user login successful', { 
+          email: normalizedEmail,
+          userId: matchingUsers[0].studentId 
+        });
         return { success: true, users: matchingUsers };
       }
       
       // Multiple users found, return the list for selection
+      logger.info('Multiple profiles found for email', { 
+        email: normalizedEmail,
+        count: matchingUsers.length 
+      });
       return { success: true, users: matchingUsers };
     } catch (error) {
       logger.error('Login error:', error);
-      return { success: false, message: 'Login failed - ' + (error instanceof Error ? error.message : String(error)) };
+      return { 
+        success: false, 
+        message: 'Login failed. Please try again later.' 
+      };
     }
   }
   
@@ -184,30 +222,37 @@ export class UserService {
     localStorage.removeItem(this.STORAGE_KEY);
   }
 
-  async searchUsers(query: string): Promise<any[]> {
+  // Search users by query
+  static async searchUsers(query: string): Promise<User[]> {
     try {
       logger.info('Starting user search for:', query);
-      if (UserService.users.length === 0) {
-        await UserService.loadUsers();
+      if (this.users.length === 0) {
+        await this.loadUsers();
       }
       
-      const searchQuery = query.toLowerCase();
-      logger.info('Searching through users:', UserService.users.length);
+      const searchQuery = query.toLowerCase().trim();
+      logger.info('Searching through users:', this.users.length);
       
-      return UserService.users.filter(user => {
+      const results = this.users.filter(user => {
         const matchEmail = user.email?.toLowerCase().includes(searchQuery);
         const matchName = user.name?.toLowerCase().includes(searchQuery);
-        // You can add more fields to search through if needed
+        const matchFirstName = user.firstName?.toLowerCase().includes(searchQuery);
+        const matchLastName = user.lastName?.toLowerCase().includes(searchQuery);
+        const matchStudentId = user.studentId?.toLowerCase().includes(searchQuery);
+        const matchCenter = user.centerName?.toLowerCase().includes(searchQuery);
+        const matchCategory = user.category?.toLowerCase().includes(searchQuery);
+        const matchBatch = user.batch?.toLowerCase().includes(searchQuery);
         
-        return matchEmail || matchName;
-      }).map(user => ({
-        email: user.email || '',
-        name: user.name || '',
-        studentId: user.studentId || '',
-        centerName: user.centerName || '',
-        category: user.category || '',
-        batch: user.batch || ''
-      }));
+        return matchEmail || matchName || matchFirstName || matchLastName || 
+               matchStudentId || matchCenter || matchCategory || matchBatch;
+      });
+
+      logger.info('Search results:', { 
+        query: searchQuery, 
+        resultCount: results.length 
+      });
+      
+      return results;
     } catch (error) {
       logger.error('Error in searchUsers:', error);
       throw new Error('Failed to search users: ' + (error instanceof Error ? error.message : 'Unknown error'));

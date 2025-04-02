@@ -4,11 +4,11 @@ import { configure } from '@testing-library/react';
 
 // Configure Testing Library to suppress HTML output
 configure({
-  getElementError: (message: string) => {
-    const errorMessage = message.split('\n')[0];
+  getElementError: (message: string | null, container?: Element) => {
+    const errorMessage = message?.split('\n')[0] || 'Element not found';
     const error = new Error(errorMessage);
     error.name = 'TestingLibraryElementError';
-    error.stack = null;
+    error.stack = undefined;
     return error;
   },
 });
@@ -27,6 +27,22 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 });
+
+// Mock IntersectionObserver
+class MockIntersectionObserver {
+  observe = vi.fn();
+  disconnect = vi.fn();
+  unobserve = vi.fn();
+}
+
+Object.defineProperty(window, 'IntersectionObserver', {
+  writable: true,
+  configurable: true,
+  value: MockIntersectionObserver,
+});
+
+// Mock scrollIntoView
+Element.prototype.scrollIntoView = vi.fn();
 
 // Mock fetch API
 declare global {

@@ -1,19 +1,15 @@
 export interface User {
   studentId: string;
-  name: string; // Full name as provided in CSV
   email: string;
+  firstName: string;
+  lastName: string;
+  name?: string;
   centerName?: string;
   category?: string;
   batch?: string;
-  // Other fields we're not using yet but might be needed later
-  // phone?: string;
-  // fatherName?: string;
-  // result?: string;
-  // familyName?: string;
-  // gitaFamily?: string;
-  // familyId?: string;
-  // isKurukshetra?: boolean;
-  // isUpdated?: boolean;
+  role: 'student' | 'admin';
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuthState {

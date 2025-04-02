@@ -31,31 +31,34 @@ export const logger = {
    * Log debug information (implementation details)
    */
   debug: (message: string, ...args: any[]) => {
-    // Only log debug messages in non-test environments unless VERBOSE_TEST_LOGS is set
-    if (!isTestEnv || process.env.VERBOSE_TEST_LOGS) {
-      console.log(`%c[app:debug] ${message}`, 'color: blue; font-weight: bold;', ...args);
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`[DEBUG] ${message}`, ...args);
+      logHistory.push({ level: 'debug', message, timestamp: new Date().toISOString(), args });
     }
-    addToLogHistory('debug', message, args);
   },
   
   /**
    * Log informational messages (general app status)
    */
   info: (message: string, ...args: any[]) => {
-    // Reduce info logs in test environment
-    if (!isTestEnv || process.env.VERBOSE_TEST_LOGS) {
-      console.log(`%c[app:info] ${message}`, 'color: green; font-weight: bold;', ...args);
-    }
-    addToLogHistory('info', message, args);
+    console.info(`[INFO] ${message}`, ...args);
+    logHistory.push({ level: 'info', message, timestamp: new Date().toISOString(), args });
+  },
+  
+  /**
+   * Log warning messages (potential issues)
+   */
+  warn: (message: string, ...args: any[]) => {
+    console.warn(`[WARN] ${message}`, ...args);
+    logHistory.push({ level: 'warn', message, timestamp: new Date().toISOString(), args });
   },
   
   /**
    * Log error messages (exceptions, failures)
    */
   error: (message: string, ...args: any[]) => {
-    // Always show error logs with distinctive styling
-    console.error(`%c[app:error] ${message}`, 'color: red; font-weight: bold; background: #ffeeee;', ...args);
-    addToLogHistory('error', message, args);
+    console.error(`[ERROR] ${message}`, ...args);
+    logHistory.push({ level: 'error', message, timestamp: new Date().toISOString(), args });
   },
   
   /**

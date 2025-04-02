@@ -18,7 +18,8 @@ vi.mock('lucide-react', () => ({
   User: () => <div data-testid="user-icon">User Icon</div>,
   Settings: () => <div data-testid="settings-icon">Settings Icon</div>,
   FileEdit: () => <div data-testid="file-edit-icon">File Edit Icon</div>,
-  ClipboardList: () => <div data-testid="clipboard-list-icon">Clipboard List Icon</div>
+  ClipboardList: () => <div data-testid="clipboard-list-icon">Clipboard List Icon</div>,
+  MessageSquare: () => <div data-testid="message-square-icon">Message Square Icon</div>
 }));
 
 // Create a wrapper component that provides necessary context
@@ -67,7 +68,7 @@ describe('Navigation', () => {
     renderWithRouter(<Navigation className="test-nav" />);
 
     // More concise assertions that will produce cleaner error output
-    const expectedItems = ['Home', 'Posts', 'My Posts', 'Profile', 'Settings'];
+    const expectedItems = ['Home', 'Posts', 'My Posts', 'Chat', 'Profile', 'Settings'];
     const unexpectedItems = ['Admin', 'Moderation', 'Review Posts'];
 
     for (const item of expectedItems) {
@@ -102,6 +103,7 @@ describe('Navigation', () => {
     
     expect(reviewPostsLink).toBeInTheDocument();
     expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.getByText('Chat')).toBeInTheDocument();
   });
 
   it('shows only moderation item for moderators', async () => {
@@ -128,6 +130,7 @@ describe('Navigation', () => {
     
     // Make sure admin link is not shown for moderators
     expect(screen.queryByText('Admin')).not.toBeInTheDocument();
+    expect(screen.getByText('Chat')).toBeInTheDocument();
   });
 
   it('handles error in admin status check gracefully', async () => {
@@ -149,6 +152,7 @@ describe('Navigation', () => {
     expect(screen.getByText('Home')).toBeInTheDocument();
     expect(screen.getByText('Posts')).toBeInTheDocument();
     expect(screen.getByText('My Posts')).toBeInTheDocument();
+    expect(screen.getByText('Chat')).toBeInTheDocument();
     expect(screen.getByText('Profile')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
     expect(screen.queryByText('Admin')).not.toBeInTheDocument();
@@ -180,6 +184,7 @@ describe('Navigation', () => {
     expect(screen.queryByText('Admin')).not.toBeInTheDocument();
     expect(screen.getByText('Posts')).toBeInTheDocument();
     expect(screen.getByText('My Posts')).toBeInTheDocument();
+    expect(screen.getByText('Chat')).toBeInTheDocument();
     expect(screen.getByText('Review Posts')).toBeInTheDocument();
     expect(screen.getByText('Profile')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();

@@ -211,6 +211,44 @@
                 ]
               }
             ]
+          },
+          {
+            "id": "IT008",
+            "name": "Iteration 8: Student Features",
+            "tasks": [
+              {
+                "id": "T026",
+                "name": "Post Management",
+                "subtasks": [
+                  {"id": "ST079", "name": "Implement status-based post navigation (Approved/Pending/Rejected/Expired)", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST080", "name": "Add post update functionality for own posts", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST081", "name": "Create post approval request workflow", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T027",
+                "name": "Chat System",
+                "subtasks": [
+                  {"id": "ST082", "name": "Implement 1-1 chat with post owners", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST083", "name": "Add real-time chat notifications", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST084", "name": "Create chat history management", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              }
+            ]
+          },
+          {
+            "id": "IT009",
+            "name": "Iteration 9: Admin Features",
+            "tasks": [
+              {
+                "id": "T028",
+                "name": "Role Management",
+                "subtasks": [
+                  {"id": "ST085", "name": "Implement mentor role assignment system", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST086", "name": "Create moderator search and management", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              }
+            ]
           }
         ]
       }

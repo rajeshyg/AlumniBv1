@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, User, Settings, FileText, Shield, ClipboardList, FileEdit } from 'lucide-react';
+import { Home, User, Settings, FileText, Shield, ClipboardList, FileEdit, MessageSquare } from 'lucide-react';
 import { useThemeStore } from '../../store/theme';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -46,6 +46,7 @@ export function Navigation({ className }: NavigationProps) {
     ] : []),
     { to: '/posts', icon: FileText, label: 'Posts' },
     { to: '/my-posts', icon: FileEdit, label: 'My Posts' },
+    { to: '/chat', icon: MessageSquare, label: 'Chat' },
     ...(adminData?.role === 'system_admin' || adminData?.role === 'moderator' 
       ? [
           { to: '/post-review', icon: ClipboardList, label: 'Review Posts' }

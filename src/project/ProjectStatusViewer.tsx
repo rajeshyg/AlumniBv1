@@ -64,6 +64,37 @@ const ProjectStatusViewer: React.FC = () => {
            (manualStatus === 'Completed' || manualStatus === 'N/A');
   };
 
+  // Initialize the expandedSections state based on completion status
+  useEffect(() => {
+    const initialExpandState: Record<string, boolean> = {};
+    
+    // Process phases
+    projectData.project.phases.forEach(phase => {
+      const phaseStatus = calculatePhaseStatus(phase);
+      initialExpandState[phase.id] = phaseStatus !== 'completed';
+      
+      // Process iterations
+      if (phase.iterations) {
+        phase.iterations.forEach(iteration => {
+          const iterationStatus = calculateStatus(iteration.tasks || []);
+          const iterationId = `${phase.id}-${iteration.id}`;
+          initialExpandState[iterationId] = iterationStatus !== 'completed';
+          
+          // Process tasks
+          if (iteration.tasks) {
+            iteration.tasks.forEach(task => {
+              const taskStatus = calculateStatus(task.subtasks || []);
+              const taskId = `${iterationId}-${task.id}`;
+              initialExpandState[taskId] = taskStatus !== 'completed';
+            });
+          }
+        });
+      }
+    });
+    
+    setExpandedSections(initialExpandState);
+  }, []);
+
   // Toggle expanded/collapsed state
   const toggleSection = (id: string) => {
     setExpandedSections(prev => ({
@@ -124,9 +155,8 @@ const ProjectStatusViewer: React.FC = () => {
   // Render a task
   const renderTask = (task: any, iterationId: string) => {
     const taskStatus = calculateStatus(task.subtasks || []);
-    const taskAllCompleted = taskStatus === 'completed';
     const taskId = `${iterationId}-${task.id}`;
-    const isExpanded = expandedSections[taskId] !== false; // Default to expanded
+    const isExpanded = expandedSections[taskId];
     
     return (
       <div className="task" key={task.id}>
@@ -144,9 +174,8 @@ const ProjectStatusViewer: React.FC = () => {
   // Render an iteration
   const renderIteration = (iteration: any, phaseId: string) => {
     const iterationStatus = calculateStatus(iteration.tasks || []);
-    const iterationAllCompleted = iterationStatus === 'completed';
     const iterationId = `${phaseId}-${iteration.id}`;
-    const isExpanded = expandedSections[iterationId] !== false; // Default to expanded
+    const isExpanded = expandedSections[iterationId];
     
     return (
       <div className="iteration" key={iteration.id}>
@@ -164,8 +193,7 @@ const ProjectStatusViewer: React.FC = () => {
   // Render a phase
   const renderPhase = (phase: any) => {
     const phaseStatus = calculatePhaseStatus(phase);
-    const phaseAllCompleted = phaseStatus === 'completed';
-    const isExpanded = expandedSections[phase.id] !== false; // Default to expanded
+    const isExpanded = expandedSections[phase.id];
     
     return (
       <div className="phase" key={phase.id}>
