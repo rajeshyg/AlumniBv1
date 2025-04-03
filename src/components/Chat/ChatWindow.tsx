@@ -232,9 +232,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
-      {/* Chat Header */}
-      <div className="p-4 border-b border-border flex items-center justify-between">
+    <div className={cn(
+      "fixed inset-0 z-50 flex flex-col bg-background",
+      isMobile ? "top-0 bottom-0 left-0 right-0 h-screen" : "h-full max-h-[calc(100vh-4rem)]"
+    )}>
+      {/* Chat Header - Fixed at top */}
+      <div className="flex-none p-4 border-b border-border flex items-center justify-between bg-background">
         <div className="flex items-center space-x-3">
           {isMobile && (
             <Button
@@ -277,145 +280,156 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
         </DropdownMenu>
       </div>
 
-      {/* Messages Area */}
+      {/* Messages Area - Scrollable content */}
       <div 
         ref={parentRef}
-        className="flex-1 overflow-y-auto p-4"
+        className="flex-1 overflow-y-auto"
+        style={{
+          height: isMobile ? 'calc(100vh - 130px)' : 'auto'
+        }}
       >
-        <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const message = chatMessages[virtualRow.index];
-            const isCurrentUser = message.senderId === authState.currentUser?.studentId;
-            const sender = chatUsers[message.senderId];
-            
-            return (
-              <div
-                key={message.id}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-                className={cn(
-                  "flex items-start space-x-2 mb-4",
-                  isCurrentUser ? "justify-end" : "justify-start"
-                )}
-              >
-                {!isCurrentUser && (
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-medium">
-                      {sender?.name?.charAt(0) || '?'}
-                    </span>
-                  </div>
-                )}
-                
-                <ContextMenu>
-                  <ContextMenuTrigger>
-                    <div
-                      className={cn(
-                        "max-w-[85%] sm:max-w-[70%] rounded-lg p-3 group relative",
-                        isCurrentUser
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                      )}
-                      style={{ display: 'inline-block', whiteSpace: 'normal', wordBreak: 'break-word' }}
-                    >
-                      {!isCurrentUser && (
-                        <div className="text-xs font-medium mb-1 text-muted-foreground">
-                          {sender?.name || 'Unknown User'}
-                        </div>
-                      )}
-                      <div className="min-w-[60px]">
-                        <p>{message.content}</p>
-                      </div>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-xs opacity-70">
-                          {format(new Date(message.timestamp), 'HH:mm')}
-                        </span>
-                        {isCurrentUser && (
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreHorizontal className="h-4 w-4" />
+        <div className="p-4">
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const message = chatMessages[virtualRow.index];
+              const isCurrentUser = message.senderId === authState.currentUser?.studentId;
+              const sender = chatUsers[message.senderId];
+              
+              return (
+                <div
+                  key={message.id}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                  className={cn(
+                    "flex items-start space-x-2 mb-4",
+                    isCurrentUser ? "justify-end" : "justify-start"
+                  )}
+                >
+                  {!isCurrentUser && (
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-medium">
+                        {sender?.name?.charAt(0) || '?'}
+                      </span>
+                    </div>
+                  )}
+                  
+                  <ContextMenu>
+                    <ContextMenuTrigger>
+                      <div
+                        className={cn(
+                          "max-w-[85%] sm:max-w-[70%] rounded-lg p-3 group relative",
+                          isCurrentUser
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
+                        )}
+                        style={{ display: 'inline-block', whiteSpace: 'normal', wordBreak: 'break-word' }}
+                      >
+                        {!isCurrentUser && (
+                          <div className="text-xs font-medium mb-1 text-muted-foreground">
+                            {sender?.name || 'Unknown User'}
                           </div>
                         )}
+                        <div className="min-w-[60px]">
+                          <p>{message.content}</p>
+                        </div>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-xs opacity-70">
+                            {format(new Date(message.timestamp), 'HH:mm')}
+                          </span>
+                          {isCurrentUser && (
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent>
-                    <ContextMenuItem>
-                      <Reply className="h-4 w-4 mr-2" />
-                      Reply
-                    </ContextMenuItem>
-                    {isCurrentUser && (
-                      <>
-                        <ContextMenuItem>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </ContextMenuItem>
-                        <ContextMenuItem className="text-destructive">
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </ContextMenuItem>
-                      </>
-                    )}
-                  </ContextMenuContent>
-                </ContextMenu>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem>
+                        <Reply className="h-4 w-4 mr-2" />
+                        Reply
+                      </ContextMenuItem>
+                      {isCurrentUser && (
+                        <>
+                          <ContextMenuItem>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </ContextMenuItem>
+                          <ContextMenuItem className="text-destructive">
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </ContextMenuItem>
+                        </>
+                      )}
+                    </ContextMenuContent>
+                  </ContextMenu>
 
-                {isCurrentUser && (
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-medium">
-                      {authState.currentUser?.name?.charAt(0) || '?'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  {isCurrentUser && (
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-medium">
+                        {authState.currentUser?.name?.charAt(0) || '?'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div ref={messagesEndRef} />
         </div>
-        <div ref={messagesEndRef} />
       </div>
 
-      {/* Typing Indicator */}
-      {typingUsers[chat.id]?.size > 0 && (
-        <div className="px-4 py-2 text-sm text-muted-foreground">
-          {(() => {
-            const typingOtherUsers = Array.from(typingUsers[chat.id])
-              .filter(id => id !== authState.currentUser?.studentId)
-              .map(id => chatUsers[id]?.name)
-              .filter(Boolean);
-            
-            if (typingOtherUsers.length === 0) return null;
-            
-            return `${typingOtherUsers.join(', ')} ${typingOtherUsers.length === 1 ? 'is' : 'are'} typing...`;
-          })()}
-        </div>
-      )}
+      {/* Footer Area - fixed section for typing indicator and input */}
+      <div className={cn(
+        "flex-none border-t border-border bg-background",
+        isMobile ? "fixed bottom-0 left-0 right-0" : ""
+      )}>
+        {/* Typing Indicator */}
+        {typingUsers[chat.id]?.size > 0 && (
+          <div className="px-4 py-2 text-sm text-muted-foreground bg-background border-t border-border">
+            {(() => {
+              const typingOtherUsers = Array.from(typingUsers[chat.id])
+                .filter(id => id !== authState.currentUser?.studentId)
+                .map(id => chatUsers[id]?.name)
+                .filter(Boolean);
+              
+              if (typingOtherUsers.length === 0) return null;
+              
+              return `${typingOtherUsers.join(', ')} ${typingOtherUsers.length === 1 ? 'is' : 'are'} typing...`;
+            })()}
+          </div>
+        )}
 
-      {/* Message Input */}
-      <form onSubmit={handleSendMessage} className="p-4 border-t border-border">
-        <div className="flex items-center space-x-2">
-          <Input
-            value={newMessage}
-            onChange={(e) => {
-              setNewMessage(e.target.value);
-              handleTyping();
-            }}
-            placeholder="Type a message..."
-            className="flex-1"
-          />
-          <Button type="submit" size="icon" disabled={!newMessage.trim()}>
-            <Send className="h-5 w-5" />
-          </Button>
-        </div>
-      </form>
+        {/* Message Input */}
+        <form onSubmit={handleSendMessage} className="p-4 bg-background">
+          <div className="flex items-center space-x-2">
+            <Input
+              value={newMessage}
+              onChange={(e) => {
+                setNewMessage(e.target.value);
+                handleTyping();
+              }}
+              placeholder="Type a message..."
+              className="flex-1"
+            />
+            <Button type="submit" size="icon" disabled={!newMessage.trim()}>
+              <Send className="h-5 w-5" />
+            </Button>
+          </div>
+        </form>
+      </div>
 
       {/* Members Dialog */}
       <Dialog open={showMembers} onOpenChange={setShowMembers}>
