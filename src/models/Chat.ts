@@ -12,7 +12,7 @@ export interface ChatMessage {
 
 export interface Chat {
   id: string;
-  postId: string;
+  postId?: string;  // Optional since direct chats don't have a post
   name: string;
   participants: string[]; // Array of studentIds
   createdAt: string;

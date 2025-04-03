@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Chat, ChatMessage } from '../../models/Chat';
+import { useChatStore } from '../../store/chat';
 import { ChatService } from '../../services/ChatService';
 import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
 import { Button } from '../ui/button';
-import { Send, Paperclip, MoreVertical, Users, X, UserPlus } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Users, X, UserPlus, MoreHorizontal, Reply, Edit, Trash2, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { useThemeStore } from '../../store/theme';
 import { cn } from '../../lib/utils';
@@ -27,6 +28,13 @@ import {
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Search } from 'lucide-react';
+import { useVirtualizer, VirtualItem } from '@tanstack/react-virtual';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '../ui/context-menu';
 
 interface ChatWindowProps {
   chat: Chat;
@@ -36,29 +44,53 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
   const { authState } = useAuth();
   const { device } = useThemeStore();
   const isMobile = device === 'mobile';
-  const [messages, setMessages] = React.useState<ChatMessage[]>([]);
-  const [newMessage, setNewMessage] = React.useState('');
-  const [isTyping, setIsTyping] = React.useState(false);
-  const [showMembers, setShowMembers] = React.useState(false);
-  const [members, setMembers] = React.useState<User[]>([]);
-  const [userSearchQuery, setUserSearchQuery] = React.useState('');
-  const [searchResults, setSearchResults] = React.useState<User[]>([]);
-  const [isSearching, setIsSearching] = React.useState(false);
-  const searchTimeoutRef = React.useRef<NodeJS.Timeout>();
+  const [newMessage, setNewMessage] = useState('');
+  const [showMembers, setShowMembers] = useState(false);
+  const [members, setMembers] = useState<User[]>([]);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const parentRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [chatUsers, setChatUsers] = useState<Record<string, User>>({});
+
+  const {
+    messages,
+    sendMessage,
+    markAsRead,
+    addTypingUser,
+    removeTypingUser,
+    typingUsers,
+    refreshChats
+  } = useChatStore();
+
+  const chatMessages = messages[chat.id] || [];
+
+  // Virtual list setup
+  const rowVirtualizer = useVirtualizer({
+    count: chatMessages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 80,
+    overscan: 5,
+    initialRect: { width: 0, height: 0 }
+  });
 
   useEffect(() => {
-    const chatMessages = ChatService.getChatMessages(chat.id);
-    setMessages(chatMessages);
-
     // Mark messages as read when opening chat
     if (authState.currentUser) {
-      ChatService.markMessagesAsRead(chat.id, authState.currentUser.studentId);
+      markAsRead(chat.id);
     }
 
     // Load chat members
     loadMembers();
   }, [chat.id, authState.currentUser, chat.participants]);
+
+  useEffect(() => {
+    if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages.length]);
 
   const loadMembers = async () => {
     try {
@@ -71,38 +103,64 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
     }
   };
 
+  // Load chat users
   useEffect(() => {
-    if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
+    const loadUsers = async () => {
+      const users: Record<string, User> = {};
+      if (authState.currentUser) {
+        users[authState.currentUser.studentId] = authState.currentUser;
+      }
+      for (const userId of chat.participants) {
+        if (!users[userId]) {
+          const user = await UserService.findUserById(userId);
+          if (user) users[userId] = user;
+        }
+      }
+      setChatUsers(users);
+    };
+    loadUsers();
+  }, [chat.participants, authState.currentUser]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !authState.currentUser) return;
+    if (!newMessage.trim() || !authState.currentUser) {
+      logger.debug('Cannot send message:', { 
+        hasMessage: !!newMessage.trim(),
+        hasUser: !!authState.currentUser 
+      });
+      return;
+    }
 
     try {
-      const message = ChatService.sendMessage(
-        chat.id,
-        authState.currentUser.studentId,
-        newMessage.trim()
-      );
-      setMessages(prev => [...prev, message]);
+      logger.debug('Attempting to send message:', {
+        chatId: chat.id,
+        messageLength: newMessage.trim().length,
+        userId: authState.currentUser.studentId
+      });
+      await sendMessage(chat.id, newMessage.trim());
       setNewMessage('');
-      setIsTyping(false);
+      removeTypingUser(chat.id, authState.currentUser.studentId);
+      logger.debug('Message sent successfully');
     } catch (error) {
       logger.error('Failed to send message', { error });
     }
   };
 
   const handleTyping = () => {
-    setIsTyping(true);
+    if (!authState.currentUser) return;
+    addTypingUser(chat.id, authState.currentUser.studentId);
+    
+    // Remove typing indicator after 3 seconds
+    setTimeout(() => {
+      removeTypingUser(chat.id, authState.currentUser!.studentId);
+    }, 3000);
   };
 
   const handleLeaveChat = () => {
     if (!authState.currentUser) return;
     try {
       ChatService.removeParticipant(chat.id, authState.currentUser.studentId);
+      refreshChats();
       // Navigate back to chat list
       window.location.href = '/chat';
     } catch (error) {
@@ -117,14 +175,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
       return;
     }
 
-    // Clear previous timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
     setIsSearching(true);
 
-    // Set new timeout for debounced search
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const users = await UserService.searchUsers(query);
@@ -151,6 +207,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
       await ChatService.addParticipant(chat.id, user.studentId);
       setMembers(prev => [...prev, user]);
       setSearchResults(prev => prev.filter(u => u.studentId !== user.studentId));
+      refreshChats();
       logger.info('Added member to chat', { 
         chatId: chat.id, 
         userId: user.studentId 
@@ -164,6 +221,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
     try {
       await ChatService.removeParticipant(chat.id, userId);
       setMembers(prev => prev.filter(member => member.studentId !== userId));
+      refreshChats();
       logger.info('Removed member from chat', { 
         chatId: chat.id, 
         userId 
@@ -174,10 +232,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
       {/* Chat Header */}
       <div className="p-4 border-b border-border flex items-center justify-between">
         <div className="flex items-center space-x-3">
+          {isMobile && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => window.history.back()}
+              className="mr-2"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
             <span className="text-primary font-medium">
               {chat.name.charAt(0).toUpperCase()}
@@ -210,32 +278,126 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={cn(
-              "flex items-start space-x-2",
-              message.senderId === authState.currentUser?.studentId ? "justify-end" : "justify-start"
-            )}
-          >
-            <div
-              className={cn(
-                "max-w-[70%] rounded-lg p-3",
-                message.senderId === authState.currentUser?.studentId
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted"
-              )}
-            >
-              <p>{message.content}</p>
-              <span className="text-xs opacity-70 mt-1 block">
-                {format(new Date(message.timestamp), 'HH:mm')}
-              </span>
-            </div>
-          </div>
-        ))}
+      <div 
+        ref={parentRef}
+        className="flex-1 overflow-y-auto p-4"
+      >
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const message = chatMessages[virtualRow.index];
+            const isCurrentUser = message.senderId === authState.currentUser?.studentId;
+            const sender = chatUsers[message.senderId];
+            
+            return (
+              <div
+                key={message.id}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                className={cn(
+                  "flex items-start space-x-2 mb-4",
+                  isCurrentUser ? "justify-end" : "justify-start"
+                )}
+              >
+                {!isCurrentUser && (
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-medium">
+                      {sender?.name?.charAt(0) || '?'}
+                    </span>
+                  </div>
+                )}
+                
+                <ContextMenu>
+                  <ContextMenuTrigger>
+                    <div
+                      className={cn(
+                        "max-w-[85%] sm:max-w-[70%] rounded-lg p-3 group relative",
+                        isCurrentUser
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted"
+                      )}
+                      style={{ display: 'inline-block', whiteSpace: 'normal', wordBreak: 'break-word' }}
+                    >
+                      {!isCurrentUser && (
+                        <div className="text-xs font-medium mb-1 text-muted-foreground">
+                          {sender?.name || 'Unknown User'}
+                        </div>
+                      )}
+                      <div className="min-w-[60px]">
+                        <p>{message.content}</p>
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-xs opacity-70">
+                          {format(new Date(message.timestamp), 'HH:mm')}
+                        </span>
+                        {isCurrentUser && (
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem>
+                      <Reply className="h-4 w-4 mr-2" />
+                      Reply
+                    </ContextMenuItem>
+                    {isCurrentUser && (
+                      <>
+                        <ContextMenuItem>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </ContextMenuItem>
+                        <ContextMenuItem className="text-destructive">
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </ContextMenuItem>
+                      </>
+                    )}
+                  </ContextMenuContent>
+                </ContextMenu>
+
+                {isCurrentUser && (
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-medium">
+                      {authState.currentUser?.name?.charAt(0) || '?'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Typing Indicator */}
+      {typingUsers[chat.id]?.size > 0 && (
+        <div className="px-4 py-2 text-sm text-muted-foreground">
+          {(() => {
+            const typingOtherUsers = Array.from(typingUsers[chat.id])
+              .filter(id => id !== authState.currentUser?.studentId)
+              .map(id => chatUsers[id]?.name)
+              .filter(Boolean);
+            
+            if (typingOtherUsers.length === 0) return null;
+            
+            return `${typingOtherUsers.join(', ')} ${typingOtherUsers.length === 1 ? 'is' : 'are'} typing...`;
+          })()}
+        </div>
+      )}
 
       {/* Message Input */}
       <form onSubmit={handleSendMessage} className="p-4 border-t border-border">
@@ -257,73 +419,107 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
 
       {/* Members Dialog */}
       <Dialog open={showMembers} onOpenChange={setShowMembers}>
-        <DialogContent>
+        <DialogContent className={cn(
+          "sm:max-w-[425px]",
+          isMobile && "w-full h-full max-w-none m-0 rounded-none"
+        )}>
           <DialogHeader>
             <DialogTitle>Chat Members</DialogTitle>
             <DialogDescription>
               Manage members in this chat
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
-            {/* Search for new members */}
             <div className="space-y-2">
-              <Label>Add New Members</Label>
+              <Label>Add Members</Label>
               <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search users..."
-                  className="pl-8"
                   value={userSearchQuery}
                   onChange={(e) => {
                     setUserSearchQuery(e.target.value);
                     handleSearchUsers(e.target.value);
                   }}
+                  placeholder="Search users..."
+                  className="pl-9"
                 />
               </div>
+
               {isSearching ? (
-                <p className="text-sm text-muted-foreground">Searching...</p>
+                <div className="text-sm text-muted-foreground text-center py-2">
+                  Searching...
+                </div>
               ) : searchResults.length > 0 ? (
-                <div className="space-y-2">
-                  {searchResults.map((user) => (
-                    <div key={user.studentId} className="flex items-center justify-between">
-                      <span>{user.name}</span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleAddMember(user)}
-                      >
-                        <UserPlus className="h-4 w-4" />
-                      </Button>
+                <div className="mt-2 border rounded-md max-h-40 overflow-y-auto">
+                  {searchResults.map(user => (
+                    <div
+                      key={user.studentId}
+                      className="flex items-center justify-between p-2 hover:bg-accent cursor-pointer"
+                      onClick={() => handleAddMember(user)}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <span className="text-sm font-medium">
+                            {user.name?.charAt(0) || '?'}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{user.name || 'Unknown User'}</p>
+                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
-              ) : userSearchQuery && (
-                <p className="text-sm text-muted-foreground">No users found</p>
+              ) : userSearchQuery.trim() ? (
+                <div className="text-sm text-muted-foreground text-center py-2">
+                  No users found
+                </div>
+              ) : null}
+
+              {members.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  <Label>Current Members</Label>
+                  <div className="space-y-2">
+                    {members.map(user => (
+                      <div
+                        key={user.studentId}
+                        className="flex items-center justify-between p-2 bg-accent rounded-md"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-sm font-medium">
+                              {user.name?.charAt(0) || '?'}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{user.name || 'Unknown User'}</p>
+                            <p className="text-xs text-muted-foreground">{user.email}</p>
+                          </div>
+                        </div>
+                        {user.studentId !== authState.currentUser?.studentId && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveMember(user.studentId)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
-
-            {/* Current members list */}
-            <div className="space-y-2">
-              <Label>Current Members</Label>
-              <div className="space-y-2">
-                {members.map((member) => (
-                  <div key={member.studentId} className="flex items-center justify-between">
-                    <span>{member.name}</span>
-                    {member.studentId !== authState.currentUser?.studentId && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleRemoveMember(member.studentId)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMembers(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

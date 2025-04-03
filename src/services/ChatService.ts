@@ -1,9 +1,10 @@
 import { Chat, ChatMessage, ChatParticipant } from '../models/Chat';
 import { logger } from '../utils/logger';
+import { UserService } from './UserService';
 
 interface SerializedChat {
   id: string;
-  postId: string;
+  postId?: string;
   name: string;
   participants: string[];
   createdAt: string;
@@ -103,35 +104,43 @@ export class ChatService {
   }
 
   // Create a 1-1 chat between two users
-  static createDirectChat(user1Id: string, user2Id: string): Chat {
+  static async createDirectChat(userId1: string, userId2: string): Promise<Chat> {
     try {
       // Check if a direct chat already exists between these users
-      const existingChat = this.chats.find(chat => 
-        chat.participants.length === 2 &&
-        chat.participants.includes(user1Id) &&
-        chat.participants.includes(user2Id)
-      );
+      const existingChat = this.chats.find(chat => {
+        if (chat.participants.length !== 2) return false;
+        return chat.participants.includes(userId1) && chat.participants.includes(userId2);
+      });
 
       if (existingChat) {
-        logger.info('Direct chat already exists', { 
-          chatId: existingChat.id,
-          user1Id,
-          user2Id
-        });
         return existingChat;
       }
 
-      // Get user names for the chat name
-      const user1 = this.getUserById(user1Id);
-      const user2 = this.getUserById(user2Id);
-      const chatName = `${user1?.name || 'User 1'} & ${user2?.name || 'User 2'}`;
+      // Get the other user's name for the chat title
+      const otherUser = await UserService.findUserById(userId2);
+      if (!otherUser) {
+        throw new Error('User not found');
+      }
 
-      const chat = this.createChat(chatName, [user1Id, user2Id]);
+      // Create new chat with the other user's name
+      const chat: Chat = {
+        id: `chat-${Date.now()}`,
+        name: otherUser.name || 'Unknown User',
+        participants: [userId1, userId2],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastMessage: undefined
+      };
+
+      this.chats.push(chat);
+      this.saveChats();
       logger.info('Created direct chat', { 
         chatId: chat.id,
-        user1Id,
-        user2Id
+        userId1,
+        userId2,
+        chatName: chat.name
       });
+
       return chat;
     } catch (error) {
       logger.error('Failed to create direct chat:', error);
@@ -215,6 +224,8 @@ export class ChatService {
   // Send a message in a chat
   static sendMessage(chatId: string, senderId: string, content: string): ChatMessage {
     try {
+      logger.debug('Sending message:', { chatId, senderId, contentLength: content.length });
+      
       const message: ChatMessage = {
         id: `msg-${Date.now()}`,
         chatId,
@@ -224,12 +235,13 @@ export class ChatService {
         readBy: [senderId]
       };
 
+      // Initialize messages array for this chat if it doesn't exist
       if (!this.messages[chatId]) {
         this.messages[chatId] = [];
       }
 
+      // Add message to the chat's messages
       this.messages[chatId].push(message);
-      this.saveMessages();
 
       // Update chat's lastMessage and timestamps
       const chat = this.chats.find(c => c.id === chatId);
@@ -238,10 +250,22 @@ export class ChatService {
         chat.lastMessageTime = message.timestamp;
         chat.updatedAt = new Date().toISOString();
         chat.lastMessage = message; // Set for immediate use
+
+        // Save all changes to localStorage
+        this.saveMessages();
         this.saveChats();
+        
+        logger.debug('Message saved and chat updated:', { 
+          chatId, 
+          messageId: message.id,
+          lastMessageTime: chat.lastMessageTime
+        });
+      } else {
+        logger.error('Chat not found when sending message:', { chatId });
+        throw new Error('Chat not found');
       }
 
-      logger.info('Message sent', { 
+      logger.info('Message sent successfully', { 
         chatId, 
         messageId: message.id, 
         senderId 
@@ -382,7 +406,10 @@ export class ChatService {
         }));
       });
       localStorage.setItem('chat_messages', JSON.stringify(serializedMessages));
-      logger.info('Messages saved to localStorage');
+      logger.debug('Messages saved to localStorage', {
+        chatCount: Object.keys(serializedMessages).length,
+        totalMessages: Object.values(serializedMessages).reduce((sum, msgs) => sum + msgs.length, 0)
+      });
     } catch (error) {
       logger.error('Failed to save messages:', error);
     }
@@ -392,5 +419,20 @@ export class ChatService {
   private static getUserById(userId: string): { name: string } | null {
     // This is a placeholder - you should implement this using your UserService
     return { name: 'User' };
+  }
+
+  // Clear all chat data from localStorage
+  static clearCache(): void {
+    try {
+      localStorage.removeItem('chats');
+      localStorage.removeItem('chat_messages');
+      localStorage.removeItem('chat_participants');
+      this.chats = [];
+      this.messages = {};
+      this.participants = [];
+      logger.info('Chat cache cleared');
+    } catch (error) {
+      logger.error('Failed to clear chat cache:', error);
+    }
   }
 } 

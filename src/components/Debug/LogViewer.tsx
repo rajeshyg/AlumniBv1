@@ -4,9 +4,18 @@ import { X, Maximize2, Minimize2, Trash2 } from 'lucide-react';
 
 export const LogViewer: React.FC = () => {
   const [logs, setLogs] = useState<any[]>([]);
-  // set default to true to show logs immediately
-  const [isVisible, setIsVisible] = useState(true);
-  const [isMaximized, setIsMaximized] = useState(false); // new state for maximize
+  // Set default to false to start minimized
+  const [isVisible, setIsVisible] = useState(() => {
+    // Try to get the stored preference, default to false (minimized)
+    const stored = localStorage.getItem('log-viewer-visible');
+    return stored ? JSON.parse(stored) : false;
+  });
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+    // Save visibility preference
+    localStorage.setItem('log-viewer-visible', JSON.stringify(isVisible));
+  }, [isVisible]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -25,8 +34,9 @@ export const LogViewer: React.FC = () => {
   if (!isVisible) {
     return (
       <div 
-        className="fixed bottom-4 right-4 bg-blue-500 text-white p-2 rounded-full shadow-lg cursor-pointer z-50"
+        className="fixed bottom-4 right-4 bg-blue-500 text-white p-2 rounded-full shadow-lg cursor-pointer z-50 hover:bg-blue-600 transition-colors"
         onClick={() => setIsVisible(true)}
+        title="Show Logs"
       >
         📋
       </div>
