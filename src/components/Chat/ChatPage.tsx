@@ -243,16 +243,34 @@ export const ChatPage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-2xl font-bold">Chats</h1>
               <div className="flex gap-2">
-                <Button onClick={() => {
-                  ChatService.clearCache();
-                  window.location.reload();
-                }} size="icon" variant="outline" title="Clear Cache">
+                <Button 
+                  onClick={() => {
+                    ChatService.clearCache();
+                    window.location.reload();
+                  }} 
+                  size="icon" 
+                  variant="ghost"
+                  className="icon-button" 
+                  title="Clear Cache"
+                >
                   <X className="h-5 w-5" />
                 </Button>
-                <Button onClick={() => setShowNewChatDialog(true)} size="icon" title="New Direct Chat">
+                <Button 
+                  onClick={() => setShowNewChatDialog(true)} 
+                  size="icon" 
+                  variant="ghost"
+                  className="icon-button" 
+                  title="New Direct Chat"
+                >
                   <MessageSquare className="h-5 w-5" />
                 </Button>
-                <Button onClick={() => setShowGroupDialog(true)} size="icon" title="New Group Chat">
+                <Button 
+                  onClick={() => setShowGroupDialog(true)} 
+                  size="icon" 
+                  variant="ghost"
+                  className="icon-button" 
+                  title="New Group Chat"
+                >
                   <Users className="h-5 w-5" />
                 </Button>
               </div>
