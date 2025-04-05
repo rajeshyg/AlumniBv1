@@ -5,7 +5,6 @@ import { ChatService } from '../../services/ChatService';
 import { UserService } from '../../services/UserService';
 import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
-import { ChatList } from './ChatList';
 import { ChatWindow } from './ChatWindow';
 import { Button } from '../ui/button';
 import { Plus, Users, MessageSquare, Search, X, UserPlus } from 'lucide-react';
@@ -38,6 +37,7 @@ export const ChatPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredChats, setFilteredChats] = useState<Chat[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [chatUsers, setChatUsers] = useState<Record<string, User>>({});
 
   useEffect(() => {
     if (authState.currentUser) {
@@ -53,17 +53,51 @@ export const ChatPage: React.FC = () => {
     }
   }, [authState.currentUser]);
 
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const users: Record<string, User> = {};
+        for (const chat of chats) {
+          for (const userId of chat.participants) {
+            if (!users[userId] && userId !== authState.currentUser?.studentId) {
+              const user = await UserService.findUserById(userId);
+              if (user) users[userId] = user;
+            }
+          }
+        }
+        setChatUsers(users);
+      } catch (error) {
+        logger.error('Failed to load chat users:', error);
+      }
+    };
+
+    if (chats.length > 0 && authState.currentUser) {
+      loadUsers();
+    }
+  }, [chats, authState.currentUser]);
+
   // Separate effect for filtered chats
   useEffect(() => {
     if (chats.length > 0) {
+      let filtered = chats;
+      
+      // Apply search filter if query exists
       if (searchQuery) {
-        const filtered = chats.filter(chat =>
+        filtered = chats.filter(chat =>
           chat.name.toLowerCase().includes(searchQuery.toLowerCase())
         );
-        setFilteredChats(filtered);
-      } else {
-        setFilteredChats(chats);
       }
+
+      // Sort chats by last message time, most recent first
+      filtered = [...filtered].sort((a, b) => {
+        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      setFilteredChats(filtered);
+    } else {
+      setFilteredChats([]);
     }
   }, [chats, searchQuery]);
 
@@ -173,6 +207,22 @@ export const ChatPage: React.FC = () => {
     setShowNewChatDialog(true);
   };
 
+  const getChatDisplayName = (chat: Chat): string => {
+    if (chat.participants.length > 2) {
+      return chat.name;
+    }
+
+    const otherParticipantId = chat.participants.find(
+      id => id !== authState.currentUser?.studentId
+    );
+    
+    if (otherParticipantId && chatUsers[otherParticipantId]) {
+      return chatUsers[otherParticipantId].name;
+    }
+
+    return chat.name;
+  };
+
   return (
     <div className="h-[calc(100vh-4rem)] flex bg-background">
       {/* Chat List Section */}
@@ -235,13 +285,13 @@ export const ChatPage: React.FC = () => {
                   {chat.participants.length > 2 ? (
                     <Users className="h-6 w-6" />
                   ) : (
-                    chat.name.charAt(0).toUpperCase()
+                    getChatDisplayName(chat).charAt(0).toUpperCase()
                   )}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-medium truncate">{chat.name}</h3>
+                  <h3 className="font-medium truncate">{getChatDisplayName(chat)}</h3>
                   {chat.lastMessageTime && (
                     <span className="text-xs text-muted-foreground">
                       {format(new Date(chat.lastMessageTime), 'HH:mm')}

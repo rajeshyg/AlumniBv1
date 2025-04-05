@@ -332,30 +332,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                   <ContextMenuTrigger>
                     <div
                       className={cn(
-                        "max-w-[85%] sm:max-w-[70%] rounded-lg p-3 group relative",
+                        "rounded-lg p-3 group relative inline-block",
                         isCurrentUser
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted"
                       )}
-                      style={{ display: 'inline-block', whiteSpace: 'normal', wordBreak: 'break-word' }}
                     >
                       {!isCurrentUser && (
                         <div className="text-xs font-medium mb-1 text-muted-foreground">
                           {sender?.name || 'Unknown User'}
                         </div>
                       )}
-                      <div className="min-w-[60px]">
-                        <p>{message.content}</p>
-                      </div>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-xs opacity-70">
-                          {format(new Date(message.timestamp), 'HH:mm')}
-                        </span>
-                        {isCurrentUser && (
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </div>
-                        )}
+                      <div className="space-y-1">
+                        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs opacity-70">
+                            {format(new Date(message.timestamp), 'HH:mm')}
+                          </span>
+                          {isCurrentUser && (
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </ContextMenuTrigger>
