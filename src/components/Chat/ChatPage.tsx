@@ -174,7 +174,10 @@ export const ChatPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-background relative">
+    <div className={cn(
+      "flex bg-background",
+      isMobile ? "h-[calc(100vh-4rem)]" : "h-[calc(100vh-4rem)]"
+    )}>
       {/* Chat List - Full width on mobile when no chat selected, hidden when chat is selected */}
       <div className={cn(
         "bg-card",
@@ -257,10 +260,10 @@ export const ChatPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Chat Window - Full width on mobile when chat selected, flex-1 on desktop */}
+      {/* Chat Window - Full screen on mobile when chat selected */}
       <div className={cn(
-        isMobile && !currentChat ? "hidden" : "flex-1",
-        isMobile && currentChat && "fixed inset-0 z-50 bg-background"
+        "flex-1",
+        isMobile && !currentChat && "hidden"
       )}>
         {currentChat ? (
           <ChatWindow 

@@ -233,7 +233,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className={cn(
+      "flex flex-col bg-background",
+      isMobile ? "fixed inset-0 z-[100]" : "h-full"
+    )}>
       {/* Chat Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border">
         <div className="p-4 flex items-center justify-between">
@@ -285,8 +288,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
         ref={parentRef}
         className="flex-1 overflow-y-auto p-4"
         style={{ 
-          height: isMobile ? 'calc(100vh - 140px)' : 'calc(100vh - 180px)',
-          paddingBottom: '80px'
+          height: isMobile ? 'calc(100% - 130px)' : 'calc(100vh - 180px)',
+          paddingBottom: '16px'
         }}
       >
         <div
@@ -391,7 +394,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       </div>
 
       {/* Message Input */}
-      <div className="sticky bottom-0 left-0 right-0 bg-background border-t border-border pb-safe">
+      <div className={cn(
+        "bg-background border-t border-border",
+        isMobile ? "fixed bottom-0 left-0 right-0 z-[100]" : "sticky bottom-0"
+      )}>
         {/* Typing Indicator */}
         {typingUsers[chat.id]?.size > 0 && (
           <div className="px-4 py-2 text-sm text-muted-foreground">
