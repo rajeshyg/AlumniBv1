@@ -174,51 +174,53 @@ export const ChatPage: React.FC = () => {
   };
 
   return (
-    <div className={cn(
-      "flex bg-background",
-      isMobile ? "h-[calc(100vh-4rem)]" : "h-[calc(100vh-4rem)]"
-    )}>
-      {/* Chat List - Full width on mobile when no chat selected, hidden when chat is selected */}
+    <div className="h-[calc(100vh-4rem)] flex bg-background">
+      {/* Chat List Section */}
       <div className={cn(
-        "bg-card",
+        "flex flex-col h-full",
         isMobile ? (
           currentChat 
             ? "hidden" 
             : "w-full"
         ) : (
           "w-80 border-r border-border"
-        )
+        ),
+        "bg-card"
       )}>
-        <div className="p-4 border-b border-border">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">Chats</h1>
-            <div className="flex gap-2">
-              <Button onClick={() => {
-                ChatService.clearCache();
-                window.location.reload();
-              }} size="icon" variant="outline" title="Clear Cache">
-                <X className="h-5 w-5" />
-              </Button>
-              <Button onClick={() => setShowNewChatDialog(true)} size="icon" title="New Direct Chat">
-                <MessageSquare className="h-5 w-5" />
-              </Button>
-              <Button onClick={() => setShowGroupDialog(true)} size="icon" title="New Group Chat">
-                <Users className="h-5 w-5" />
-              </Button>
+        {/* Fixed Header */}
+        <div className="w-full bg-card border-b border-border">
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-2xl font-bold">Chats</h1>
+              <div className="flex gap-2">
+                <Button onClick={() => {
+                  ChatService.clearCache();
+                  window.location.reload();
+                }} size="icon" variant="outline" title="Clear Cache">
+                  <X className="h-5 w-5" />
+                </Button>
+                <Button onClick={() => setShowNewChatDialog(true)} size="icon" title="New Direct Chat">
+                  <MessageSquare className="h-5 w-5" />
+                </Button>
+                <Button onClick={() => setShowGroupDialog(true)} size="icon" title="New Group Chat">
+                  <Users className="h-5 w-5" />
+                </Button>
+              </div>
             </div>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search chats..."
-              className="pl-9"
-            />
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Search chats..."
+                className="pl-9"
+              />
+            </div>
           </div>
         </div>
 
-        <div className="overflow-y-auto h-[calc(100vh-8rem)]">
+        {/* Scrollable Chat List */}
+        <div className="flex-1 overflow-y-auto min-h-0">
           {filteredChats.map((chat) => (
             <div
               key={chat.id}
@@ -260,9 +262,9 @@ export const ChatPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Chat Window - Full screen on mobile when chat selected */}
+      {/* Chat Window Section */}
       <div className={cn(
-        "flex-1",
+        "flex-1 h-full",
         isMobile && !currentChat && "hidden"
       )}>
         {currentChat ? (
