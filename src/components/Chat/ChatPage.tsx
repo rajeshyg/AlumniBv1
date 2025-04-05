@@ -78,6 +78,17 @@ export const ChatPage: React.FC = () => {
     }
   }, [currentChat]);
 
+  useEffect(() => {
+    // Check for mobile viewport on mount and window resize
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const handleChatSelect = (chat: Chat) => {
     setCurrentChat(chat);
   };
@@ -163,11 +174,17 @@ export const ChatPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-background">
-      {/* Sidebar - Hidden on mobile when chat is selected */}
+    <div className="flex h-[calc(100vh-4rem)] bg-background relative">
+      {/* Chat List - Full width on mobile when no chat selected, hidden when chat is selected */}
       <div className={cn(
-        "w-80 border-r border-border bg-card",
-        isMobile && currentChat && "hidden"
+        "bg-card",
+        isMobile ? (
+          currentChat 
+            ? "hidden" 
+            : "w-full"
+        ) : (
+          "w-80 border-r border-border"
+        )
       )}>
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-4">
@@ -206,7 +223,7 @@ export const ChatPage: React.FC = () => {
                 "flex items-center p-4 cursor-pointer hover:bg-accent transition-colors",
                 currentChat?.id === chat.id && "bg-accent"
               )}
-              onClick={() => setCurrentChat(chat)}
+              onClick={() => handleChatSelect(chat)}
             >
               <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mr-3">
                 <span className="text-lg font-medium">
@@ -240,13 +257,21 @@ export const ChatPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Chat Window - Full width on mobile */}
+      {/* Chat Window - Full width on mobile when chat selected, flex-1 on desktop */}
       <div className={cn(
-        "flex-1 flex flex-col",
-        isMobile && !currentChat && "hidden"
+        isMobile && !currentChat ? "hidden" : "flex-1",
+        isMobile && currentChat && "fixed inset-0 z-50 bg-background"
       )}>
         {currentChat ? (
-          <ChatWindow chat={currentChat} />
+          <ChatWindow 
+            chat={currentChat} 
+            onBack={() => {
+              if (isMobile) {
+                setCurrentChat(null);
+              }
+            }}
+            isMobile={isMobile}
+          />
         ) : (
           <div className="flex-1 flex items-center justify-center p-4">
             <div className="text-center">

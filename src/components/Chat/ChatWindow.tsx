@@ -38,12 +38,13 @@ import {
 
 interface ChatWindowProps {
   chat: Chat;
+  onBack?: () => void;
+  isMobile?: boolean;
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
+export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }) => {
   const { authState } = useAuth();
   const { device } = useThemeStore();
-  const isMobile = device === 'mobile';
   const [newMessage, setNewMessage] = useState('');
   const [showMembers, setShowMembers] = useState(false);
   const [members, setMembers] = useState<User[]>([]);
@@ -232,173 +233,168 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
   };
 
   return (
-    <div className={cn(
-      "fixed inset-0 z-50 flex flex-col bg-background",
-      isMobile ? "top-0 bottom-0 left-0 right-0 h-screen" : "h-full max-h-[calc(100vh-4rem)]"
-    )}>
-      {/* Chat Header - Fixed at top */}
-      <div className="flex-none p-4 border-b border-border flex items-center justify-between bg-background">
-        <div className="flex items-center space-x-3">
-          {isMobile && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => window.history.back()}
-              className="mr-2"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          )}
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <span className="text-primary font-medium">
-              {chat.name.charAt(0).toUpperCase()}
-            </span>
+    <div className="flex flex-col h-full bg-background">
+      {/* Chat Header */}
+      <div className="sticky top-0 z-10 bg-background border-b border-border">
+        <div className="p-4 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            {isMobile && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onBack}
+                className="mr-2"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="text-primary font-medium">
+                {chat.name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div>
+              <h2 className="font-semibold">{chat.name}</h2>
+              <p className="text-sm text-muted-foreground">
+                {chat.participants.length} participants
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-semibold">{chat.name}</h2>
-            <p className="text-sm text-muted-foreground">
-              {chat.participants.length} participants
-            </p>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreVertical className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setShowMembers(true)}>
+                <Users className="h-4 w-4 mr-2" />
+                Manage Members
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLeaveChat} className="text-destructive">
+                <X className="h-4 w-4 mr-2" />
+                Leave Chat
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <MoreVertical className="h-5 w-5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setShowMembers(true)}>
-              <Users className="h-4 w-4 mr-2" />
-              Manage Members
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleLeaveChat} className="text-destructive">
-              <X className="h-4 w-4 mr-2" />
-              Leave Chat
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
-      {/* Messages Area - Scrollable content */}
+      {/* Messages Area */}
       <div 
         ref={parentRef}
-        className="flex-1 overflow-y-auto"
-        style={{
-          height: isMobile ? 'calc(100vh - 130px)' : 'auto'
+        className="flex-1 overflow-y-auto p-4"
+        style={{ 
+          height: isMobile ? 'calc(100vh - 140px)' : 'calc(100vh - 180px)',
+          paddingBottom: '80px'
         }}
       >
-        <div className="p-4">
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const message = chatMessages[virtualRow.index];
-              const isCurrentUser = message.senderId === authState.currentUser?.studentId;
-              const sender = chatUsers[message.senderId];
-              
-              return (
-                <div
-                  key={message.id}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                  className={cn(
-                    "flex items-start space-x-2 mb-4",
-                    isCurrentUser ? "justify-end" : "justify-start"
-                  )}
-                >
-                  {!isCurrentUser && (
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-medium">
-                        {sender?.name?.charAt(0) || '?'}
-                      </span>
-                    </div>
-                  )}
-                  
-                  <ContextMenu>
-                    <ContextMenuTrigger>
-                      <div
-                        className={cn(
-                          "max-w-[85%] sm:max-w-[70%] rounded-lg p-3 group relative",
-                          isCurrentUser
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
-                        )}
-                        style={{ display: 'inline-block', whiteSpace: 'normal', wordBreak: 'break-word' }}
-                      >
-                        {!isCurrentUser && (
-                          <div className="text-xs font-medium mb-1 text-muted-foreground">
-                            {sender?.name || 'Unknown User'}
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const message = chatMessages[virtualRow.index];
+            const isCurrentUser = message.senderId === authState.currentUser?.studentId;
+            const sender = chatUsers[message.senderId];
+            
+            return (
+              <div
+                key={message.id}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                className={cn(
+                  "flex items-start space-x-2 mb-4",
+                  isCurrentUser ? "justify-end" : "justify-start"
+                )}
+              >
+                {!isCurrentUser && (
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-medium">
+                      {sender?.name?.charAt(0) || '?'}
+                    </span>
+                  </div>
+                )}
+                
+                <ContextMenu>
+                  <ContextMenuTrigger>
+                    <div
+                      className={cn(
+                        "max-w-[85%] sm:max-w-[70%] rounded-lg p-3 group relative",
+                        isCurrentUser
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted"
+                      )}
+                      style={{ display: 'inline-block', whiteSpace: 'normal', wordBreak: 'break-word' }}
+                    >
+                      {!isCurrentUser && (
+                        <div className="text-xs font-medium mb-1 text-muted-foreground">
+                          {sender?.name || 'Unknown User'}
+                        </div>
+                      )}
+                      <div className="min-w-[60px]">
+                        <p>{message.content}</p>
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-xs opacity-70">
+                          {format(new Date(message.timestamp), 'HH:mm')}
+                        </span>
+                        {isCurrentUser && (
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MoreHorizontal className="h-4 w-4" />
                           </div>
                         )}
-                        <div className="min-w-[60px]">
-                          <p>{message.content}</p>
-                        </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs opacity-70">
-                            {format(new Date(message.timestamp), 'HH:mm')}
-                          </span>
-                          {isCurrentUser && (
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </div>
-                          )}
-                        </div>
                       </div>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      <ContextMenuItem>
-                        <Reply className="h-4 w-4 mr-2" />
-                        Reply
-                      </ContextMenuItem>
-                      {isCurrentUser && (
-                        <>
-                          <ContextMenuItem>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </ContextMenuItem>
-                          <ContextMenuItem className="text-destructive">
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </ContextMenuItem>
-                        </>
-                      )}
-                    </ContextMenuContent>
-                  </ContextMenu>
-
-                  {isCurrentUser && (
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-medium">
-                        {authState.currentUser?.name?.charAt(0) || '?'}
-                      </span>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div ref={messagesEndRef} />
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem>
+                      <Reply className="h-4 w-4 mr-2" />
+                      Reply
+                    </ContextMenuItem>
+                    {isCurrentUser && (
+                      <>
+                        <ContextMenuItem>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </ContextMenuItem>
+                        <ContextMenuItem className="text-destructive">
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </ContextMenuItem>
+                      </>
+                    )}
+                  </ContextMenuContent>
+                </ContextMenu>
+
+                {isCurrentUser && (
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-medium">
+                      {authState.currentUser?.name?.charAt(0) || '?'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Footer Area - fixed section for typing indicator and input */}
-      <div className={cn(
-        "flex-none border-t border-border bg-background",
-        isMobile ? "fixed bottom-0 left-0 right-0" : ""
-      )}>
+      {/* Message Input */}
+      <div className="sticky bottom-0 left-0 right-0 bg-background border-t border-border pb-safe">
         {/* Typing Indicator */}
         {typingUsers[chat.id]?.size > 0 && (
-          <div className="px-4 py-2 text-sm text-muted-foreground bg-background border-t border-border">
+          <div className="px-4 py-2 text-sm text-muted-foreground">
             {(() => {
               const typingOtherUsers = Array.from(typingUsers[chat.id])
                 .filter(id => id !== authState.currentUser?.studentId)
@@ -412,8 +408,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
           </div>
         )}
 
-        {/* Message Input */}
-        <form onSubmit={handleSendMessage} className="p-4 bg-background">
+        {/* Message Input Form */}
+        <form onSubmit={handleSendMessage} className="p-4">
           <div className="flex items-center space-x-2">
             <Input
               value={newMessage}
