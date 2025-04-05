@@ -180,7 +180,11 @@ export default function PostReviewPage() {
             {Object.entries(statusLabels)
               .filter(([status]) => ['pending', 'approved', 'rejected'].includes(status)) // Only show main review statuses
               .map(([status, label]) => (
-                <TabsTrigger key={status} value={status}>
+                <TabsTrigger 
+                  key={status} 
+                  value={status}
+                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                >
                   {/* Use the label from statusLabels, fallback to capitalized status */}
                   {statusLabels[status as PostStatus] || status.charAt(0).toUpperCase() + status.slice(1)}
                 </TabsTrigger>

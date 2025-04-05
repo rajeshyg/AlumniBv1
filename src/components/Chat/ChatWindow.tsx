@@ -63,7 +63,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     addTypingUser,
     removeTypingUser,
     typingUsers,
-    refreshChats
+    refreshChats,
+    loadMessages
   } = useChatStore();
 
   const chatMessages = messages[chat.id] || [];
@@ -78,6 +79,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     paddingEnd: 20,
     initialRect: { width: 0, height: 0 }
   });
+
+  // Subscribe to message updates
+  useEffect(() => {
+    const handleMessageUpdate = (updatedChatId: string) => {
+      if (updatedChatId === chat.id) {
+        loadMessages(chat.id);
+      }
+    };
+
+    ChatService.subscribeToMessageUpdates(handleMessageUpdate);
+
+    return () => {
+      ChatService.unsubscribeFromMessageUpdates(handleMessageUpdate);
+    };
+  }, [chat.id, loadMessages]);
 
   useEffect(() => {
     // Mark messages as read when opening chat
