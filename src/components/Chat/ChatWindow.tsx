@@ -69,31 +69,48 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
   const chatMessages = messages[chat.id] || [];
 
-  // Virtual list setup
-  const rowVirtualizer = useVirtualizer({
-    count: chatMessages.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 120,
-    overscan: 5,
-    paddingStart: 20,
-    paddingEnd: 20,
-    initialRect: { width: 0, height: 0 }
-  });
-
-  // Subscribe to message updates
+  // Initialize chat service with current user
   useEffect(() => {
-    const handleMessageUpdate = (updatedChatId: string) => {
-      if (updatedChatId === chat.id) {
-        loadMessages(chat.id);
-      }
-    };
+    if (authState.currentUser) {
+      logger.debug('Initializing chat service with user:', {
+        userId: authState.currentUser.studentId,
+        userName: authState.currentUser.name
+      });
+      ChatService.initialize(authState.currentUser.studentId);
+    }
+  }, [authState.currentUser]);
 
-    ChatService.subscribeToMessageUpdates(handleMessageUpdate);
+  // Join chat room when component mounts
+  useEffect(() => {
+    if (authState.currentUser) {
+      logger.debug('Joining chat room:', {
+        chatId: chat.id,
+        userId: authState.currentUser.studentId
+      });
+      ChatService.joinChat(chat.id, authState.currentUser.studentId);
+    }
 
     return () => {
-      ChatService.unsubscribeFromMessageUpdates(handleMessageUpdate);
+      if (authState.currentUser) {
+        logger.debug('Leaving chat room:', {
+          chatId: chat.id,
+          userId: authState.currentUser.studentId
+        });
+        ChatService.leaveChat(chat.id, authState.currentUser.studentId);
+      }
     };
-  }, [chat.id, loadMessages]);
+  }, [chat.id, authState.currentUser]);
+
+  // Load messages when component mounts or chat changes
+  useEffect(() => {
+    if (authState.currentUser) {
+      logger.debug('Loading messages for chat:', {
+        chatId: chat.id,
+        chatName: chat.name
+      });
+      loadMessages(chat.id);
+    }
+  }, [chat.id, authState.currentUser]);
 
   useEffect(() => {
     // Mark messages as read when opening chat
@@ -167,10 +184,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
   const handleTyping = () => {
     if (!authState.currentUser) return;
+    
+    // Set typing status through Socket.IO
+    ChatService.setTypingStatus(chat.id, authState.currentUser.studentId, true);
     addTypingUser(chat.id, authState.currentUser.studentId);
     
     // Remove typing indicator after 3 seconds
     setTimeout(() => {
+      ChatService.setTypingStatus(chat.id, authState.currentUser!.studentId, false);
       removeTypingUser(chat.id, authState.currentUser!.studentId);
     }, 3000);
   };
@@ -249,6 +270,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       logger.error('Failed to remove member', { error });
     }
   };
+
+  // Virtual list setup
+  const rowVirtualizer = useVirtualizer({
+    count: chatMessages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 120,
+    overscan: 5,
+    paddingStart: 20,
+    paddingEnd: 20,
+    initialRect: { width: 0, height: 0 }
+  });
 
   return (
     <div className={cn(

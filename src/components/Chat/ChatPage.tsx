@@ -21,6 +21,28 @@ import { Label } from '../ui/label';
 import { User } from '../../models/User';
 import { cn } from '../../lib/utils';
 import { format } from 'date-fns';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  logger.error('Missing Supabase environment variables');
+  throw new Error('Missing Supabase environment variables');
+}
+
+const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+
+interface ChatStore {
+  chats: Chat[];
+  messages: Record<string, any[]>;
+  participants: Array<{
+    chatId: string;
+    userId: string;
+    joinedAt: string;
+  }>;
+}
 
 export const ChatPage: React.FC = () => {
   const { authState } = useAuth();
@@ -38,6 +60,7 @@ export const ChatPage: React.FC = () => {
   const [filteredChats, setFilteredChats] = useState<Chat[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [chatUsers, setChatUsers] = useState<Record<string, User>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (authState.currentUser) {
@@ -48,6 +71,127 @@ export const ChatPage: React.FC = () => {
       const { setCurrentUser, initialize } = useChatStore.getState();
       setCurrentUser(authState.currentUser);
       initialize();
+      
+      // Load chats from the server
+      const loadChatsFromServer = async () => {
+        try {
+          setIsLoading(true);
+          const currentUserId = authState.currentUser?.studentId;
+          if (!currentUserId) {
+            logger.error('No current user ID found');
+            return;
+          }
+          
+          logger.debug('Loading chats from server for user:', currentUserId);
+          
+          // Get all chats where the user is a participant
+          const { data: participantData, error: participantError } = await supabase
+            .from('chat_participants')
+            .select('chat_id')
+            .eq('user_id', currentUserId);
+            
+          if (participantError) {
+            logger.error('Error loading chat participants:', participantError);
+            return;
+          }
+          
+          if (participantData && participantData.length > 0) {
+            const chatIds = participantData.map((p: { chat_id: string }) => p.chat_id);
+            
+            // Get all chats
+            const { data: chatData, error: chatError } = await supabase
+              .from('chats')
+              .select('*')
+              .in('id', chatIds);
+              
+            if (chatError) {
+              logger.error('Error loading chats:', chatError);
+              return;
+            }
+            
+            if (chatData && chatData.length > 0) {
+              logger.debug(`Loaded ${chatData.length} chats from server`);
+              
+              // Get all participants for these chats
+              const { data: allParticipants, error: allParticipantsError } = await supabase
+                .from('chat_participants')
+                .select('*')
+                .in('chat_id', chatIds);
+                
+              if (allParticipantsError) {
+                logger.error('Error loading all participants:', allParticipantsError);
+                return;
+              }
+              
+              // Get all messages for these chats
+              const { data: allMessages, error: allMessagesError } = await supabase
+                .from('chat_messages')
+                .select('*')
+                .in('chat_id', chatIds)
+                .order('created_at', { ascending: true });
+                
+              if (allMessagesError) {
+                logger.error('Error loading messages:', allMessagesError);
+                return;
+              }
+              
+              // Update the chat store with the loaded data
+              const chatStore = useChatStore.getState() as unknown as ChatStore;
+              
+              // Convert to the format expected by the store
+              const formattedChats = chatData.map((chat: any) => ({
+                id: chat.id,
+                name: chat.name,
+                participants: allParticipants
+                  .filter((p: { chat_id: string }) => p.chat_id === chat.id)
+                  .map((p: { user_id: string }) => p.user_id),
+                createdAt: chat.created_at,
+                updatedAt: chat.updated_at,
+                lastMessageId: chat.last_message_id,
+                lastMessageTime: chat.last_message_time,
+                lastMessage: allMessages
+                  .filter((m: { chat_id: string }) => m.chat_id === chat.id)
+                  .sort((a: { created_at: string }, b: { created_at: string }) => 
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+              }));
+              
+              const formattedMessages = allMessages.map((msg: any) => ({
+                id: msg.id,
+                chatId: msg.chat_id,
+                senderId: msg.sender_id,
+                content: msg.content,
+                timestamp: msg.created_at,
+                readBy: msg.read_by || []
+              }));
+              
+              const formattedParticipants = allParticipants.map((p: any) => ({
+                chatId: p.chat_id,
+                userId: p.user_id,
+                joinedAt: p.joined_at
+              }));
+              
+              // Update the store with the loaded data
+              chatStore.chats = formattedChats;
+              chatStore.messages = formattedMessages.reduce((acc: Record<string, any[]>, msg: any) => {
+                if (!acc[msg.chatId]) {
+                  acc[msg.chatId] = [];
+                }
+                acc[msg.chatId].push(msg);
+                return acc;
+              }, {});
+              chatStore.participants = formattedParticipants;
+              
+              logger.debug('Chat store updated with server data');
+            }
+          }
+        } catch (error) {
+          logger.error('Error loading chats from server:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      
+      loadChatsFromServer();
     } else {
       logger.debug('No current user found, skipping chat store initialization');
     }
@@ -217,7 +361,7 @@ export const ChatPage: React.FC = () => {
     );
     
     if (otherParticipantId && chatUsers[otherParticipantId]) {
-      return chatUsers[otherParticipantId].name;
+      return chatUsers[otherParticipantId].name || chat.name;
     }
 
     return chat.name;
@@ -289,44 +433,61 @@ export const ChatPage: React.FC = () => {
 
         {/* Scrollable Chat List */}
         <div className="flex-1 overflow-y-auto min-h-0">
-          {filteredChats.map((chat) => (
-            <div
-              key={chat.id}
-              className={cn(
-                "flex items-center p-4 cursor-pointer hover:bg-accent transition-colors",
-                currentChat?.id === chat.id && "bg-accent"
-              )}
-              onClick={() => handleChatSelect(chat)}
-            >
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mr-3">
-                <span className="text-lg font-medium">
-                  {chat.participants.length > 2 ? (
-                    <Users className="h-6 w-6" />
-                  ) : (
-                    getChatDisplayName(chat).charAt(0).toUpperCase()
-                  )}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium truncate">{getChatDisplayName(chat)}</h3>
-                  {chat.lastMessageTime && (
-                    <span className="text-xs text-muted-foreground">
-                      {format(new Date(chat.lastMessageTime), 'HH:mm')}
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground">Loading chats...</p>
+            </div>
+          ) : filteredChats.length > 0 ? (
+            filteredChats.map((chat) => (
+              <div
+                key={chat.id}
+                className={cn(
+                  "flex items-center p-4 cursor-pointer hover:bg-accent transition-colors",
+                  currentChat?.id === chat.id && "bg-accent"
+                )}
+                onClick={() => handleChatSelect(chat)}
+              >
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+                  <span className="text-lg font-medium">
+                    {chat.participants.length > 2 ? (
+                      <Users className="h-6 w-6" />
+                    ) : (
+                      getChatDisplayName(chat).charAt(0).toUpperCase()
+                    )}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-medium truncate">{getChatDisplayName(chat)}</h3>
+                    {chat.lastMessageTime && (
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(chat.lastMessageTime), 'HH:mm')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {chat.lastMessage?.content || 'No messages yet'}
+                  </p>
+                  {unreadCounts[chat.id] > 0 && (
+                    <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded-full">
+                      {unreadCounts[chat.id]}
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-muted-foreground truncate">
-                  {chat.lastMessage?.content || 'No messages yet'}
-                </p>
-                {unreadCounts[chat.id] > 0 && (
-                  <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded-full">
-                    {unreadCounts[chat.id]}
-                  </span>
-                )}
               </div>
+            ))
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+              <p className="text-muted-foreground mb-2">No chats found</p>
+              <Button 
+                onClick={() => setShowNewChatDialog(true)} 
+                variant="outline" 
+                size="sm"
+              >
+                Start a conversation
+              </Button>
             </div>
-          ))}
+          )}
         </div>
       </div>
 

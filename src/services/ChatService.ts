@@ -1,6 +1,8 @@
 import { Chat, ChatMessage, ChatParticipant } from '../models/Chat';
 import { logger } from '../utils/logger';
 import { UserService } from './UserService';
+import { io, Socket } from 'socket.io-client';
+import { v4 as uuidv4 } from 'uuid';
 
 interface SerializedChat {
   id: string;
@@ -29,10 +31,23 @@ export class ChatService {
   private static messageUpdateCallbacks: ((chatId: string) => void)[] = [];
   private static typingUsers: Record<string, Set<string>> = {};
   private static storageKey = 'alumbiBv1_chat_';
+  private static socket: Socket | null = null;
+  private static currentUserId: string | null = null;
+  private static socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3006';
 
-  // Initialize chats from storage
-  static initialize(): void {
+  // Initialize chats from storage and setup Socket.IO
+  static initialize(userId: string): void {
     try {
+      this.currentUserId = userId;
+      
+      // Initialize Socket.IO connection
+      this.socket = io(this.socketUrl, {
+        auth: { userId }
+      });
+
+      // Setup Socket.IO event handlers
+      this.setupSocketHandlers();
+
       // Load from shared storage
       const savedChats = sessionStorage.getItem(this.storageKey + 'chats') || localStorage.getItem(this.storageKey + 'chats');
       if (savedChats) {
@@ -54,12 +69,6 @@ export class ChatService {
         this.participants = JSON.parse(savedParticipants);
       }
 
-      // Setup shared message server
-      this.setupSharedMessageServer();
-
-      // Set up message polling
-      this.startMessagePolling();
-
       // Add storage event listener for cross-tab/browser sync
       window.addEventListener('storage', this.handleStorageChange.bind(this));
 
@@ -76,132 +85,158 @@ export class ChatService {
     }
   }
 
-  // Setup shared message server simulation
-  private static setupSharedMessageServer(): void {
-    // Check if we're in development mode
-    if (process.env.NODE_ENV !== 'production') {
-      // Check for message server in sessionStorage
-      const messageServer = sessionStorage.getItem('__alumbiBv1_shared_message_server');
+  // Setup Socket.IO event handlers
+  private static setupSocketHandlers(): void {
+    if (!this.socket) return;
+
+    this.socket.on('connect', () => {
+      logger.info('Connected to chat server');
+    });
+
+    this.socket.on('disconnect', () => {
+      logger.warn('Disconnected from chat server');
+    });
+
+    this.socket.on('new_message', (message: ChatMessage) => {
+      logger.debug('Received new message:', message);
+      this.handleNewMessage(message);
       
-      if (!messageServer) {
-        // Create the shared message server and store in sessionStorage
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = 'about:blank';
-        
-        document.body.appendChild(iframe);
-        
-        if (iframe.contentWindow) {
-          // Create a polling function in the iframe's window
-          const sharedMessageServerCode = `
-            (function() {
-              window.messages = {};
-              window.addMessage = function(chatId, message) {
-                if (!window.messages[chatId]) {
-                  window.messages[chatId] = [];
-                }
-                // Check for duplicates
-                const exists = window.messages[chatId].some(m => m.id === message.id);
-                if (!exists) {
-                  window.messages[chatId].push(message);
-                  localStorage.setItem('__alumbiBv1_shared_messages', JSON.stringify(window.messages));
-                  return true;
-                }
-                return false;
-              };
-              window.getMessages = function(chatId) {
-                return window.messages[chatId] || [];
-              };
-              window.getAllMessages = function() {
-                return window.messages;
-              };
-              
-              // Initialize from localStorage if available
-              const savedMessages = localStorage.getItem('__alumbiBv1_shared_messages');
-              if (savedMessages) {
-                try {
-                  window.messages = JSON.parse(savedMessages);
-                } catch (e) {
-                  console.error('Failed to parse saved messages:', e);
-                  window.messages = {};
-                }
-              }
-              
-              console.log('Shared message server initialized');
-            })();
-          `;
-          
-          const iframeDoc = iframe.contentWindow.document;
-          iframeDoc.open();
-          iframeDoc.write(`<script>${sharedMessageServerCode}</script>`);
-          iframeDoc.close();
-          
-          // Store the iframe reference
-          sessionStorage.setItem('__alumbiBv1_shared_message_server', 'true');
-          
-          logger.debug('Created shared message server');
+      // Notify all subscribers about the new message
+      this.messageUpdateCallbacks.forEach(callback => {
+        try {
+          callback(message.chatId);
+          logger.debug('Notified subscriber about new message in chat:', message.chatId);
+        } catch (error) {
+          logger.error('Error in message update callback:', error);
         }
+      });
+    });
+
+    this.socket.on('user_typing', ({ chatId, userId }: { chatId: string; userId: string }) => {
+      logger.debug('User started typing:', { chatId, userId });
+      this.handleTypingStart(chatId, userId);
+    });
+
+    this.socket.on('stopTyping', ({ chatId, userId }: { chatId: string; userId: string }) => {
+      logger.debug('User stopped typing:', { chatId, userId });
+      this.handleTypingStop(chatId, userId);
+    });
+
+    this.socket.on('userJoined', ({ chatId, userId }: { chatId: string; userId: string }) => {
+      logger.debug('User joined chat:', { chatId, userId });
+      this.handleUserJoined(chatId, userId);
+    });
+
+    this.socket.on('userLeft', ({ chatId, userId }: { chatId: string; userId: string }) => {
+      logger.debug('User left chat:', { chatId, userId });
+      this.handleUserLeft(chatId, userId);
+    });
+  }
+
+  // Handle new message from server
+  private static handleNewMessage(message: ChatMessage): void {
+    if (!this.messages[message.chatId]) {
+      this.messages[message.chatId] = [];
+    }
+    this.messages[message.chatId].push(message);
+    this.saveMessages();
+    this.messageUpdateCallbacks.forEach(callback => callback(message.chatId));
+  }
+
+  // Handle typing start
+  private static handleTypingStart(chatId: string, userId: string): void {
+    if (!this.typingUsers[chatId]) {
+      this.typingUsers[chatId] = new Set();
+    }
+    this.typingUsers[chatId].add(userId);
+  }
+
+  // Handle typing stop
+  private static handleTypingStop(chatId: string, userId: string): void {
+    if (this.typingUsers[chatId]) {
+      this.typingUsers[chatId].delete(userId);
+    }
+  }
+
+  // Handle user joined
+  private static handleUserJoined(chatId: string, userId: string): void {
+    this.addParticipant(chatId, userId);
+  }
+
+  // Handle user left
+  private static handleUserLeft(chatId: string, userId: string): void {
+    this.removeParticipant(chatId, userId);
+  }
+
+  // Send a message in a chat
+  static sendMessage(chatId: string, senderId: string, content: string): ChatMessage {
+    try {
+      logger.debug('Sending message:', { chatId, senderId, contentLength: content.length });
+      
+      const message: ChatMessage = {
+        id: uuidv4(),
+        chatId,
+        senderId,
+        content,
+        timestamp: new Date().toISOString(),
+        readBy: [senderId]
+      };
+
+      // Send message through Socket.IO
+      if (this.socket) {
+        logger.debug('Emitting message through Socket.IO:', message);
+        this.socket.emit('send_message', message);
+      } else {
+        logger.warn('Socket not connected, message will not be sent to server');
+      }
+
+      // Update local state
+      if (!this.messages[chatId]) {
+        this.messages[chatId] = [];
+      }
+      this.messages[chatId].push(message);
+
+      // Update chat's lastMessage and timestamps
+      const chat = this.chats.find(c => c.id === chatId);
+      if (chat) {
+        chat.lastMessageId = message.id;
+        chat.lastMessageTime = message.timestamp;
+        chat.updatedAt = new Date().toISOString();
+        chat.lastMessage = message;
+        this.saveChats();
+      }
+
+      return message;
+    } catch (error) {
+      logger.error('Failed to send message:', error);
+      throw error;
+    }
+  }
+
+  // Set typing status
+  static setTypingStatus(chatId: string, userId: string, isTyping: boolean): void {
+    if (this.socket) {
+      if (isTyping) {
+        this.socket.emit('typing', { chatId, userId });
+      } else {
+        this.socket.emit('stop_typing', { chatId, userId });
       }
     }
   }
 
-  // Add message to shared server
-  private static addMessageToSharedServer(chatId: string, message: ChatMessage): boolean {
-    try {
-      const iframes = document.querySelectorAll('iframe');
-      for (let i = 0; i < iframes.length; i++) {
-        const iframe = iframes[i];
-        if (iframe.contentWindow) {
-          const win = iframe.contentWindow as any;
-          if (win.addMessage) {
-            return win.addMessage(chatId, message);
-          }
-        }
-      }
-      return false;
-    } catch (error) {
-      logger.error('Failed to add message to shared server:', error);
-      return false;
+  // Join a chat room
+  static joinChat(chatId: string, userId: string): void {
+    if (this.socket) {
+      logger.debug('Joining chat room:', { chatId, userId });
+      this.socket.emit('join_chat', chatId);
     }
   }
 
-  // Get messages from shared server
-  private static getMessagesFromSharedServer(chatId: string): ChatMessage[] {
-    try {
-      const iframes = document.querySelectorAll('iframe');
-      for (let i = 0; i < iframes.length; i++) {
-        const iframe = iframes[i];
-        if (iframe.contentWindow) {
-          const win = iframe.contentWindow as any;
-          if (win.getMessages) {
-            return win.getMessages(chatId) || [];
-          }
-        }
-      }
-      return [];
-    } catch (error) {
-      logger.error('Failed to get messages from shared server:', error);
-      return [];
-    }
-  }
-
-  // Get all messages from shared server
-  private static getAllMessagesFromSharedServer(): Record<string, ChatMessage[]> {
-    try {
-      const iframes = document.querySelectorAll('iframe');
-      for (let i = 0; i < iframes.length; i++) {
-        const iframe = iframes[i];
-        if (iframe.contentWindow) {
-          const win = iframe.contentWindow as any;
-          if (win.getAllMessages) {
-            return win.getAllMessages() || {};
-          }
-        }
-      }
-      return {};
-    } catch (error) {
-      logger.error('Failed to get all messages from shared server:', error);
-      return {};
+  // Leave a chat room
+  static leaveChat(chatId: string, userId: string): void {
+    if (this.socket) {
+      logger.debug('Leaving chat room:', { chatId, userId });
+      this.socket.emit('leave_chat', chatId);
     }
   }
 
@@ -308,124 +343,6 @@ export class ChatService {
     }
   }
 
-  // Start polling for new messages
-  private static startMessagePolling(): void {
-    setInterval(() => {
-      this.pollForNewMessages();
-    }, 1000); // Poll every second for better responsiveness
-  }
-
-  // Poll for new messages
-  private static async pollForNewMessages(): Promise<void> {
-    try {
-      const savedMessages = localStorage.getItem(this.storageKey + 'messages');
-      if (savedMessages) {
-        logger.debug('Polling found messages in storage:', savedMessages.substring(0, 100) + '...');
-        
-        const storedMessages: Record<string, SerializedMessage[]> = JSON.parse(savedMessages);
-        let hasUpdates = false;
-
-        // Update messages for each chat
-        Object.entries(storedMessages).forEach(([chatId, messages]) => {
-          const currentMessages = this.messages[chatId] || [];
-          logger.debug(`Chat ${chatId}: ${messages.length} stored messages, ${currentMessages.length} current messages`);
-          
-          const newMessages = messages.filter(msg => 
-            !currentMessages.some(current => current.id === msg.id)
-          );
-
-          if (newMessages.length > 0) {
-            logger.debug(`Found ${newMessages.length} new messages for chat ${chatId}:`, JSON.stringify(newMessages));
-            
-            this.messages[chatId] = [...currentMessages, ...newMessages].sort((a, b) => 
-              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-            );
-            hasUpdates = true;
-            
-            // Add new messages to shared server
-            newMessages.forEach(msg => this.addMessageToSharedServer(chatId, msg));
-            
-            this.messageUpdateCallbacks.forEach(callback => callback(chatId));
-          }
-        });
-
-        if (hasUpdates) {
-          logger.debug('New messages found during polling');
-        }
-      } else {
-        logger.debug('No messages found in storage during polling');
-      }
-
-      // Also check shared server for new messages
-      if (process.env.NODE_ENV !== 'production') {
-        const sharedMessages = this.getAllMessagesFromSharedServer();
-        
-        if (Object.keys(sharedMessages).length > 0) {
-          logger.debug('Found messages in shared server:', JSON.stringify(Object.keys(sharedMessages)));
-          
-          let hasUpdates = false;
-          
-          Object.entries(sharedMessages).forEach(([chatId, messages]) => {
-            const currentMessages = this.messages[chatId] || [];
-            
-            const newMessages = messages.filter(msg => 
-              !currentMessages.some(current => current.id === msg.id)
-            );
-            
-            if (newMessages.length > 0) {
-              logger.debug(`Found ${newMessages.length} new messages from shared server for chat ${chatId}`);
-              
-              this.messages[chatId] = [...currentMessages, ...newMessages].sort((a, b) => 
-                new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-              );
-              
-              hasUpdates = true;
-              
-              // Save to localStorage
-              this.saveMessages();
-              
-              // Notify subscribers
-              this.messageUpdateCallbacks.forEach(callback => callback(chatId));
-            }
-          });
-          
-          if (hasUpdates) {
-            logger.debug('Updated messages from shared server');
-          }
-        }
-      }
-
-      // Check for typing indicators
-      const savedTyping = localStorage.getItem(this.storageKey + 'typing');
-      if (savedTyping) {
-        try {
-          const typingData = JSON.parse(savedTyping);
-          // Convert JSON back to Sets
-          Object.keys(typingData).forEach(chatId => {
-            this.typingUsers[chatId] = new Set(typingData[chatId]);
-          });
-        } catch (e) {
-          logger.error('Failed to parse typing data', e);
-        }
-      }
-    } catch (error) {
-      logger.error('Error polling for messages:', error);
-    }
-  }
-
-  // Subscribe to message updates
-  static subscribeToMessageUpdates(callback: (chatId: string) => void): void {
-    this.messageUpdateCallbacks.push(callback);
-  }
-
-  // Unsubscribe from message updates
-  static unsubscribeFromMessageUpdates(callback: (chatId: string) => void): void {
-    const index = this.messageUpdateCallbacks.indexOf(callback);
-    if (index > -1) {
-      this.messageUpdateCallbacks.splice(index, 1);
-    }
-  }
-
   // Get chats for a specific user with diagnostic logging
   static getUserChats(userId: string): Chat[] {
     try {
@@ -480,6 +397,14 @@ export class ChatService {
         this.participants.push(participant);
       });
       this.saveParticipants();
+      
+      // Emit event to server to save chat and participants
+      if (this.socket) {
+        logger.debug('Emitting create_chat event to server:', newChat);
+        this.socket.emit('create_chat', newChat);
+      } else {
+        logger.warn('Socket not connected, chat will not be saved to server');
+      }
       
       logger.debug(`Chat created successfully with ID ${chatId}`, newChat);
       return newChat;
@@ -584,81 +509,6 @@ export class ChatService {
     }
   }
 
-  // Send a message in a chat
-  static sendMessage(chatId: string, senderId: string, content: string): ChatMessage {
-    try {
-      logger.debug('Sending message:', { chatId, senderId, contentLength: content.length });
-      
-      const message: ChatMessage = {
-        id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        chatId,
-        senderId,
-        content,
-        timestamp: new Date().toISOString(),
-        readBy: [senderId]
-      };
-
-      logger.debug('Created message object:', JSON.stringify(message));
-
-      // Initialize messages array for this chat if it doesn't exist
-      if (!this.messages[chatId]) {
-        this.messages[chatId] = [];
-      }
-
-      // Add message to the chat's messages
-      this.messages[chatId].push(message);
-
-      // Update chat's lastMessage and timestamps
-      const chat = this.chats.find(c => c.id === chatId);
-      if (chat) {
-        chat.lastMessageId = message.id;
-        chat.lastMessageTime = message.timestamp;
-        chat.updatedAt = new Date().toISOString();
-        chat.lastMessage = message;
-
-        logger.debug('Saving message to storage with key:', this.storageKey + 'messages');
-        
-        // Log the state before saving
-        const currentStorageValue = localStorage.getItem(this.storageKey + 'messages');
-        logger.debug('Current storage state:', currentStorageValue || 'empty');
-
-        // Save all changes to localStorage
-        this.saveMessages();
-        this.saveChats();
-        
-        // Log the state after saving
-        const newStorageValue = localStorage.getItem(this.storageKey + 'messages');
-        logger.debug('New storage state:', newStorageValue || 'empty');
-        
-        // Add to shared server
-        if (process.env.NODE_ENV !== 'production') {
-          const added = this.addMessageToSharedServer(chatId, message);
-          logger.debug('Added message to shared server:', added ? 'success' : 'failed');
-        }
-        
-        // Verify the chat has participants
-        logger.debug('Chat participants:', JSON.stringify(chat.participants));
-        
-        // Notify subscribers about the new message
-        this.messageUpdateCallbacks.forEach(callback => callback(chatId));
-        
-        logger.debug('Message saved and chat updated:', { 
-          chatId, 
-          messageId: message.id,
-          lastMessageTime: chat.lastMessageTime
-        });
-      } else {
-        logger.error('Chat not found when sending message:', { chatId });
-        throw new Error('Chat not found');
-      }
-
-      return message;
-    } catch (error) {
-      logger.error('Failed to send message:', error);
-      throw error;
-    }
-  }
-
   // Add a participant to a chat
   static addParticipant(chatId: string, userId: string): void {
     try {
@@ -683,6 +533,15 @@ export class ChatService {
 
       this.saveChats();
       this.saveParticipants();
+      
+      // Emit event to server to save participant
+      if (this.socket) {
+        logger.debug('Emitting add_participant event to server:', { chatId, userId });
+        this.socket.emit('add_participant', { chatId, userId });
+      } else {
+        logger.warn('Socket not connected, participant will not be saved to server');
+      }
+      
       logger.info('Participant added to chat', { chatId, userId });
     } catch (error) {
       logger.error('Failed to add participant:', error);
@@ -742,6 +601,15 @@ export class ChatService {
 
       this.saveChats();
       this.saveParticipants();
+      
+      // Emit event to server to remove participant
+      if (this.socket) {
+        logger.debug('Emitting remove_participant event to server:', { chatId, userId });
+        this.socket.emit('remove_participant', { chatId, userId });
+      } else {
+        logger.warn('Socket not connected, participant will not be removed from server');
+      }
+      
       logger.info('Participant removed from chat', { chatId, userId });
     } catch (error) {
       logger.error('Failed to remove participant:', error);

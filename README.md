@@ -18,6 +18,7 @@ The project follows a clean architecture pattern with the following layers:
 - Lazy loading
 - Type safety with TypeScript
 - Performance optimizations
+- Real-time chat functionality with Socket.IO
 
 ## React Native Migration Guide
 
@@ -84,3 +85,21 @@ src/
 - Follow atomic design principles
 - Implement proper error handling
 - Use lazy loading for better performance
+
+## Deployment
+
+### Frontend Deployment (Vercel)
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Configure environment variables:
+   - `VITE_SOCKET_URL`: URL of your deployed chat server
+
+### Chat Server Deployment
+
+The chat server is a separate Node.js application that provides real-time communication using Socket.IO. See the [chat-server README](chat-server/README.md) for detailed deployment instructions.
+
+For a complete setup, you'll need to:
+1. Deploy the chat server to a platform like Railway or Render
+2. Update the frontend's `.env.production` file with the deployed chat server URL
+3. Deploy the frontend to Vercel
