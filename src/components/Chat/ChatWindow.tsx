@@ -35,6 +35,18 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '../ui/context-menu';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  logger.error('Missing Supabase environment variables');
+  throw new Error('Missing Supabase environment variables');
+}
+
+const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
 interface ChatWindowProps {
   chat: Chat;
@@ -55,6 +67,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   const parentRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [chatUsers, setChatUsers] = useState<Record<string, User>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   const {
     messages,
@@ -103,14 +116,74 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
   // Load messages when component mounts or chat changes
   useEffect(() => {
-    if (authState.currentUser) {
-      logger.debug('Loading messages for chat:', {
-        chatId: chat.id,
-        chatName: chat.name
-      });
-      loadMessages(chat.id);
-    }
+    const loadChatMessages = async () => {
+      try {
+        setIsLoading(true);
+        if (authState.currentUser) {
+          logger.debug('Loading messages for chat:', {
+            chatId: chat.id,
+            chatName: chat.name
+          });
+
+          // Load messages from Supabase
+          const { data: messageData, error: messageError } = await supabase
+            .from('chat_messages')
+            .select('*')
+            .eq('chat_id', chat.id)
+            .order('created_at', { ascending: true });
+
+          if (messageError) {
+            logger.error('Error loading messages:', messageError);
+            return;
+          }
+
+          if (messageData) {
+            const formattedMessages = messageData.map((msg: any) => ({
+              id: msg.id,
+              chatId: msg.chat_id,
+              senderId: msg.sender_id,
+              content: msg.content,
+              timestamp: msg.created_at,
+              readBy: msg.read_by || []
+            }));
+
+            // Update messages in store
+            const chatStore = useChatStore.getState();
+            chatStore.messages = {
+              ...chatStore.messages,
+              [chat.id]: formattedMessages
+            };
+          }
+        }
+      } catch (error) {
+        logger.error('Failed to load messages:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadChatMessages();
   }, [chat.id, authState.currentUser]);
+
+  // Subscribe to real-time message updates
+  useEffect(() => {
+    const messageSubscription = supabase
+      .channel(`chat_messages:${chat.id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'chat_messages',
+        filter: `chat_id=eq.${chat.id}`
+      }, (payload) => {
+        logger.debug('Message update received:', payload);
+        loadMessages(chat.id);
+      })
+      .subscribe();
+
+    return () => {
+      messageSubscription.unsubscribe();
+    };
+  }, [chat.id]);
 
   useEffect(() => {
     // Mark messages as read when opening chat
@@ -157,365 +230,153 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     loadUsers();
   }, [chat.participants, authState.currentUser]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !authState.currentUser) {
-      logger.debug('Cannot send message:', { 
-        hasMessage: !!newMessage.trim(),
-        hasUser: !!authState.currentUser 
-      });
-      return;
-    }
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !authState.currentUser) return;
 
     try {
-      logger.debug('Attempting to send message:', {
-        chatId: chat.id,
-        messageLength: newMessage.trim().length,
-        userId: authState.currentUser.studentId
-      });
       await sendMessage(chat.id, newMessage.trim());
       setNewMessage('');
-      removeTypingUser(chat.id, authState.currentUser.studentId);
-      logger.debug('Message sent successfully');
     } catch (error) {
-      logger.error('Failed to send message', { error });
+      logger.error('Failed to send message:', error);
     }
   };
 
-  const handleTyping = () => {
-    if (!authState.currentUser) return;
-    
-    // Set typing status through Socket.IO
-    ChatService.setTypingStatus(chat.id, authState.currentUser.studentId, true);
-    addTypingUser(chat.id, authState.currentUser.studentId);
-    
-    // Remove typing indicator after 3 seconds
-    setTimeout(() => {
-      ChatService.setTypingStatus(chat.id, authState.currentUser!.studentId, false);
-      removeTypingUser(chat.id, authState.currentUser!.studentId);
-    }, 3000);
-  };
-
-  const handleLeaveChat = () => {
-    if (!authState.currentUser) return;
-    try {
-      ChatService.removeParticipant(chat.id, authState.currentUser.studentId);
-      refreshChats();
-      // Navigate back to chat list
-      window.location.href = '/chat';
-    } catch (error) {
-      logger.error('Failed to leave chat', { error });
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
     }
   };
 
-  const handleSearchUsers = async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    setIsSearching(true);
-
-    searchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const users = await UserService.searchUsers(query);
-        const filteredUsers = users.filter(user => 
-          user.studentId !== authState.currentUser?.studentId &&
-          !chat.participants.includes(user.studentId)
-        );
-        setSearchResults(filteredUsers);
-        logger.info('User search completed', { 
-          query, 
-          resultCount: filteredUsers.length 
-        });
-      } catch (error) {
-        logger.error('Failed to search users', { error });
-        setSearchResults([]);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300);
+  const getMessageSender = (message: ChatMessage): User | undefined => {
+    return chatUsers[message.senderId];
   };
 
-  const handleAddMember = async (user: User) => {
-    try {
-      await ChatService.addParticipant(chat.id, user.studentId);
-      setMembers(prev => [...prev, user]);
-      setSearchResults(prev => prev.filter(u => u.studentId !== user.studentId));
-      refreshChats();
-      logger.info('Added member to chat', { 
-        chatId: chat.id, 
-        userId: user.studentId 
-      });
-    } catch (error) {
-      logger.error('Failed to add member', { error });
-    }
+  const isCurrentUser = (userId: string): boolean => {
+    return userId === authState.currentUser?.studentId;
   };
 
-  const handleRemoveMember = async (userId: string) => {
-    try {
-      await ChatService.removeParticipant(chat.id, userId);
-      setMembers(prev => prev.filter(member => member.studentId !== userId));
-      refreshChats();
-      logger.info('Removed member from chat', { 
-        chatId: chat.id, 
-        userId 
-      });
-    } catch (error) {
-      logger.error('Failed to remove member', { error });
-    }
+  const formatMessageTime = (timestamp: string): string => {
+    return format(new Date(timestamp), 'HH:mm');
   };
 
-  // Virtual list setup
-  const rowVirtualizer = useVirtualizer({
-    count: chatMessages.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 120,
-    overscan: 5,
-    paddingStart: 20,
-    paddingEnd: 20,
-    initialRect: { width: 0, height: 0 }
-  });
+  const formatMessageDate = (timestamp: string): string => {
+    return format(new Date(timestamp), 'MMM d, yyyy');
+  };
+
+  const renderMessage = (message: ChatMessage, index: number) => {
+    const sender = getMessageSender(message);
+    const isCurrentUserMessage = isCurrentUser(message.senderId);
+    const showDate = index === 0 || !isSameDay(new Date(message.timestamp), new Date(chatMessages[index - 1].timestamp));
+
+    return (
+      <div key={message.id} className="flex flex-col">
+        {showDate && (
+          <div className="flex justify-center my-4">
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+              {formatMessageDate(message.timestamp)}
+            </span>
+          </div>
+        )}
+        <div className={cn(
+          "flex",
+          isCurrentUserMessage ? "justify-end" : "justify-start"
+        )}>
+          <div className={cn(
+            "max-w-[70%] rounded-lg px-4 py-2",
+            isCurrentUserMessage ? "bg-blue-500 text-white" : "bg-gray-100"
+          )}>
+            <div className="text-sm">{message.content}</div>
+            <div className={cn(
+              "text-xs mt-1",
+              isCurrentUserMessage ? "text-blue-100" : "text-gray-500"
+            )}>
+              {formatMessageTime(message.timestamp)}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className={cn(
-      "flex flex-col bg-background",
-      isMobile ? "fixed inset-0 z-[100]" : "h-full"
-    )}>
+    <div className="flex flex-col h-full">
       {/* Chat Header */}
-      <div className="chat-header">
-        <div className="flex items-center space-x-3">
+      <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center space-x-4">
           {isMobile && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onBack}
-              className="icon-button"
-            >
+            <Button variant="ghost" size="icon" onClick={onBack}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
           )}
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <span className="text-primary font-medium">
-              {chat.name.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <div className="flex-1">
-            <h2 className="font-semibold text-lg">{chat.name}</h2>
-            <p className="text-sm text-muted-foreground">
-              {chat.participants.length} participants
+          <div>
+            <h2 className="text-lg font-semibold">{chat.name}</h2>
+            <p className="text-sm text-gray-500">
+              {members.length} {members.length === 1 ? 'member' : 'members'}
             </p>
           </div>
-          <Button variant="ghost" size="icon" className="icon-button">
-            <MoreVertical className="h-5 w-5" />
-          </Button>
         </div>
+        <Button variant="ghost" size="icon" onClick={() => setShowMembers(true)}>
+          <Users className="h-5 w-5" />
+        </Button>
       </div>
 
-      {/* Messages Area */}
-      <div 
-        ref={parentRef}
-        className="flex-1 overflow-y-auto px-4"
-        style={{ 
-          height: isMobile ? 'calc(100vh - 130px)' : 'calc(100vh - 180px)',
-        }}
-      >
-        <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-          className="min-h-full"
-        >
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const message = chatMessages[virtualRow.index];
-            const currentUserId = authState.currentUser?.studentId;
-            const isCurrentUser = Boolean(currentUserId && message.senderId === currentUserId);
-            const messageDate = new Date(message.timestamp);
-            const showDateDivider = virtualRow.index === 0 || 
-              !isSameDay(messageDate, new Date(chatMessages[virtualRow.index - 1].timestamp));
-            
-            return (
-              <div
-                key={message.id}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                  paddingTop: showDateDivider ? '24px' : '12px',
-                  paddingBottom: '12px'
-                }}
-              >
-                {showDateDivider && (
-                  <div className="chat-date-divider">
-                    {format(messageDate, 'MMMM d, yyyy')}
-                  </div>
-                )}
-                <div className={cn(
-                  "flex w-full",
-                  isCurrentUser ? "justify-end" : "justify-start"
-                )}>
-                  <div className="message-container">
-                    <div
-                      className={cn(
-                        "chat-bubble",
-                        isCurrentUser ? "chat-bubble-sent" : "chat-bubble-received"
-                      )}
-                    >
-                      <div>{message.content}</div>
-                    </div>
-                    <div className={cn(
-                      "flex",
-                      isCurrentUser ? "justify-end" : "justify-start"
-                    )}>
-                      <span className="chat-timestamp">
-                        {format(messageDate, 'h:mm a')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {/* Messages Container */}
+      <div ref={parentRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+        {isLoading ? (
+          <div className="flex justify-center items-center h-full">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          </div>
+        ) : chatMessages.length === 0 ? (
+          <div className="flex justify-center items-center h-full">
+            <p className="text-gray-500">No messages yet</p>
+          </div>
+        ) : (
+          chatMessages.map((message, index) => renderMessage(message, index))
+        )}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Message Input */}
-      <div className="chat-input-container">
-        <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+      <div className="p-4 border-t">
+        <div className="flex items-center space-x-2">
           <Input
             value={newMessage}
-            onChange={(e) => {
-              setNewMessage(e.target.value);
-              handleTyping();
-            }}
-            placeholder="Type your message here..."
-            className="chat-input flex-1"
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Type a message..."
+            className="flex-1"
           />
-          <Button 
-            type="submit" 
-            size="icon" 
-            className="chat-send-button"
-            disabled={!newMessage.trim()}
-          >
+          <Button onClick={handleSendMessage} disabled={!newMessage.trim()}>
             <Send className="h-5 w-5" />
           </Button>
-        </form>
+        </div>
       </div>
 
       {/* Members Dialog */}
       <Dialog open={showMembers} onOpenChange={setShowMembers}>
-        <DialogContent className={cn(
-          "sm:max-w-[425px]",
-          isMobile && "w-full h-full max-w-none m-0 rounded-none"
-        )}>
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Chat Members</DialogTitle>
             <DialogDescription>
-              Manage members in this chat
+              {members.length} {members.length === 1 ? 'member' : 'members'} in this chat
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Add Members</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={userSearchQuery}
-                  onChange={(e) => {
-                    setUserSearchQuery(e.target.value);
-                    handleSearchUsers(e.target.value);
-                  }}
-                  placeholder="Search users..."
-                  className="pl-9"
-                />
+            {members.map((member) => (
+              <div key={member.studentId} className="flex items-center space-x-4">
+                <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                  <span className="text-lg font-medium">
+                    {member.name?.charAt(0).toUpperCase() || '?'}
+                  </span>
+                </div>
+                <div>
+                  <p className="font-medium">{member.name || 'Unknown User'}</p>
+                  <p className="text-sm text-gray-500">{member.email}</p>
+                </div>
               </div>
-
-              {isSearching ? (
-                <div className="text-sm text-muted-foreground text-center py-2">
-                  Searching...
-                </div>
-              ) : searchResults.length > 0 ? (
-                <div className="mt-2 border rounded-md max-h-40 overflow-y-auto">
-                  {searchResults.map(user => (
-                    <div
-                      key={user.studentId}
-                      className="flex items-center justify-between p-2 hover:bg-accent cursor-pointer"
-                      onClick={() => handleAddMember(user)}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <span className="text-sm font-medium">
-                            {user.name?.charAt(0) || '?'}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{user.name || 'Unknown User'}</p>
-                          <p className="text-xs text-muted-foreground">{user.email}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : userSearchQuery.trim() ? (
-                <div className="text-sm text-muted-foreground text-center py-2">
-                  No users found
-                </div>
-              ) : null}
-
-              {members.length > 0 && (
-                <div className="mt-2 space-y-2">
-                  <Label>Current Members</Label>
-                  <div className="space-y-2">
-                    {members.map(user => (
-                      <div
-                        key={user.studentId}
-                        className="flex items-center justify-between p-2 bg-accent rounded-md"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-sm font-medium">
-                              {user.name?.charAt(0) || '?'}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{user.name || 'Unknown User'}</p>
-                            <p className="text-xs text-muted-foreground">{user.email}</p>
-                          </div>
-                        </div>
-                        {user.studentId !== authState.currentUser?.studentId && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveMember(user.studentId)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            ))}
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowMembers(false)}>
-              Close
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -62,6 +62,7 @@ export const ChatPage: React.FC = () => {
   const [chatUsers, setChatUsers] = useState<Record<string, User>>({});
   const [isLoading, setIsLoading] = useState(true);
 
+  // Initialize chat store and load data
   useEffect(() => {
     if (authState.currentUser) {
       logger.debug('Initializing chat store with user:', {
@@ -192,10 +193,43 @@ export const ChatPage: React.FC = () => {
       };
       
       loadChatsFromServer();
+
+      // Subscribe to real-time updates
+      const chatSubscription = supabase
+        .channel('chat_changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, (payload) => {
+          logger.debug('Chat change received:', payload);
+          loadChatsFromServer();
+        })
+        .subscribe();
+
+      const messageSubscription = supabase
+        .channel('message_changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, (payload) => {
+          logger.debug('Message change received:', payload);
+          if (currentChat) {
+            loadMessages(currentChat.id);
+          }
+        })
+        .subscribe();
+
+      const participantSubscription = supabase
+        .channel('participant_changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_participants' }, (payload) => {
+          logger.debug('Participant change received:', payload);
+          loadChatsFromServer();
+        })
+        .subscribe();
+
+      return () => {
+        chatSubscription.unsubscribe();
+        messageSubscription.unsubscribe();
+        participantSubscription.unsubscribe();
+      };
     } else {
       logger.debug('No current user found, skipping chat store initialization');
     }
-  }, [authState.currentUser]);
+  }, [authState.currentUser, currentChat]);
 
   useEffect(() => {
     const loadUsers = async () => {
