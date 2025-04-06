@@ -14,6 +14,7 @@ export interface Chat {
   id: string;
   postId?: string;  // Optional since direct chats don't have a post
   name: string;
+  type: 'direct' | 'group';  // Add type field to distinguish between direct and group chats
   participants: string[]; // Array of studentIds
   createdAt: string;
   updatedAt: string;

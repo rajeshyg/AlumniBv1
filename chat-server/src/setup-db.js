@@ -38,11 +38,12 @@ async function setupDatabase() {
           console.log('Please create the chat_messages table in the Supabase dashboard with the following structure:');
           console.log(`
             CREATE TABLE chat_messages (
-              id TEXT PRIMARY KEY,
-              chat_id TEXT NOT NULL,
+              id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+              chat_id UUID REFERENCES chats(id) ON DELETE CASCADE,
               sender_id TEXT NOT NULL,
               content TEXT NOT NULL,
-              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+              read_by TEXT[] DEFAULT '{}'
             );
           `);
         } else {
@@ -80,11 +81,11 @@ async function setupDatabase() {
           console.log('Please create the chat_participants table in the Supabase dashboard with the following structure:');
           console.log(`
             CREATE TABLE chat_participants (
-              id SERIAL PRIMARY KEY,
-              chat_id TEXT NOT NULL,
-              user_id TEXT NOT NULL,
-              joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-              UNIQUE(chat_id, user_id)
+              id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+              chat_id UUID REFERENCES chats(id) ON DELETE CASCADE,
+              student_id TEXT NOT NULL,
+              joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+              UNIQUE(chat_id, student_id)
             );
           `);
         } else {

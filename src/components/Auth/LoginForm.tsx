@@ -94,10 +94,11 @@ export const LoginForm: React.FC = () => {
       name: user.name
     });
     
-    // First, select the profile
-    selectProfile(user);
-    
     try {
+      // First, select the profile
+      await selectProfile(user);
+      
+      // Then check admin status
       const adminService = AdminService.getInstance();
       const isAdmin = await adminService.validateAdminStatus(user.email);
       

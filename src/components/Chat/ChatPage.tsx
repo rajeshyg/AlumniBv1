@@ -44,192 +44,85 @@ interface ChatStore {
   }>;
 }
 
+// Interface for local component state
+interface ChatPageState {
+  currentChat: Chat | null;
+  showNewChatDialog: boolean;
+  showGroupDialog: boolean;
+  selectedUsers: User[];
+  userSearchQuery: string;
+  searchResults: User[];
+  isSearching: boolean;
+  groupName: string;
+  isMobile: boolean;
+  searchQuery: string;
+  filteredChats: Chat[];
+  unreadCounts: Record<string, number>;
+  chatUsers: Record<string, User>;
+  isLoading: boolean;
+}
+
 export const ChatPage: React.FC = () => {
   const { authState } = useAuth();
-  const { chats, currentChat, setCurrentChat, initialize, loadMessages } = useChatStore();
-  const [showNewChatDialog, setShowNewChatDialog] = useState(false);
-  const [showGroupDialog, setShowGroupDialog] = useState(false);
-  const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<User[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [groupName, setGroupName] = useState('');
-  const searchTimeoutRef = React.useRef<NodeJS.Timeout>();
-  const [isMobile, setIsMobile] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filteredChats, setFilteredChats] = useState<Chat[]>([]);
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const [chatUsers, setChatUsers] = useState<Record<string, User>>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const { chats, loadChats, loadMessages, sendMessage, markAsRead, setCurrentUser, unreadCounts: storeUnreadCounts } = useChatStore();
+  
+  // Local component state
+  const [state, setState] = useState<ChatPageState>({
+    currentChat: null,
+    showNewChatDialog: false,
+    showGroupDialog: false,
+    selectedUsers: [],
+    userSearchQuery: '',
+    searchResults: [],
+    isSearching: false,
+    groupName: '',
+    isMobile: false,
+    searchQuery: '',
+    filteredChats: [],
+    unreadCounts: {},
+    chatUsers: {},
+    isLoading: true
+  });
 
-  // Initialize chat store and load data
+  // Destructure state for easier access
+  const { 
+    currentChat, showNewChatDialog, showGroupDialog, selectedUsers, 
+    userSearchQuery, searchResults, isSearching, groupName, 
+    isMobile, searchQuery, filteredChats, chatUsers, isLoading 
+  } = state;
+
+  // Update specific state properties
+  const updateState = (updates: Partial<ChatPageState>) => {
+    setState(prev => ({ ...prev, ...updates }));
+  };
+
   useEffect(() => {
     if (authState.currentUser) {
       logger.debug('Initializing chat store with user:', {
         userId: authState.currentUser.studentId,
         userName: authState.currentUser.name
       });
-      const { setCurrentUser, initialize } = useChatStore.getState();
-      setCurrentUser(authState.currentUser);
-      initialize();
       
-      // Load chats from the server
-      const loadChatsFromServer = async () => {
+      // Set the current user in the chat store
+      setCurrentUser(authState.currentUser);
+      
+      // Load chats using our updated loadChats function
+      const loadUserChats = async () => {
         try {
-          setIsLoading(true);
-          const currentUserId = authState.currentUser?.studentId;
-          if (!currentUserId) {
-            logger.error('No current user ID found');
-            return;
-          }
-          
-          logger.debug('Loading chats from server for user:', currentUserId);
-          
-          // Get all chats where the user is a participant
-          const { data: participantData, error: participantError } = await supabase
-            .from('chat_participants')
-            .select('chat_id')
-            .eq('user_id', currentUserId);
-            
-          if (participantError) {
-            logger.error('Error loading chat participants:', participantError);
-            return;
-          }
-          
-          if (participantData && participantData.length > 0) {
-            const chatIds = participantData.map((p: { chat_id: string }) => p.chat_id);
-            
-            // Get all chats
-            const { data: chatData, error: chatError } = await supabase
-              .from('chats')
-              .select('*')
-              .in('id', chatIds);
-              
-            if (chatError) {
-              logger.error('Error loading chats:', chatError);
-              return;
-            }
-            
-            if (chatData && chatData.length > 0) {
-              logger.debug(`Loaded ${chatData.length} chats from server`);
-              
-              // Get all participants for these chats
-              const { data: allParticipants, error: allParticipantsError } = await supabase
-                .from('chat_participants')
-                .select('*')
-                .in('chat_id', chatIds);
-                
-              if (allParticipantsError) {
-                logger.error('Error loading all participants:', allParticipantsError);
-                return;
-              }
-              
-              // Get all messages for these chats
-              const { data: allMessages, error: allMessagesError } = await supabase
-                .from('chat_messages')
-                .select('*')
-                .in('chat_id', chatIds)
-                .order('created_at', { ascending: true });
-                
-              if (allMessagesError) {
-                logger.error('Error loading messages:', allMessagesError);
-                return;
-              }
-              
-              // Update the chat store with the loaded data
-              const chatStore = useChatStore.getState() as unknown as ChatStore;
-              
-              // Convert to the format expected by the store
-              const formattedChats = chatData.map((chat: any) => ({
-                id: chat.id,
-                name: chat.name,
-                participants: allParticipants
-                  .filter((p: { chat_id: string }) => p.chat_id === chat.id)
-                  .map((p: { user_id: string }) => p.user_id),
-                createdAt: chat.created_at,
-                updatedAt: chat.updated_at,
-                lastMessageId: chat.last_message_id,
-                lastMessageTime: chat.last_message_time,
-                lastMessage: allMessages
-                  .filter((m: { chat_id: string }) => m.chat_id === chat.id)
-                  .sort((a: { created_at: string }, b: { created_at: string }) => 
-                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-              }));
-              
-              const formattedMessages = allMessages.map((msg: any) => ({
-                id: msg.id,
-                chatId: msg.chat_id,
-                senderId: msg.sender_id,
-                content: msg.content,
-                timestamp: msg.created_at,
-                readBy: msg.read_by || []
-              }));
-              
-              const formattedParticipants = allParticipants.map((p: any) => ({
-                chatId: p.chat_id,
-                userId: p.user_id,
-                joinedAt: p.joined_at
-              }));
-              
-              // Update the store with the loaded data
-              chatStore.chats = formattedChats;
-              chatStore.messages = formattedMessages.reduce((acc: Record<string, any[]>, msg: any) => {
-                if (!acc[msg.chatId]) {
-                  acc[msg.chatId] = [];
-                }
-                acc[msg.chatId].push(msg);
-                return acc;
-              }, {});
-              chatStore.participants = formattedParticipants;
-              
-              logger.debug('Chat store updated with server data');
-            }
-          }
+          updateState({ isLoading: true });
+          await loadChats();
         } catch (error) {
-          logger.error('Error loading chats from server:', error);
+          logger.error('Error loading chats:', error);
         } finally {
-          setIsLoading(false);
+          updateState({ isLoading: false });
         }
       };
       
-      loadChatsFromServer();
-
-      // Subscribe to real-time updates
-      const chatSubscription = supabase
-        .channel('chat_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, (payload) => {
-          logger.debug('Chat change received:', payload);
-          loadChatsFromServer();
-        })
-        .subscribe();
-
-      const messageSubscription = supabase
-        .channel('message_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, (payload) => {
-          logger.debug('Message change received:', payload);
-          if (currentChat) {
-            loadMessages(currentChat.id);
-          }
-        })
-        .subscribe();
-
-      const participantSubscription = supabase
-        .channel('participant_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_participants' }, (payload) => {
-          logger.debug('Participant change received:', payload);
-          loadChatsFromServer();
-        })
-        .subscribe();
-
-      return () => {
-        chatSubscription.unsubscribe();
-        messageSubscription.unsubscribe();
-        participantSubscription.unsubscribe();
-      };
+      loadUserChats();
     } else {
       logger.debug('No current user found, skipping chat store initialization');
     }
-  }, [authState.currentUser, currentChat]);
+  }, [authState.currentUser, setCurrentUser, loadChats]);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -243,7 +136,7 @@ export const ChatPage: React.FC = () => {
             }
           }
         }
-        setChatUsers(users);
+        updateState({ chatUsers: users });
       } catch (error) {
         logger.error('Failed to load chat users:', error);
       }
@@ -273,9 +166,9 @@ export const ChatPage: React.FC = () => {
         return timeB - timeA;
       });
 
-      setFilteredChats(filtered);
+      updateState({ filteredChats: filtered });
     } else {
-      setFilteredChats([]);
+      updateState({ filteredChats: [] });
     }
   }, [chats, searchQuery]);
 
@@ -285,15 +178,14 @@ export const ChatPage: React.FC = () => {
         chatId: currentChat.id,
         chatName: currentChat.name
       });
-      const { loadMessages } = useChatStore.getState();
       loadMessages(currentChat.id);
     }
-  }, [currentChat]);
+  }, [currentChat, loadMessages]);
 
   useEffect(() => {
     // Check for mobile viewport on mount and window resize
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      updateState({ isMobile: window.innerWidth < 768 });
     };
 
     checkMobile();
@@ -302,103 +194,191 @@ export const ChatPage: React.FC = () => {
   }, []);
 
   const handleChatSelect = (chat: Chat) => {
-    setCurrentChat(chat);
+    updateState({ currentChat: chat });
+    markAsRead(chat.id);
   };
 
   const handleUserSearch = async (query: string) => {
+    updateState({ userSearchQuery: query });
+    
     if (!query.trim()) {
-      setSearchResults([]);
+      updateState({ searchResults: [] });
       return;
     }
 
     try {
-      setIsSearching(true);
+      updateState({ isSearching: true });
       const results = await UserService.searchUsers(query);
       // Filter out the current user and users already in the chat
       const filteredResults = results.filter(user => 
         user.studentId !== authState.currentUser?.studentId &&
         !selectedUsers.some(selected => selected.studentId === user.studentId)
       );
-      setSearchResults(filteredResults);
+      updateState({ searchResults: filteredResults, isSearching: false });
     } catch (error) {
-      logger.error('Failed to search users:', error);
-    } finally {
-      setIsSearching(false);
+      logger.error('Error searching users:', error);
+      updateState({ isSearching: false });
     }
   };
 
   const handleAddUser = (user: User) => {
-    setSelectedUsers(prev => [...prev, user]);
-    setSearchResults(prev => prev.filter(u => u.studentId !== user.studentId));
+    updateState({ 
+      selectedUsers: [...selectedUsers, user],
+      searchResults: searchResults.filter(u => u.studentId !== user.studentId),
+      userSearchQuery: ''
+    });
   };
 
   const handleRemoveUser = (userId: string) => {
-    setSelectedUsers(prev => prev.filter(user => user.studentId !== userId));
+    updateState({ selectedUsers: selectedUsers.filter(u => u.studentId !== userId) });
   };
 
   const handleCreateDirectChat = async (user: User) => {
     if (!authState.currentUser) return;
+    
     try {
-      const chat = await ChatService.createDirectChat(
-        authState.currentUser.studentId,
-        user.studentId
-      );
-      setCurrentChat(chat);
-      setShowNewChatDialog(false);
-      setSearchResults([]);
-      logger.info('Created direct chat', { 
-        chatId: chat.id,
-        userId: user.studentId 
+      // Show loading state
+      updateState({ isLoading: true });
+      logger.debug('Creating direct chat with user:', { 
+        userId: user.studentId, 
+        userName: user.name || user.email 
       });
+      
+      // First check if a direct chat already exists with this user
+      const existingChat = chats.find(chat => 
+        chat.type === 'direct' && 
+        chat.participants.includes(user.studentId) &&
+        chat.participants.includes(authState.currentUser!.studentId) &&
+        chat.participants.length === 2
+      );
+      
+      if (existingChat) {
+        // If a chat already exists, select it
+        logger.debug('Using existing chat:', { chatId: existingChat.id });
+        handleChatSelect(existingChat);
+        updateState({ showNewChatDialog: false, isLoading: false });
+        return;
+      }
+      
+      // Create a new direct chat
+      const chatName = user.name || `${user.firstName} ${user.lastName}` || user.email;
+      const participants = [authState.currentUser.studentId, user.studentId];
+      
+      logger.debug('Creating new chat with name:', { chatName, participants });
+      
+      try {
+        const newChat = await ChatService.createChat(chatName, participants, '', 'direct');
+        logger.debug('Created new chat:', { chatId: newChat.id, name: newChat.name });
+        
+        // Add the new chat to our store
+        await loadChats();
+        
+        // Select the newly created chat
+        handleChatSelect(newChat);
+        updateState({ showNewChatDialog: false, isLoading: false });
+      } catch (chatError) {
+        logger.error('Failed to create chat in service:', chatError);
+        
+        // Create a temporary chat if the service fails
+        const tempChat: Chat = {
+          id: `temp-chat-${Date.now()}`,
+          name: chatName,
+          type: 'direct',
+          participants,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        logger.debug('Created temporary chat:', { chatId: tempChat.id });
+        handleChatSelect(tempChat);
+        updateState({ showNewChatDialog: false, isLoading: false });
+      }
     } catch (error) {
-      logger.error('Failed to create direct chat:', error);
+      logger.error('Error creating direct chat:', error);
+      updateState({ isLoading: false });
     }
   };
 
   const handleCreateGroupChat = async () => {
-    if (!authState.currentUser || !groupName.trim() || selectedUsers.length === 0) return;
+    if (!authState.currentUser || selectedUsers.length === 0 || !groupName.trim()) {
+      return;
+    }
+    
     try {
+      // Add current user to participants
       const participants = [
         authState.currentUser.studentId,
-        ...selectedUsers.map(user => user.studentId)
+        ...selectedUsers.map(u => u.studentId)
       ];
-      const chat = await ChatService.createChat(groupName, participants);
-      setCurrentChat(chat);
-      setShowGroupDialog(false);
-      setGroupName('');
-      setSelectedUsers([]);
-      logger.info('Created group chat', { 
-        chatId: chat.id,
-        name: groupName,
-        participantCount: participants.length 
+      
+      // Create a new group chat
+      const newChat = await ChatService.createChat(groupName.trim(), participants, '', 'group');
+      
+      // Add the new chat to our store
+      await loadChats();
+      
+      // Select the newly created chat
+      handleChatSelect(newChat);
+      
+      // Reset the dialog state
+      updateState({ 
+        showGroupDialog: false,
+        selectedUsers: [],
+        groupName: ''
       });
     } catch (error) {
-      logger.error('Failed to create group chat:', error);
+      logger.error('Error creating group chat:', error);
     }
   };
 
   const handleSearch = (query: string) => {
-    setSearchQuery(query);
+    updateState({ searchQuery: query });
   };
 
   const handleNewChat = () => {
-    setShowNewChatDialog(true);
+    updateState({ showNewChatDialog: true });
   };
 
   const getChatDisplayName = (chat: Chat): string => {
-    if (chat.participants.length > 2) {
-      return chat.name;
-    }
-
-    const otherParticipantId = chat.participants.find(
-      id => id !== authState.currentUser?.studentId
-    );
+    if (chat.type === 'group') return chat.name;
     
-    if (otherParticipantId && chatUsers[otherParticipantId]) {
-      return chatUsers[otherParticipantId].name || chat.name;
+    // For direct chats, show the other person's name
+    if (chat.participants.length === 2) {
+      const otherUserId = chat.participants.find(
+        id => id !== authState.currentUser?.studentId
+      );
+      
+      if (otherUserId && chatUsers[otherUserId]) {
+        return chatUsers[otherUserId].name || 
+          `${chatUsers[otherUserId].firstName} ${chatUsers[otherUserId].lastName}`;
+      }
     }
-
+    
     return chat.name;
+  };
+
+  // Add a function to handle cache clearing
+  const handleClearCache = async () => {
+    try {
+      logger.debug('Clearing chat cache');
+      // Clear the chats in the store and reload
+      
+      updateState({ 
+        isLoading: true,
+        currentChat: null,
+        filteredChats: []
+      });
+      
+      // Wait a moment and reload chats
+      setTimeout(async () => {
+        await loadChats();
+        logger.debug('Chats reloaded after cache clear');
+        updateState({ isLoading: false });
+      }, 500);
+    } catch (error) {
+      logger.error('Error clearing cache and reloading chats:', error);
+      updateState({ isLoading: false });
+    }
   };
 
   return (
@@ -422,10 +402,7 @@ export const ChatPage: React.FC = () => {
               <h1 className="text-2xl font-bold">Chats</h1>
               <div className="flex gap-2">
                 <Button 
-                  onClick={() => {
-                    ChatService.clearCache();
-                    window.location.reload();
-                  }} 
+                  onClick={handleClearCache} 
                   size="icon" 
                   variant="ghost"
                   className="icon-button" 
@@ -434,7 +411,7 @@ export const ChatPage: React.FC = () => {
                   <X className="h-5 w-5" />
                 </Button>
                 <Button 
-                  onClick={() => setShowNewChatDialog(true)} 
+                  onClick={() => updateState({ showNewChatDialog: true })} 
                   size="icon" 
                   variant="ghost"
                   className="icon-button" 
@@ -443,7 +420,7 @@ export const ChatPage: React.FC = () => {
                   <MessageSquare className="h-5 w-5" />
                 </Button>
                 <Button 
-                  onClick={() => setShowGroupDialog(true)} 
+                  onClick={() => updateState({ showGroupDialog: true })} 
                   size="icon" 
                   variant="ghost"
                   className="icon-button" 
@@ -502,9 +479,9 @@ export const ChatPage: React.FC = () => {
                   <p className="text-sm text-muted-foreground truncate">
                     {chat.lastMessage?.content || 'No messages yet'}
                   </p>
-                  {unreadCounts[chat.id] > 0 && (
+                  {storeUnreadCounts[chat.id] > 0 && (
                     <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded-full">
-                      {unreadCounts[chat.id]}
+                      {storeUnreadCounts[chat.id]}
                     </span>
                   )}
                 </div>
@@ -514,7 +491,7 @@ export const ChatPage: React.FC = () => {
             <div className="flex flex-col items-center justify-center h-full p-4 text-center">
               <p className="text-muted-foreground mb-2">No chats found</p>
               <Button 
-                onClick={() => setShowNewChatDialog(true)} 
+                onClick={() => updateState({ showNewChatDialog: true })} 
                 variant="outline" 
                 size="sm"
               >
@@ -535,7 +512,7 @@ export const ChatPage: React.FC = () => {
             chat={currentChat} 
             onBack={() => {
               if (isMobile) {
-                setCurrentChat(null);
+                updateState({ currentChat: null });
               }
             }}
             isMobile={isMobile}
@@ -553,7 +530,10 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* New Chat Dialog */}
-      <Dialog open={showNewChatDialog} onOpenChange={setShowNewChatDialog}>
+      <Dialog 
+        open={showNewChatDialog} 
+        onOpenChange={(open) => updateState({ showNewChatDialog: open })}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New Direct Chat</DialogTitle>
@@ -610,7 +590,7 @@ export const ChatPage: React.FC = () => {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewChatDialog(false)}>
+            <Button variant="outline" onClick={() => updateState({ showNewChatDialog: false })}>
               Cancel
             </Button>
           </DialogFooter>
@@ -618,7 +598,10 @@ export const ChatPage: React.FC = () => {
       </Dialog>
 
       {/* Group Chat Dialog */}
-      <Dialog open={showGroupDialog} onOpenChange={setShowGroupDialog}>
+      <Dialog 
+        open={showGroupDialog} 
+        onOpenChange={(open) => updateState({ showGroupDialog: open })}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New Group Chat</DialogTitle>
@@ -632,7 +615,7 @@ export const ChatPage: React.FC = () => {
               <Label>Group Name</Label>
               <Input
                 value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
+                onChange={(e) => updateState({ groupName: e.target.value })}
                 placeholder="Enter group name..."
               />
             </div>
@@ -644,7 +627,7 @@ export const ChatPage: React.FC = () => {
                 <Input
                   value={userSearchQuery}
                   onChange={(e) => {
-                    setUserSearchQuery(e.target.value);
+                    updateState({ userSearchQuery: e.target.value });
                     handleUserSearch(e.target.value);
                   }}
                   placeholder="Search users..."
@@ -708,10 +691,12 @@ export const ChatPage: React.FC = () => {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => {
-              setShowGroupDialog(false);
-              setGroupName('');
-              setSelectedUsers([]);
-              setUserSearchQuery('');
+              updateState({
+                showGroupDialog: false,
+                groupName: '',
+                selectedUsers: [],
+                userSearchQuery: ''
+              });
             }}>
               Cancel
             </Button>

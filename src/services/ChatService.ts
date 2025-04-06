@@ -3,11 +3,13 @@ import { logger } from '../utils/logger';
 import { UserService } from './UserService';
 import { io, Socket } from 'socket.io-client';
 import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '../lib/supabaseClient';
 
 interface SerializedChat {
   id: string;
   postId?: string;
   name: string;
+  type: 'direct' | 'group';
   participants: string[];
   createdAt: string;
   updatedAt: string;
@@ -25,202 +27,341 @@ interface SerializedMessage {
 }
 
 export class ChatService {
-  private static chats: Chat[] = [];
-  private static messages: Record<string, ChatMessage[]> = {};
-  private static participants: ChatParticipant[] = [];
-  private static messageUpdateCallbacks: ((chatId: string) => void)[] = [];
-  private static typingUsers: Record<string, Set<string>> = {};
-  private static storageKey = 'alumbiBv1_chat_';
   private static socket: Socket | null = null;
   private static currentUserId: string | null = null;
   private static socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3006';
+  private static typingUsers: Record<string, Set<string>> = {};
 
-  // Initialize chats from storage and setup Socket.IO
+  // Check if the service has been initialized
+  static isInitialized(): boolean {
+    return this.currentUserId !== null && this.socket !== null;
+  }
+
+  // Clear any cached data
+  static clearCache(): void {
+    logger.debug('Clearing chat service cache');
+    this.socket?.disconnect();
+    this.socket = null;
+    this.currentUserId = null;
+    this.typingUsers = {};
+    
+    // Reconnect if needed
+    if (this.currentUserId) {
+      this.initialize(this.currentUserId);
+      logger.debug('Reinitialized chat service after cache clear');
+    }
+  }
+
+  // Initialize service with Socket.IO
   static initialize(userId: string): void {
     try {
       this.currentUserId = userId;
       
-      // Initialize Socket.IO connection
+      // Initialize Socket.IO connection with reconnection options
       this.socket = io(this.socketUrl, {
-        auth: { userId }
+        auth: { userId },
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
       });
 
       // Setup Socket.IO event handlers
       this.setupSocketHandlers();
 
-      // Load from shared storage
-      const savedChats = sessionStorage.getItem(this.storageKey + 'chats') || localStorage.getItem(this.storageKey + 'chats');
-      if (savedChats) {
-        const serializedChats: SerializedChat[] = JSON.parse(savedChats);
-        this.chats = serializedChats.map(chat => ({
-          ...chat,
-          lastMessage: undefined
-        }));
-      }
-
-      const savedMessages = sessionStorage.getItem(this.storageKey + 'messages') || localStorage.getItem(this.storageKey + 'messages');
-      if (savedMessages) {
-        const serializedMessages: Record<string, SerializedMessage[]> = JSON.parse(savedMessages);
-        this.messages = serializedMessages;
-      }
-
-      const savedParticipants = sessionStorage.getItem(this.storageKey + 'participants') || localStorage.getItem(this.storageKey + 'participants');
-      if (savedParticipants) {
-        this.participants = JSON.parse(savedParticipants);
-      }
-
-      // Add storage event listener for cross-tab/browser sync
-      window.addEventListener('storage', this.handleStorageChange.bind(this));
-
-      logger.info('Chat service initialized', {
-        chatCount: this.chats.length,
-        messageCount: Object.keys(this.messages).length,
-        participantCount: this.participants.length
-      });
+      logger.info('Chat service initialized', { userId });
     } catch (error) {
-      logger.error('Failed to initialize chats:', error);
-      this.chats = [];
-      this.messages = {};
-      this.participants = [];
+      logger.error('Failed to initialize chat service:', error);
     }
   }
 
-  // Setup Socket.IO event handlers
-  private static setupSocketHandlers(): void {
-    if (!this.socket) return;
-
-    this.socket.on('connect', () => {
-      logger.info('Connected to chat server');
-    });
-
-    this.socket.on('disconnect', () => {
-      logger.warn('Disconnected from chat server');
-    });
-
-    this.socket.on('new_message', (message: ChatMessage) => {
-      logger.debug('Received new message:', message);
-      this.handleNewMessage(message);
+  // Get messages for a specific chat from Supabase
+  static async getChatMessages(chatId: string): Promise<ChatMessage[]> {
+    try {
+      logger.debug('Getting messages for chat:', { chatId });
       
-      // Notify all subscribers about the new message
-      this.messageUpdateCallbacks.forEach(callback => {
-        try {
-          callback(message.chatId);
-          logger.debug('Notified subscriber about new message in chat:', message.chatId);
-        } catch (error) {
-          logger.error('Error in message update callback:', error);
-        }
-      });
-    });
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
 
-    this.socket.on('user_typing', ({ chatId, userId }: { chatId: string; userId: string }) => {
-      logger.debug('User started typing:', { chatId, userId });
-      this.handleTypingStart(chatId, userId);
-    });
+      if (error) {
+        logger.error('Error loading messages from Supabase:', error);
+        return [];
+      }
 
-    this.socket.on('stopTyping', ({ chatId, userId }: { chatId: string; userId: string }) => {
-      logger.debug('User stopped typing:', { chatId, userId });
-      this.handleTypingStop(chatId, userId);
-    });
+      if (!data || data.length === 0) {
+        logger.debug('No messages found for chat:', { chatId });
+        return [];
+      }
 
-    this.socket.on('userJoined', ({ chatId, userId }: { chatId: string; userId: string }) => {
-      logger.debug('User joined chat:', { chatId, userId });
-      this.handleUserJoined(chatId, userId);
-    });
-
-    this.socket.on('userLeft', ({ chatId, userId }: { chatId: string; userId: string }) => {
-      logger.debug('User left chat:', { chatId, userId });
-      this.handleUserLeft(chatId, userId);
-    });
-  }
-
-  // Handle new message from server
-  private static handleNewMessage(message: ChatMessage): void {
-    if (!this.messages[message.chatId]) {
-      this.messages[message.chatId] = [];
+      logger.debug('Loaded messages from database:', { chatId, count: data.length });
+      
+      return data.map(msg => ({
+        id: msg.id,
+        chatId: msg.chat_id,
+        senderId: msg.sender_id,
+        content: msg.content,
+        timestamp: msg.created_at,
+        readBy: msg.read_by || []
+      }));
+    } catch (error) {
+      logger.error('Failed to get chat messages:', error);
+      return [];
     }
-    this.messages[message.chatId].push(message);
-    this.saveMessages();
-    this.messageUpdateCallbacks.forEach(callback => callback(message.chatId));
-  }
-
-  // Handle typing start
-  private static handleTypingStart(chatId: string, userId: string): void {
-    if (!this.typingUsers[chatId]) {
-      this.typingUsers[chatId] = new Set();
-    }
-    this.typingUsers[chatId].add(userId);
-  }
-
-  // Handle typing stop
-  private static handleTypingStop(chatId: string, userId: string): void {
-    if (this.typingUsers[chatId]) {
-      this.typingUsers[chatId].delete(userId);
-    }
-  }
-
-  // Handle user joined
-  private static handleUserJoined(chatId: string, userId: string): void {
-    this.addParticipant(chatId, userId);
-  }
-
-  // Handle user left
-  private static handleUserLeft(chatId: string, userId: string): void {
-    this.removeParticipant(chatId, userId);
   }
 
   // Send a message in a chat
-  static sendMessage(chatId: string, senderId: string, content: string): ChatMessage {
+  static async sendMessage(chatId: string, senderId: string, content: string): Promise<ChatMessage> {
     try {
       logger.debug('Sending message:', { chatId, senderId, contentLength: content.length });
       
+      const messageId = `msg-${Date.now()}`;
+      const timestamp = new Date().toISOString();
+      
       const message: ChatMessage = {
-        id: uuidv4(),
+        id: messageId,
         chatId,
         senderId,
         content,
-        timestamp: new Date().toISOString(),
+        timestamp,
         readBy: [senderId]
       };
 
-      // Send message through Socket.IO
+      // Try to insert message into Supabase
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          id: message.id,
+          chat_id: message.chatId,
+          sender_id: message.senderId,
+          content: message.content,
+          created_at: message.timestamp,
+          updated_at: message.timestamp,
+          read_by: message.readBy
+        })
+        .select()
+        .single();
+
+      if (error) {
+        logger.error('Error inserting message into Supabase:', error);
+        logger.warn('Returning fake message due to database error');
+        // Still return the message so the UI can display it
+        return message;
+      }
+
+      // Try to update chat's last message
+      const { error: updateError } = await supabase
+        .from('chats')
+        .update({
+          last_message_id: message.id,
+          last_message_time: message.timestamp,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', chatId);
+
+      if (updateError) {
+        logger.error('Error updating chat last message:', updateError);
+      }
+
+      // Send message through Socket.IO for real-time updates
       if (this.socket) {
         logger.debug('Emitting message through Socket.IO:', message);
         this.socket.emit('send_message', message);
       } else {
-        logger.warn('Socket not connected, message will not be sent to server');
-      }
-
-      // Update local state
-      if (!this.messages[chatId]) {
-        this.messages[chatId] = [];
-      }
-      this.messages[chatId].push(message);
-
-      // Update chat's lastMessage and timestamps
-      const chat = this.chats.find(c => c.id === chatId);
-      if (chat) {
-        chat.lastMessageId = message.id;
-        chat.lastMessageTime = message.timestamp;
-        chat.updatedAt = new Date().toISOString();
-        chat.lastMessage = message;
-        this.saveChats();
+        logger.warn('Socket not connected, cannot send real-time update');
       }
 
       return message;
     } catch (error) {
       logger.error('Failed to send message:', error);
-      throw error;
+      
+      // Create a fallback message
+      const messageId = `msg-error-${Date.now()}`;
+      const timestamp = new Date().toISOString();
+      
+      const fallbackMessage: ChatMessage = {
+        id: messageId,
+        chatId,
+        senderId,
+        content,
+        timestamp,
+        readBy: [senderId]
+      };
+      
+      logger.warn('Returning fallback message due to exception:', fallbackMessage);
+      return fallbackMessage;
     }
   }
 
-  // Set typing status
-  static setTypingStatus(chatId: string, userId: string, isTyping: boolean): void {
-    if (this.socket) {
-      if (isTyping) {
-        this.socket.emit('typing', { chatId, userId });
-      } else {
-        this.socket.emit('stop_typing', { chatId, userId });
+  // Create a new chat (for both group and 1-1)
+  static async createChat(
+    name: string, 
+    participants: string[], 
+    postId: string = '', 
+    type: 'direct' | 'group' = 'group'
+  ): Promise<Chat> {
+    try {
+      logger.debug(`Creating new chat "${name}" with participants:`, participants);
+      
+      // Generate a unique ID for the chat
+      const chatId = `chat-${Date.now()}`;
+      
+      // Prepare chat object for Supabase
+      const newChat = {
+        id: chatId,
+        post_id: postId,
+        name,
+        type,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        last_message_id: null,
+        last_message_time: null
+      };
+
+      // Try to insert chat into Supabase
+      const { data: chatData, error: chatError } = await supabase
+        .from('chats')
+        .insert(newChat)
+        .select()
+        .single();
+
+      if (chatError) {
+        logger.error('Error creating chat in Supabase:', {
+          error: chatError,
+          message: chatError.message,
+          details: chatError.details
+        });
+        
+        // Return a local chat object even if database insertion failed
+        logger.debug('Returning local chat object after database error');
+        return {
+          id: chatId,
+          postId: postId,
+          name,
+          type,
+          participants,
+          createdAt: newChat.created_at,
+          updatedAt: newChat.updated_at,
+          lastMessageId: undefined,
+          lastMessageTime: undefined
+        };
       }
+
+      logger.debug('Chat created successfully in database:', {
+        chatId: chatData.id,
+        name: chatData.name
+      });
+      
+      // Try to add participants
+      const participantAddSuccess = await this.addParticipantsToChat(chatId, participants);
+      if (!participantAddSuccess) {
+        logger.error('Failed to add all participants to chat:', {
+          chatId,
+          participants
+        });
+      }
+
+      // Convert to local format and return
+      const chat: Chat = {
+        id: chatData.id,
+        postId: chatData.post_id,
+        name: chatData.name,
+        type: chatData.type,
+        participants, // Use the participants array we tried to add
+        createdAt: chatData.created_at,
+        updatedAt: chatData.updated_at,
+        lastMessageId: chatData.last_message_id,
+        lastMessageTime: chatData.last_message_time
+      };
+      
+      logger.debug('Returning chat:', chat);
+      return chat;
+    } catch (error) {
+      logger.error('Error in createChat:', error);
+      
+      // Create a fallback chat to ensure the UI can continue to function
+      const fallbackChatId = `fallback-chat-${Date.now()}`;
+      
+      logger.debug('Returning fallback chat due to error');
+      return {
+        id: fallbackChatId,
+        name,
+        type,
+        participants,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+  }
+  
+  // Helper to add participants to a chat
+  private static async addParticipantsToChat(chatId: string, participants: string[]): Promise<boolean> {
+    try {
+      logger.debug('Adding participants to chat:', { chatId, participants });
+      
+      const participantRecords = participants.map(userId => ({
+        chat_id: chatId,
+        user_id: userId,
+        joined_at: new Date().toISOString()
+      }));
+
+      // Insert all participants
+      const { error: participantError } = await supabase
+        .from('chat_participants')
+        .insert(participantRecords);
+
+      if (participantError) {
+        logger.error('Error adding participants:', {
+          error: participantError,
+          message: participantError.message
+        });
+        return false;
+      }
+      
+      logger.debug('Successfully added participants to chat');
+      return true;
+    } catch (error) {
+      logger.error('Error in addParticipantsToChat:', error);
+      return false;
+    }
+  }
+
+  // Add typing indicator
+  static addTypingUser(chatId: string, userId: string): void {
+    try {
+      if (!this.typingUsers[chatId]) {
+        this.typingUsers[chatId] = new Set();
+      }
+      this.typingUsers[chatId].add(userId);
+    } catch (error) {
+      logger.error('Failed to add typing user:', error);
+    }
+  }
+
+  // Remove typing indicator
+  static removeTypingUser(chatId: string, userId: string): void {
+    try {
+      if (this.typingUsers[chatId]) {
+        this.typingUsers[chatId].delete(userId);
+      }
+    } catch (error) {
+      logger.error('Failed to remove typing user:', error);
+    }
+  }
+
+  // Get typing users for a chat
+  static getTypingUsers(chatId: string, currentUserId: string): string[] {
+    try {
+      const typingSet = this.typingUsers[chatId];
+      if (!typingSet) return [];
+      // Filter out current user from typing indicators
+      return Array.from(typingSet).filter(id => id !== currentUserId);
+    } catch (error) {
+      logger.error('Failed to get typing users:', error);
+      return [];
     }
   }
 
@@ -240,458 +381,219 @@ export class ChatService {
     }
   }
 
-  // Handle storage changes from other tabs/windows
-  private static handleStorageChange(event: StorageEvent): void {
-    logger.debug('Storage event detected:', { 
-      key: event.key,
-      oldValue: event.oldValue?.substring(0, 50) + '...',
-      newValue: event.newValue?.substring(0, 50) + '...',
-    });
-    
-    if (!event.key?.startsWith(this.storageKey)) return;
-
+  // Get user's chats from Supabase
+  static async getUserChats(userId: string): Promise<Chat[]> {
     try {
-      if (event.key === this.storageKey + 'messages' && event.newValue) {
-        logger.debug('Processing messages storage change');
+      logger.debug('Getting user chats from Supabase:', { userId });
+      
+      // Try to fetch existing chats
+      try {
+        logger.debug('Fetching chats for user:', { userId });
         
-        const newMessages: Record<string, SerializedMessage[]> = JSON.parse(event.newValue);
-        let hasUpdates = false;
-
-        Object.entries(newMessages).forEach(([chatId, messages]) => {
-          const currentMessages = this.messages[chatId] || [];
-          const newMsgs = messages.filter(msg => 
-            !currentMessages.some(current => current.id === msg.id)
-          );
-
-          if (newMsgs.length > 0) {
-            logger.debug(`Found ${newMsgs.length} new messages from storage event for chat ${chatId}`);
-            
-            this.messages[chatId] = [...currentMessages, ...newMsgs].sort((a, b) => 
-              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-            );
-            hasUpdates = true;
-          }
+        // Query for all chats where this user is a participant
+        const { data: participantData, error: participantError } = await supabase
+          .from('chat_participants')
+          .select('chat_id')
+          .eq('user_id', userId);
+          
+        if (participantError) {
+          logger.error('Error querying chat_participants:', {
+            error: participantError,
+            message: participantError.message
+          });
+          return [];
+        }
+        
+        if (!participantData || participantData.length === 0) {
+          logger.debug('No chat participants found for user');
+          return [];
+        }
+        
+        const chatIds = participantData.map((p: { chat_id: string }) => p.chat_id);
+        logger.debug('Found chat IDs:', chatIds);
+        
+        // Get chat details
+        const { data: chatData, error: chatError } = await supabase
+          .from('chats')
+          .select('*')
+          .in('id', chatIds);
+          
+        if (chatError) {
+          logger.error('Error querying chats:', {
+            error: chatError,
+            message: chatError.message
+          });
+          return [];
+        }
+        
+        if (!chatData || chatData.length === 0) {
+          logger.debug('No chats found for user');
+          return [];
+        }
+        
+        // Get all participants for these chats
+        const { data: allParticipants, error: allParticipantsError } = await supabase
+          .from('chat_participants')
+          .select('*')
+          .in('chat_id', chatIds);
+          
+        if (allParticipantsError) {
+          logger.error('Error fetching all participants:', {
+            error: allParticipantsError,
+            message: allParticipantsError.message
+          });
+          return [];
+        }
+        
+        // Convert to the format expected by the store
+        const chats: Chat[] = chatData.map((chat: any) => {
+          // Get participants for this chat
+          const chatParticipants = allParticipants
+            ? allParticipants.filter((p: any) => p.chat_id === chat.id)
+                              .map((p: any) => p.user_id)
+            : [userId];
+          
+          return {
+            id: chat.id,
+            name: chat.name,
+            type: chat.type || 'direct',
+            participants: chatParticipants,
+            createdAt: chat.created_at,
+            updatedAt: chat.updated_at,
+            lastMessageId: chat.last_message_id,
+            lastMessageTime: chat.last_message_time
+          };
         });
-
-        if (hasUpdates) {
-          logger.debug('Notifying subscribers about new messages from storage event');
-          this.messageUpdateCallbacks.forEach(callback => callback(Object.keys(newMessages)[0]));
-        }
+        
+        logger.debug('Returning chats from database:', { count: chats.length });
+        return chats;
+      } catch (dbError) {
+        logger.error('Failed to query database:', dbError);
+        return [];
       }
     } catch (error) {
-      logger.error('Error handling storage change:', error);
-    }
-  }
-
-  // Save to both localStorage and sessionStorage
-  private static saveToStorage(key: string, value: any): void {
-    const fullKey = this.storageKey + key;
-    const serialized = JSON.stringify(value);
-    try {
-      localStorage.setItem(fullKey, serialized);
-      sessionStorage.setItem(fullKey, serialized);
-    } catch (error) {
-      logger.error('Failed to save to storage:', error);
-    }
-  }
-
-  // Save messages
-  private static saveMessages(): void {
-    try {
-      const serializedMessages: Record<string, SerializedMessage[]> = {};
-      Object.entries(this.messages).forEach(([chatId, messages]) => {
-        serializedMessages[chatId] = messages.map(msg => ({
-          id: msg.id,
-          chatId: msg.chatId,
-          senderId: msg.senderId,
-          content: msg.content,
-          timestamp: msg.timestamp,
-          readBy: msg.readBy
-        }));
-      });
-      this.saveToStorage('messages', serializedMessages);
-    } catch (error) {
-      logger.error('Failed to save messages:', error);
-    }
-  }
-
-  // Save chats
-  private static saveChats(): void {
-    try {
-      const serializedChats: SerializedChat[] = this.chats.map(chat => ({
-        id: chat.id,
-        postId: chat.postId,
-        name: chat.name,
-        participants: chat.participants,
-        createdAt: chat.createdAt,
-        updatedAt: chat.updatedAt,
-        lastMessageId: chat.lastMessageId,
-        lastMessageTime: chat.lastMessageTime
-      }));
-      this.saveToStorage('chats', serializedChats);
-    } catch (error) {
-      logger.error('Failed to save chats:', error);
-    }
-  }
-
-  // Save participants
-  private static saveParticipants(): void {
-    try {
-      this.saveToStorage('participants', this.participants);
-    } catch (error) {
-      logger.error('Failed to save participants:', error);
-    }
-  }
-
-  // Get chats for a specific user with diagnostic logging
-  static getUserChats(userId: string): Chat[] {
-    try {
-      logger.debug(`Getting chats for user ${userId}`);
-      const userChats = this.chats.filter(chat => 
-        chat.participants.includes(userId)
-      );
-      
-      logger.debug(`Found ${userChats.length} chats for user ${userId}:`, 
-        userChats.map(c => ({ id: c.id, name: c.name, participants: c.participants }))
-      );
-      
-      return userChats;
-    } catch (error) {
-      logger.error('Failed to get user chats:', error);
+      logger.error('Error in getUserChats:', error);
       return [];
     }
   }
 
-  // Create a new chat (for both group and 1-1)
-  static createChat(name: string, participants: string[], postId: string = ''): Chat {
+  // Get unread message count for a chat
+  static async getUnreadMessageCount(chatId: string, userId: string): Promise<number> {
     try {
-      logger.debug(`Creating new chat "${name}" with participants:`, participants);
-      
-      const chatId = `chat-${Date.now()}`;
-      const newChat: Chat = {
-        id: chatId,
-        postId,
-        name,
-        participants,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        lastMessageId: undefined,
-        lastMessageTime: undefined,
-        lastMessage: undefined
-      };
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('id')
+        .eq('chat_id', chatId)
+        .not('read_by', 'cs', `{${userId}}`); // Using studentId for read_by
 
-      this.chats.push(newChat);
-      this.saveChats();
-      
-      // Initialize empty message array for this chat
-      this.messages[chatId] = [];
-      this.saveMessages();
-      
-      // Add participants
-      participants.forEach(userId => {
-        const participant: ChatParticipant = {
-          chatId,
-          userId,
-          joinedAt: new Date().toISOString()
-        };
-        this.participants.push(participant);
-      });
-      this.saveParticipants();
-      
-      // Emit event to server to save chat and participants
-      if (this.socket) {
-        logger.debug('Emitting create_chat event to server:', newChat);
-        this.socket.emit('create_chat', newChat);
-      } else {
-        logger.warn('Socket not connected, chat will not be saved to server');
-      }
-      
-      logger.debug(`Chat created successfully with ID ${chatId}`, newChat);
-      return newChat;
-    } catch (error) {
-      logger.error('Failed to create chat:', error);
-      throw error;
-    }
-  }
-
-  // Create a direct chat between two users
-  static async createDirectChat(userId1: string, userId2: string): Promise<Chat> {
-    try {
-      logger.debug(`Creating direct chat between users ${userId1} and ${userId2}`);
-      
-      // Check if chat already exists
-      const existingChat = this.chats.find(chat => 
-        chat.participants.length === 2 && 
-        chat.participants.includes(userId1) && 
-        chat.participants.includes(userId2)
-      );
-      
-      if (existingChat) {
-        logger.debug('Direct chat already exists:', existingChat);
-        return existingChat;
-      }
-      
-      // Get user names for chat name
-      const user1 = await UserService.findUserById(userId1);
-      const user2 = await UserService.findUserById(userId2);
-      
-      // Create chat name as combination of first names or IDs if names not available
-      const chatName = `${user1?.name || userId1}, ${user2?.name || userId2}`;
-      
-      return this.createChat(chatName, [userId1, userId2]);
-    } catch (error) {
-      logger.error('Failed to create direct chat:', error);
-      throw error;
-    }
-  }
-
-  // Get direct chats for a user
-  static getDirectChats(userId: string): Chat[] {
-    try {
-      return this.chats.filter(chat => 
-        chat.participants.length === 2 && 
-        chat.participants.includes(userId)
-      );
-    } catch (error) {
-      logger.error('Failed to get direct chats:', error);
-      return [];
-    }
-  }
-
-  // Get group chats for a user
-  static getGroupChats(userId: string): Chat[] {
-    try {
-      return this.chats.filter(chat => 
-        chat.participants.length > 2 && 
-        chat.participants.includes(userId)
-      );
-    } catch (error) {
-      logger.error('Failed to get group chats:', error);
-      return [];
-    }
-  }
-
-  // Get a chat by ID
-  static getChat(chatId: string): Chat | null {
-    try {
-      const chat = this.chats.find(c => c.id === chatId);
-      
-      if (chat) {
-        // Get last message if available
-        if (chat.lastMessageId && !chat.lastMessage) {
-          const messages = this.messages[chatId] || [];
-          chat.lastMessage = messages.find(m => m.id === chat.lastMessageId);
-        }
-      }
-      
-      return chat || null;
-    } catch (error) {
-      logger.error('Failed to get chat:', error);
-      return null;
-    }
-  }
-
-  // Get messages for a specific chat
-  static getChatMessages(chatId: string): ChatMessage[] {
-    try {
-      // Always get fresh messages from localStorage
-      const savedMessages = localStorage.getItem(this.storageKey + 'messages');
-      if (savedMessages) {
-        const storedMessages: Record<string, SerializedMessage[]> = JSON.parse(savedMessages);
-        if (storedMessages[chatId]) {
-          this.messages[chatId] = storedMessages[chatId];
-        }
-      }
-      return this.messages[chatId] || [];
-    } catch (error) {
-      logger.error('Failed to get chat messages:', error);
-      return [];
-    }
-  }
-
-  // Add a participant to a chat
-  static addParticipant(chatId: string, userId: string): void {
-    try {
-      const chat = this.chats.find(c => c.id === chatId);
-      if (!chat) {
-        logger.error('Chat not found when adding participant');
-        throw new Error('Chat not found');
+      if (error) {
+        logger.error('Error getting unread message count:', error);
+        return 0;
       }
 
-      if (chat.participants.includes(userId)) {
-        logger.warn('User is already a participant in this chat');
-        return;
-      }
-
-      // Add user to participants
-      chat.participants.push(userId);
-      this.participants.push({
-        chatId,
-        userId,
-        joinedAt: new Date().toISOString()
-      });
-
-      this.saveChats();
-      this.saveParticipants();
-      
-      // Emit event to server to save participant
-      if (this.socket) {
-        logger.debug('Emitting add_participant event to server:', { chatId, userId });
-        this.socket.emit('add_participant', { chatId, userId });
-      } else {
-        logger.warn('Socket not connected, participant will not be saved to server');
-      }
-      
-      logger.info('Participant added to chat', { chatId, userId });
-    } catch (error) {
-      logger.error('Failed to add participant:', error);
-      throw error;
-    }
-  }
-
-  // Mark messages as read by a user
-  static markMessagesAsRead(chatId: string, userId: string): void {
-    try {
-      const messages = this.messages[chatId] || [];
-      let updated = false;
-
-      messages.forEach(message => {
-        if (!message.readBy.includes(userId)) {
-          message.readBy.push(userId);
-          updated = true;
-        }
-      });
-
-      if (updated) {
-        this.saveMessages();
-        logger.debug('Messages marked as read', { chatId, userId });
-      }
-    } catch (error) {
-      logger.error('Failed to mark messages as read:', error);
-    }
-  }
-
-  // Get count of unread messages in a chat for a user
-  static getUnreadMessageCount(chatId: string, userId: string): number {
-    try {
-      const messages = this.messages[chatId] || [];
-      return messages.filter(message => !message.readBy.includes(userId)).length;
+      return data?.length || 0;
     } catch (error) {
       logger.error('Failed to get unread message count:', error);
       return 0;
     }
   }
 
-  // Remove a participant from a chat
-  static removeParticipant(chatId: string, userId: string): void {
+  // Mark messages as read
+  static async markMessagesAsRead(chatId: string, userId: string): Promise<void> {
     try {
-      const chat = this.chats.find(c => c.id === chatId);
-      if (!chat) {
-        logger.error('Chat not found when removing participant');
-        throw new Error('Chat not found');
-      }
-
-      // Remove user from chat.participants
-      chat.participants = chat.participants.filter(id => id !== userId);
-
-      // Remove participant entry
-      this.participants = this.participants.filter(
-        p => !(p.chatId === chatId && p.userId === userId)
-      );
-
-      this.saveChats();
-      this.saveParticipants();
+      logger.debug('Marking messages as read:', { chatId, userId });
       
-      // Emit event to server to remove participant
-      if (this.socket) {
-        logger.debug('Emitting remove_participant event to server:', { chatId, userId });
-        this.socket.emit('remove_participant', { chatId, userId });
-      } else {
-        logger.warn('Socket not connected, participant will not be removed from server');
+      // Simple validation
+      if (!chatId || !userId) {
+        logger.error('Invalid parameters for markMessagesAsRead:', { chatId, userId });
+        return;
       }
       
-      logger.info('Participant removed from chat', { chatId, userId });
-    } catch (error) {
-      logger.error('Failed to remove participant:', error);
-      throw error;
-    }
-  }
+      // Try to get unread messages
+      const { data: messages, error: fetchError } = await supabase
+        .from('chat_messages')
+        .select('id, read_by')
+        .eq('chat_id', chatId)
+        .not('read_by', 'cs', `{${userId}}`); // Using userId for read_by
 
-  // Helper method to get user by ID (this should be replaced with actual user service call)
-  private static getUserById(userId: string): { name: string } | null {
-    return { name: `User ${userId.substring(0, 5)}` };
-  }
-
-  // Clear all chat data from localStorage
-  static clearCache(): void {
-    try {
-      localStorage.removeItem(this.storageKey + 'chats');
-      localStorage.removeItem(this.storageKey + 'messages');
-      localStorage.removeItem(this.storageKey + 'participants');
-      localStorage.removeItem(this.storageKey + 'typing');
-      sessionStorage.removeItem(this.storageKey + 'chats');
-      sessionStorage.removeItem(this.storageKey + 'messages');
-      sessionStorage.removeItem(this.storageKey + 'participants');
-      sessionStorage.removeItem(this.storageKey + 'typing');
-      localStorage.removeItem('__alumbiBv1_shared_messages');
-      this.chats = [];
-      this.messages = {};
-      this.participants = [];
-      logger.info('Chat cache cleared');
-    } catch (error) {
-      logger.error('Failed to clear chat cache:', error);
-    }
-  }
-
-  // Add typing indicator
-  static addTypingUser(chatId: string, userId: string): void {
-    try {
-      if (!this.typingUsers[chatId]) {
-        this.typingUsers[chatId] = new Set();
+      if (fetchError) {
+        logger.error('Error fetching unread messages:', fetchError);
+        return;
       }
-      this.typingUsers[chatId].add(userId);
       
-      // Convert Sets to arrays for storage
-      const typingData: Record<string, string[]> = {};
-      Object.keys(this.typingUsers).forEach(cid => {
-        typingData[cid] = Array.from(this.typingUsers[cid]);
+      // No messages to mark as read
+      if (!messages || messages.length === 0) {
+        logger.debug('No unread messages found:', { chatId, userId });
+        return;
+      }
+      
+      logger.debug(`Found ${messages.length} messages to mark as read:`, { 
+        chatId, 
+        messageIds: messages.map(m => m.id)
+      });
+
+      // Update each message's read_by array
+      const updatePromises = messages.map(async (message) => {
+        try {
+          const readBy = message.read_by || [];
+          if (!readBy.includes(userId)) {
+            const { error: updateError } = await supabase
+              .from('chat_messages')
+              .update({ read_by: [...readBy, userId] })
+              .eq('id', message.id);
+
+            if (updateError) {
+              logger.error('Error marking message as read:', { 
+                error: updateError, 
+                messageId: message.id 
+              });
+            } else {
+              logger.debug('Marked message as read:', { messageId: message.id });
+            }
+          }
+        } catch (error) {
+          logger.error('Error in message update:', { error, messageId: message.id });
+        }
       });
       
-      localStorage.setItem(this.storageKey + 'typing', JSON.stringify(typingData));
+      // Wait for all updates to complete
+      await Promise.all(updatePromises);
+      logger.debug('All messages marked as read:', { 
+        chatId, 
+        count: messages.length 
+      });
     } catch (error) {
-      logger.error('Failed to add typing user:', error);
+      logger.error('Failed to mark messages as read:', error);
     }
   }
 
-  // Remove typing indicator
-  static removeTypingUser(chatId: string, userId: string): void {
-    try {
-      if (this.typingUsers[chatId]) {
-        this.typingUsers[chatId].delete(userId);
-        
-        // Convert Sets to arrays for storage
-        const typingData: Record<string, string[]> = {};
-        Object.keys(this.typingUsers).forEach(cid => {
-          typingData[cid] = Array.from(this.typingUsers[cid]);
-        });
-        
-        localStorage.setItem(this.storageKey + 'typing', JSON.stringify(typingData));
-      }
-    } catch (error) {
-      logger.error('Failed to remove typing user:', error);
+  // Subscribe to message updates
+  static subscribeToMessageUpdates(callback: (chatId: string) => void): void {
+    if (!this.socket) {
+      logger.error('Cannot subscribe to message updates: Socket not initialized');
+      return;
     }
+
+    this.socket.on('message_update', (chatId: string) => {
+      logger.debug('Received message update for chat:', chatId);
+      callback(chatId);
+    });
   }
 
-  // Get typing users for a chat
-  static getTypingUsers(chatId: string, currentUserId: string): string[] {
-    try {
-      const typingSet = this.typingUsers[chatId];
-      if (!typingSet) return [];
-      // Filter out current user from typing indicators
-      return Array.from(typingSet).filter(id => id !== currentUserId);
-    } catch (error) {
-      logger.error('Failed to get typing users:', error);
-      return [];
-    }
+  // Setup Socket.IO event handlers
+  private static setupSocketHandlers(): void {
+    if (!this.socket) return;
+
+    this.socket.on('connect', () => {
+      logger.info('Socket.IO connected');
+    });
+
+    this.socket.on('disconnect', () => {
+      logger.warn('Socket.IO disconnected');
+    });
+
+    this.socket.on('error', (error) => {
+      logger.error('Socket.IO error:', error);
+    });
   }
 } 

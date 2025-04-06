@@ -1,285 +1,196 @@
 import { create } from 'zustand';
-import { Chat, ChatMessage, ChatParticipant } from '../models/Chat';
+import { Chat, ChatMessage } from '../models/Chat';
 import { ChatService } from '../services/ChatService';
 import { logger } from '../utils/logger';
 import { User } from '../models/User';
 
-interface ChatStore {
+export interface ChatStore {
   chats: Chat[];
-  currentChat: Chat | null;
   messages: Record<string, ChatMessage[]>;
-  loading: boolean;
-  error: string | null;
-  typingUsers: Record<string, Set<string>>;
   unreadCounts: Record<string, number>;
   currentUser: User | null;
-  
-  // Actions
-  initialize: () => Promise<void>;
-  setCurrentChat: (chat: Chat | null) => void;
+  loading: boolean;
+  error: string | null;
+  loadChats: () => Promise<void>;
+  loadMessages: (chatId: string) => Promise<void>;
   sendMessage: (chatId: string, content: string) => Promise<void>;
   markAsRead: (chatId: string) => Promise<void>;
-  addTypingUser: (chatId: string, userId: string) => void;
-  removeTypingUser: (chatId: string, userId: string) => void;
-  updateUnreadCount: (chatId: string) => void;
-  refreshChats: () => Promise<void>;
-  loadMessages: (chatId: string) => Promise<void>;
   setCurrentUser: (user: User | null) => void;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
   chats: [],
-  currentChat: null,
   messages: {},
-  loading: false,
-  error: null,
-  typingUsers: {},
   unreadCounts: {},
   currentUser: null,
+  loading: false,
+  error: null,
 
+  // Set current user for the chat store
   setCurrentUser: (user) => {
     logger.debug('Setting current user in chat store:', user ? {
       userId: user.studentId,
       name: user.name,
       email: user.email
     } : 'null');
+    
     set({ currentUser: user });
+    
+    // Initialize Chat Service if user is set
+    if (user) {
+      if (!ChatService.isInitialized()) {
+        ChatService.initialize(user.studentId);
+      }
+    }
   },
 
-  initialize: async () => {
+  // Load all chats for the current user
+  loadChats: async () => {
     try {
       set({ loading: true, error: null });
-      logger.debug('Initializing chat store');
+      logger.debug('Loading chats');
       
-      ChatService.initialize();
-      const { currentUser } = get();
+      const currentUser = get().currentUser;
+      if (!currentUser) {
+        logger.error('Cannot load chats: No current user');
+        set({ loading: false, error: 'No current user' });
+        return;
+      }
       
-      if (currentUser) {
-        logger.debug('Current user found in chat store:', {
-          userId: currentUser.studentId,
-          name: currentUser.name,
-          email: currentUser.email
-        });
-        
-        const chats = ChatService.getUserChats(currentUser.studentId);
-        logger.debug(`Found ${chats.length} chats for user:`, 
-          chats.map(c => ({ id: c.id, name: c.name, participants: c.participants }))
-        );
-        
-        const messages: Record<string, ChatMessage[]> = {};
-        const unreadCounts: Record<string, number> = {};
-
-        // Load messages and unread counts for each chat
-        for (const chat of chats) {
-          messages[chat.id] = ChatService.getChatMessages(chat.id);
-          unreadCounts[chat.id] = ChatService.getUnreadMessageCount(chat.id, currentUser.studentId);
-          logger.debug(`Chat ${chat.id}: loaded ${messages[chat.id].length} messages, ${unreadCounts[chat.id]} unread`);
+      try {
+        // Initialize chat service if needed
+        if (!ChatService.isInitialized()) {
+          ChatService.initialize(currentUser.studentId);
         }
-
-        // Subscribe to message updates
-        ChatService.subscribeToMessageUpdates((chatId) => {
-          logger.debug(`Message update callback triggered for chat ${chatId}`);
-          
-          const updatedMessages = ChatService.getChatMessages(chatId);
-          logger.debug(`Loaded ${updatedMessages.length} messages for chat ${chatId}`);
-          
-          const chat = chats.find(c => c.id === chatId);
-          
-          if (chat) {
-            // Update messages
-            set(state => ({
-              messages: {
-                ...state.messages,
-                [chatId]: updatedMessages
-              }
-            }));
-            logger.debug(`Updated messages in store for chat ${chatId}`);
-
-            // Update unread count
-            const unreadCount = ChatService.getUnreadMessageCount(chatId, currentUser.studentId);
-            set(state => ({
-              unreadCounts: {
-                ...state.unreadCounts,
-                [chatId]: unreadCount
-              }
-            }));
-
-            // Update chat list
-            const updatedChats = ChatService.getUserChats(currentUser.studentId);
-            set({ chats: updatedChats });
-            logger.debug('Updated chat list after message update');
-          }
-        });
-
-        set({
-          chats,
-          messages,
-          unreadCounts,
-          loading: false
-        });
-        logger.debug('Chat store initialized successfully');
-      } else {
-        logger.debug('No current user found, skipping chat store initialization');
+        
+        const chats = await ChatService.getUserChats(currentUser.studentId);
+        logger.debug('Chats loaded:', { count: chats.length });
+        
+        set({ chats, loading: false });
+      } catch (chatError) {
+        logger.error('Error loading chats:', chatError);
+        set({ loading: false, error: 'Error loading chats' });
       }
     } catch (error) {
-      logger.error('Failed to initialize chat store:', error);
-      set({ error: 'Failed to initialize chat', loading: false });
+      logger.error('Failed to load chats:', error);
+      set({ loading: false, error: 'Failed to load chats' });
     }
   },
 
-  setCurrentChat: (chat) => {
-    set({ currentChat: chat });
-    if (chat) {
-      get().markAsRead(chat.id);
-      get().loadMessages(chat.id);
-    }
-  },
-
-  loadMessages: async (chatId) => {
+  // Load messages for a specific chat
+  loadMessages: async (chatId: string) => {
     try {
-      const messages = ChatService.getChatMessages(chatId);
-      // Update messages in store, ensuring no duplicates
-      set(state => {
-        const currentMessages = state.messages[chatId] || [];
-        const newMessages = messages.filter(msg => 
-          !currentMessages.some(existing => existing.id === msg.id)
-        );
+      set({ loading: true, error: null });
+      logger.debug('Loading messages for chat:', { chatId });
+      
+      const currentUser = get().currentUser;
+      if (!currentUser) {
+        logger.error('Cannot load messages: No current user');
+        set({ loading: false, error: 'No current user' });
+        return;
+      }
+      
+      try {
+        const messages = await ChatService.getChatMessages(chatId);
+        logger.debug('Messages loaded:', { chatId, count: messages.length });
         
-        if (newMessages.length === 0) {
-          return state;
-        }
-
-        return {
+        set(state => ({
           messages: {
             ...state.messages,
-            [chatId]: [...currentMessages, ...newMessages].sort((a, b) => 
-              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-            )
-          }
-        };
-      });
+            [chatId]: messages
+          },
+          loading: false
+        }));
+      } catch (chatError) {
+        logger.error('Error loading messages:', chatError);
+        set({ loading: false, error: 'Error loading messages' });
+      }
     } catch (error) {
       logger.error('Failed to load messages:', error);
+      set({ loading: false, error: 'Failed to load messages' });
     }
   },
 
-  sendMessage: async (chatId, content) => {
+  // Send a message
+  sendMessage: async (chatId: string, content: string) => {
     try {
-      const { currentUser } = get();
+      logger.debug('Sending message:', { chatId, content });
+      
+      const currentUser = get().currentUser;
       if (!currentUser) {
-        logger.error('Cannot send message: User not authenticated');
-        throw new Error('User not authenticated');
+        logger.error('Cannot send message: No current user');
+        return;
       }
-
-      logger.debug('Sending message from chat store:', {
-        chatId,
-        content,
-        userId: currentUser.studentId
-      });
       
-      // Send message
-      const message = ChatService.sendMessage(chatId, currentUser.studentId, content);
-      logger.debug('Message sent successfully, got response:', JSON.stringify(message));
+      // Create the message in Supabase
+      const message = await ChatService.sendMessage(chatId, currentUser.studentId, content);
       
-      // Update messages in store
+      if (!message) {
+        logger.error('No message returned from sendMessage');
+        return;
+      }
+      
+      logger.debug('Message sent successfully:', { messageId: message.id });
+      
+      // Add the message to the store
       set(state => {
-        const currentMessages = state.messages[chatId] || [];
-        if (currentMessages.some(m => m.id === message.id)) {
-          logger.debug('Message already exists in store, skipping update');
+        const existingMessages = state.messages[chatId] || [];
+        
+        // Check if the message already exists
+        if (existingMessages.some(m => m.id === message.id)) {
+          logger.debug('Message already exists in store:', { messageId: message.id });
           return state;
         }
         
-        logger.debug('Adding message to store');
+        logger.debug('Adding message to store:', { messageId: message.id });
+        
         return {
           messages: {
             ...state.messages,
-            [chatId]: [...currentMessages, message].sort((a, b) => 
-              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-            )
+            [chatId]: [...existingMessages, message]
           }
         };
       });
-
-      // Update chat list and trigger refresh
-      const updatedChats = ChatService.getUserChats(currentUser.studentId);
-      set({ chats: updatedChats });
-      logger.debug('Updated chat list after sending message');
       
+      // Update the chat list to show the latest message
+      await get().loadChats();
     } catch (error) {
       logger.error('Failed to send message:', error);
-      throw error;
     }
   },
 
-  markAsRead: async (chatId) => {
+  // Mark messages as read
+  markAsRead: async (chatId: string) => {
     try {
-      const { currentUser } = get();
-      if (!currentUser) return;
-
-      ChatService.markMessagesAsRead(chatId, currentUser.studentId);
-      set(state => ({
-        unreadCounts: {
-          ...state.unreadCounts,
-          [chatId]: 0
-        }
-      }));
+      logger.debug('Marking messages as read:', { chatId });
+      
+      const currentUser = get().currentUser;
+      if (!currentUser) {
+        logger.error('Cannot mark messages as read: No current user');
+        return;
+      }
+      
+      try {
+        // Mark messages as read in Supabase
+        await ChatService.markMessagesAsRead(chatId, currentUser.studentId);
+        
+        // Get the updated unread count
+        const unreadCount = await ChatService.getUnreadMessageCount(chatId, currentUser.studentId);
+        
+        // Update the unread count in the store
+        set(state => ({
+          unreadCounts: {
+            ...state.unreadCounts,
+            [chatId]: Number(unreadCount)
+          }
+        }));
+        
+        logger.debug('Messages marked as read:', { chatId, unreadCount });
+      } catch (markError) {
+        logger.error('Error marking messages as read:', markError);
+      }
     } catch (error) {
       logger.error('Failed to mark messages as read:', error);
-    }
-  },
-
-  addTypingUser: (chatId, userId) => {
-    const { currentUser } = get();
-    if (!currentUser || userId === currentUser.studentId) return;
-
-    ChatService.addTypingUser(chatId, userId);
-    set(state => ({
-      typingUsers: {
-        ...state.typingUsers,
-        [chatId]: new Set([...(state.typingUsers[chatId] || []), userId])
-      }
-    }));
-  },
-
-  removeTypingUser: (chatId, userId) => {
-    const { currentUser } = get();
-    if (!currentUser || userId === currentUser.studentId) return;
-
-    ChatService.removeTypingUser(chatId, userId);
-    set(state => {
-      const typingUsers = new Set(state.typingUsers[chatId] || []);
-      typingUsers.delete(userId);
-      return {
-        typingUsers: {
-          ...state.typingUsers,
-          [chatId]: typingUsers
-        }
-      };
-    });
-  },
-
-  updateUnreadCount: (chatId) => {
-    const { currentUser } = get();
-    if (!currentUser) return;
-
-    const count = ChatService.getUnreadMessageCount(chatId, currentUser.studentId);
-    set(state => ({
-      unreadCounts: {
-        ...state.unreadCounts,
-        [chatId]: count
-      }
-    }));
-  },
-
-  refreshChats: async () => {
-    try {
-      const { currentUser } = get();
-      if (!currentUser) return;
-
-      const chats = ChatService.getUserChats(currentUser.studentId);
-      set({ chats });
-    } catch (error) {
-      logger.error('Failed to refresh chats:', error);
     }
   }
 })); 

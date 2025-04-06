@@ -1,6 +1,11 @@
 ---
 description: 
 globs: 
+alwaysApply: false
+---
+---
+description: rule for managing the posts data, user data and chat data
+globs: 
 alwaysApply: true
 ---
 
@@ -9,3 +14,4 @@ alwaysApply: true
 - [posts.json](mdc:src/data/posts.json) contains the posts data. Currently we don't have real database. 
 - When user creates new post using [PostForm.tsx](mdc:src/components/Posts/PostForm.tsx) it doesn't save to the posts.json file instead caches. We have clear cache button in the [Posts.tsx](mdc:src/pages/Posts.tsx) to reset the cache and load data from posts.json
 - Any action done by the user should be saved with the studentId from the users database (currently [users.csv](mdc:public/data/users.csv)) such as likes, posts, comments and etc. In [posts.json](mdc:src/data/posts.json) PostedBy field is foreign key for the current profile(user). For example record "ID": "post-005" in [posts.json](mdc:src/data/posts.json) is posted by studentId 10870 in the [users.csv](mdc:public/data/users.csv). At this point we don't have data integrity in the [posts.json](mdc:src/data/posts.json) file
+- Chats data is stored in the supabase database. refer to .env file. default password 'test' temporary hardcoded authentication for students to authentication to my app but not for the supabase authentication
