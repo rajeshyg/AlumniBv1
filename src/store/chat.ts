@@ -16,6 +16,14 @@ export interface ChatStore {
   sendMessage: (chatId: string, content: string) => Promise<void>;
   markAsRead: (chatId: string) => Promise<void>;
   setCurrentUser: (user: User | null) => void;
+  
+  // Methods for real-time updates
+  addOrUpdateMessage: (message: ChatMessage) => void;
+  updateChatWithLastMessage: (chatId: string, lastMessage: ChatMessage) => void;
+  incrementUnreadCount: (chatId: string) => void;
+
+  // Add a property to track processed messages by content
+  processedMessageContents: Set<string>;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -77,6 +85,164 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
+  // Add or update a message in the store with enhanced duplicate protection
+  addOrUpdateMessage: (message: ChatMessage) => {
+    logger.debug('Processing received message:', { 
+      messageId: message.id,
+      chatId: message.chatId 
+    });
+    
+    set(state => {
+      // 1. Check if this exact message ID already exists to prevent duplicates
+      const existingMessages = state.messages[message.chatId] || [];
+      const messageExists = existingMessages.some(m => m.id === message.id);
+      
+      if (messageExists) {
+        logger.debug('Ignoring duplicate message by ID:', message.id);
+        return state; // Return unchanged state
+      }
+      
+      // 2. Check for very similar content that might be a duplicate
+      const contentKey = `${message.chatId}:${message.senderId}:${message.content}`;
+      if (get().processedMessageContents.has(contentKey)) {
+        logger.debug('Ignoring likely duplicate message by content:', {
+          content: message.content,
+          chatId: message.chatId
+        });
+        return state;
+      }
+      
+      // Add to processed message contents
+      get().processedMessageContents.add(contentKey);
+      
+      // Clear old entries after 10 minutes to prevent memory leaks
+      setTimeout(() => {
+        get().processedMessageContents.delete(contentKey);
+      }, 10 * 60 * 1000);
+      
+      logger.debug('Adding new message to store:', {
+        messageId: message.id,
+        chatId: message.chatId,
+        content: message.content?.substring(0, 20) + (message.content?.length > 20 ? '...' : '')
+      });
+      
+      // Add the message to the messages array for this chat
+      const updatedMessages = {
+        ...state.messages,
+        [message.chatId]: [...existingMessages, message]
+      };
+      
+      // CRITICAL: Find the chat in the state and update it directly
+      // This ensures the UI updates properly without requiring a tap
+      let updatedChats = [...state.chats];
+      const chatIndex = updatedChats.findIndex(c => c.id === message.chatId);
+      
+      if (chatIndex >= 0) {
+        // Copy the chat to avoid reference issues
+        const updatedChat = {...updatedChats[chatIndex]};
+        
+        // Update last message properties
+        updatedChat.lastMessageId = message.id;
+        updatedChat.lastMessageTime = message.timestamp;
+        updatedChat.lastMessage = {
+          id: message.id,
+          content: message.content,
+          senderId: message.senderId,
+          timestamp: message.timestamp,
+          chatId: message.chatId,
+          readBy: message.readBy || []
+        };
+        
+        // Remove the chat from its current position
+        updatedChats.splice(chatIndex, 1);
+        // Add it to the top of the list
+        updatedChats = [updatedChat, ...updatedChats];
+        
+        logger.debug('Moved chat to top of list for new message:', {
+          chatId: message.chatId,
+          messageId: message.id
+        });
+      }
+      
+      // If this is a new message and it's not from the current user, increment unread count
+      const currentUser = state.currentUser;
+      let unreadCounts = {...state.unreadCounts};
+      
+      if (currentUser && message.senderId !== currentUser.studentId) {
+        unreadCounts = {
+          ...unreadCounts,
+          [message.chatId]: (unreadCounts[message.chatId] || 0) + 1
+        };
+        logger.debug('Incremented unread count for chat:', {
+          chatId: message.chatId,
+          newCount: unreadCounts[message.chatId]
+        });
+      }
+      
+      // Force a UI refresh by returning a completely new state object
+      return {
+        ...state,
+        messages: updatedMessages,
+        chats: updatedChats,
+        unreadCounts
+      };
+    });
+  },
+  
+  // Update a chat with the latest message info (to update the chat list)
+  updateChatWithLastMessage: (chatId: string, lastMessage: ChatMessage) => {
+    logger.debug('Updating chat with last message:', { 
+      chatId,
+      messageId: lastMessage.id 
+    });
+    
+    set(state => {
+      // Create a properly typed updatedChats array
+      const updatedChats = state.chats.map(chat => {
+        if (chat.id === chatId) {
+          // Create a new timestamp for the lastMessageTime that's slightly later
+          // than any existing timestamp to ensure it sorts at the top
+          const lastMessageTime = new Date(
+            Math.max(
+              new Date(lastMessage.timestamp).getTime(),
+              chat.lastMessageTime ? new Date(chat.lastMessageTime).getTime() : 0
+            ) + 1
+          ).toISOString();
+          
+          // Create a simplified lastMessage object that matches the Chat type
+          return {
+            ...chat,
+            lastMessageId: lastMessage.id,
+            lastMessageTime,
+            lastMessage: {
+              id: lastMessage.id,
+              content: lastMessage.content,
+              senderId: lastMessage.senderId,
+              timestamp: lastMessage.timestamp,
+              chatId: lastMessage.chatId,
+              readBy: lastMessage.readBy
+            }
+          };
+        }
+        return chat;
+      });
+      
+      return { chats: updatedChats };
+    });
+  },
+  
+  // Increment the unread count for a chat
+  incrementUnreadCount: (chatId: string) => {
+    logger.debug('Incrementing unread count for chat:', { chatId });
+    
+    set(state => ({
+      unreadCounts: {
+        ...state.unreadCounts,
+        [chatId]: (state.unreadCounts[chatId] || 0) + 1
+      }
+    }));
+  },
+
   // Load messages for a specific chat
   loadMessages: async (chatId: string) => {
     try {
@@ -132,28 +298,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       
       logger.debug('Message sent successfully:', { messageId: message.id });
       
-      // Add the message to the store
-      set(state => {
-        const existingMessages = state.messages[chatId] || [];
-        
-        // Check if the message already exists
-        if (existingMessages.some(m => m.id === message.id)) {
-          logger.debug('Message already exists in store:', { messageId: message.id });
-          return state;
-        }
-        
-        logger.debug('Adding message to store:', { messageId: message.id });
-        
-        return {
-          messages: {
-            ...state.messages,
-            [chatId]: [...existingMessages, message]
-          }
-        };
-      });
-      
-      // Update the chat list to show the latest message
-      await get().loadChats();
+      // Add the message to the store directly
+      get().addOrUpdateMessage(message);
     } catch (error) {
       logger.error('Failed to send message:', error);
     }
@@ -174,23 +320,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         // Mark messages as read in Supabase
         await ChatService.markMessagesAsRead(chatId, currentUser.studentId);
         
-        // Get the updated unread count
-        const unreadCount = await ChatService.getUnreadMessageCount(chatId, currentUser.studentId);
-        
-        // Update the unread count in the store
+        // Reset the unread count in the store
         set(state => ({
           unreadCounts: {
             ...state.unreadCounts,
-            [chatId]: Number(unreadCount)
+            [chatId]: 0
           }
         }));
         
-        logger.debug('Messages marked as read:', { chatId, unreadCount });
+        logger.debug('Messages marked as read, reset unread count:', { chatId });
       } catch (markError) {
         logger.error('Error marking messages as read:', markError);
       }
     } catch (error) {
       logger.error('Failed to mark messages as read:', error);
     }
-  }
+  },
+
+  // Add a property to track processed messages by content
+  processedMessageContents: new Set(),
 })); 

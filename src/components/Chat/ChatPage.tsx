@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Chat } from '../../models/Chat';
 import { useChatStore } from '../../store/chat';
 import { ChatService } from '../../services/ChatService';
@@ -22,6 +22,8 @@ import { User } from '../../models/User';
 import { cn } from '../../lib/utils';
 import { format } from 'date-fns';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { toast } from 'react-hot-toast';
+import { ChatMessage } from '../../models/Chat';
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -60,11 +62,15 @@ interface ChatPageState {
   unreadCounts: Record<string, number>;
   chatUsers: Record<string, User>;
   isLoading: boolean;
+  isRefreshing: boolean;
 }
 
 export const ChatPage: React.FC = () => {
   const { authState } = useAuth();
-  const { chats, loadChats, loadMessages, sendMessage, markAsRead, setCurrentUser, unreadCounts: storeUnreadCounts } = useChatStore();
+  const { chats, loadChats, loadMessages, sendMessage, markAsRead, setCurrentUser, unreadCounts: storeUnreadCounts, addOrUpdateMessage } = useChatStore();
+  
+  // Keep track of subscription status to prevent duplicates
+  const subscriptionRef = useRef<boolean>(false);
   
   // Local component state
   const [state, setState] = useState<ChatPageState>({
@@ -81,14 +87,15 @@ export const ChatPage: React.FC = () => {
     filteredChats: [],
     unreadCounts: {},
     chatUsers: {},
-    isLoading: true
+    isLoading: true,
+    isRefreshing: false
   });
 
   // Destructure state for easier access
   const { 
     currentChat, showNewChatDialog, showGroupDialog, selectedUsers, 
     userSearchQuery, searchResults, isSearching, groupName, 
-    isMobile, searchQuery, filteredChats, chatUsers, isLoading 
+    isMobile, searchQuery, filteredChats, chatUsers, isLoading, isRefreshing 
   } = state;
 
   // Update specific state properties
@@ -96,58 +103,108 @@ export const ChatPage: React.FC = () => {
     setState(prev => ({ ...prev, ...updates }));
   };
 
-  useEffect(() => {
-    if (authState.currentUser) {
-      logger.debug('Initializing chat store with user:', {
-        userId: authState.currentUser.studentId,
-        userName: authState.currentUser.name
-      });
-      
-      // Set the current user in the chat store
-      setCurrentUser(authState.currentUser);
-      
-      // Load chats using our updated loadChats function
-      const loadUserChats = async () => {
-        try {
-          updateState({ isLoading: true });
-          await loadChats();
-        } catch (error) {
-          logger.error('Error loading chats:', error);
-        } finally {
-          updateState({ isLoading: false });
+  // Load chats without triggering excessive refreshes
+  const loadUserChats = useCallback(async (forceFullLoading = false) => {
+    try {
+      // Only show loading indicator for initial or forced loads
+      if (forceFullLoading || !chats.length) {
+        let loadingShown = false;
+        
+        // Only show loading after a delay if operation takes time
+        const loadingTimer = setTimeout(() => {
+          loadingShown = true;
+          updateState({ isLoading: true, isRefreshing: false });
+        }, 300);
+        
+        // Perform the actual load
+        await loadChats();
+        
+        // Clear timer if it hasn't triggered yet
+        clearTimeout(loadingTimer);
+        
+        // If loading was shown, give a slight delay before hiding
+        if (loadingShown) {
+          setTimeout(() => {
+            updateState({ isLoading: false, isRefreshing: false });
+          }, 100);
+        } else {
+          updateState({ isLoading: false, isRefreshing: false });
         }
-      };
-      
-      loadUserChats();
-    } else {
-      logger.debug('No current user found, skipping chat store initialization');
+      } else {
+        // For background refreshes just update the data without visual indicators
+        await loadChats();
+        updateState({ isRefreshing: false });
+      }
+    } catch (error) {
+      logger.error('Error loading chats:', error);
+      updateState({ isLoading: false, isRefreshing: false });
     }
-  }, [authState.currentUser, setCurrentUser, loadChats]);
+  }, [chats.length, loadChats]);
 
+  // Setup real-time message subscription - ONLY ONCE when component mounts
   useEffect(() => {
-    const loadUsers = async () => {
-      try {
-        const users: Record<string, User> = {};
-        for (const chat of chats) {
-          for (const userId of chat.participants) {
-            if (!users[userId] && userId !== authState.currentUser?.studentId) {
-              const user = await UserService.findUserById(userId);
-              if (user) users[userId] = user;
-            }
-          }
+    if (!authState.currentUser || subscriptionRef.current) return;
+    
+    logger.debug('Setting up real-time message subscription in ChatPage - INITIAL SETUP');
+    
+    // Mark that we've set up the subscription
+    subscriptionRef.current = true;
+    
+    // Initialize chat service and store with current user
+    setCurrentUser(authState.currentUser);
+    
+    if (!ChatService.isInitialized()) {
+      ChatService.initialize(authState.currentUser.studentId);
+    }
+
+    // This callback handles real-time message updates without causing UI flickering
+    const handleMessageUpdate = (updatedChatId: string, newMessage?: ChatMessage) => {
+      // Log at debug level to reduce console noise
+      logger.debug('Received real-time message update:', { 
+        updatedChatId,
+        hasNewMessage: !!newMessage,
+        isCurrentChat: currentChat?.id === updatedChatId
+      });
+
+      // Use addOrUpdateMessage to handle all the store updates
+      // This will update the message list, chat list, and unread counts
+      if (newMessage) {
+        // Process the message in the store - this will trigger UI updates
+        addOrUpdateMessage(newMessage);
+        
+        // If this is the current chat, ensure messages are loaded
+        if (currentChat?.id === updatedChatId) {
+          // Mark as read if this is the current chat
+          markAsRead(updatedChatId);
         }
-        updateState({ chatUsers: users });
-      } catch (error) {
-        logger.error('Failed to load chat users:', error);
+      } else {
+        // If we don't have the message, do a background refresh
+        // with a significant delay to prevent flickering
+        setTimeout(() => {
+          loadChats().then(() => {
+            if (currentChat?.id === updatedChatId) {
+              loadMessages(updatedChatId);
+            }
+          });
+        }, 1000);
       }
     };
 
-    if (chats.length > 0 && authState.currentUser) {
-      loadUsers();
-    }
-  }, [chats, authState.currentUser]);
+    // Set up the subscription
+    ChatService.subscribeToMessageUpdates(handleMessageUpdate);
+    
+    // Initial load of chats
+    loadUserChats(true);
+    
+    // Cleanup function
+    return () => {
+      logger.debug('Cleaning up message subscription');
+      ChatService.unsubscribeFromMessageUpdates();
+      subscriptionRef.current = false;
+    };
+  }, [authState.currentUser, setCurrentUser, loadMessages, addOrUpdateMessage, loadChats, loadUserChats, currentChat]);
 
-  // Separate effect for filtered chats
+  // Separate effect for filtered chats to avoid constantly re-adding message subscriptions
   useEffect(() => {
     if (chats.length > 0) {
       let filtered = chats;
@@ -349,19 +406,22 @@ export const ChatPage: React.FC = () => {
       );
       
       if (otherUserId && chatUsers[otherUserId]) {
-        return chatUsers[otherUserId].name || 
-          `${chatUsers[otherUserId].firstName} ${chatUsers[otherUserId].lastName}`;
+        const user = chatUsers[otherUserId];
+        // Try different name formats in order of preference
+        return user.name || 
+          `${user.firstName || ''} ${user.lastName || ''}`.trim() || 
+          user.email || 
+          'Chat Participant';
       }
     }
     
     return chat.name;
   };
 
-  // Add a function to handle cache clearing
+  // Handle clear cache with improved loading
   const handleClearCache = async () => {
     try {
       logger.debug('Clearing chat cache');
-      // Clear the chats in the store and reload
       
       updateState({ 
         isLoading: true,
@@ -369,11 +429,23 @@ export const ChatPage: React.FC = () => {
         filteredChats: []
       });
       
-      // Wait a moment and reload chats
+      // Cancel any pending refreshes
+      if (window.pendingRefreshTimeout) {
+        clearTimeout(window.pendingRefreshTimeout);
+      }
+      
+      if (window.debounceReloadTimer) {
+        clearTimeout(window.debounceReloadTimer);
+      }
+      
+      // Wait longer for cache clear to prevent flickering
       setTimeout(async () => {
         await loadChats();
         logger.debug('Chats reloaded after cache clear');
-        updateState({ isLoading: false });
+        
+        setTimeout(() => {
+          updateState({ isLoading: false });
+        }, 300);
       }, 500);
     } catch (error) {
       logger.error('Error clearing cache and reloading chats:', error);
@@ -446,47 +518,81 @@ export const ChatPage: React.FC = () => {
         <div className="flex-1 overflow-y-auto min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">Loading chats...</p>
+              <div className="text-center">
+                <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                <p className="text-muted-foreground text-sm">Loading your conversations...</p>
+              </div>
             </div>
           ) : filteredChats.length > 0 ? (
-            filteredChats.map((chat) => (
-              <div
-                key={chat.id}
-                className={cn(
-                  "flex items-center p-4 cursor-pointer hover:bg-accent transition-colors",
-                  currentChat?.id === chat.id && "bg-accent"
-                )}
-                onClick={() => handleChatSelect(chat)}
-              >
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mr-3">
-                  <span className="text-lg font-medium">
-                    {chat.participants.length > 2 ? (
-                      <Users className="h-6 w-6" />
-                    ) : (
-                      getChatDisplayName(chat).charAt(0).toUpperCase()
-                    )}
-                  </span>
+            <>
+              {isRefreshing && (
+                <div className="py-1 px-4 text-xs text-muted-foreground bg-accent/20 flex items-center justify-center space-x-2">
+                  <div className="w-3 h-3 border-2 border-primary/40 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Updating conversations...</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-medium truncate">{getChatDisplayName(chat)}</h3>
-                    {chat.lastMessageTime && (
-                      <span className="text-xs text-muted-foreground">
-                        {format(new Date(chat.lastMessageTime), 'HH:mm')}
-                      </span>
+              )}
+              {filteredChats.map((chat) => (
+                <div
+                  key={chat.id}
+                  className={cn(
+                    "flex items-center p-4 cursor-pointer hover:bg-accent transition-colors relative",
+                    currentChat?.id === chat.id && "bg-accent"
+                  )}
+                  onClick={() => handleChatSelect(chat)}
+                >
+                  {/* Show a subtle indicator for new messages */}
+                  {storeUnreadCounts[chat.id] > 0 && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+                  )}
+                  
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mr-3 relative">
+                    <span className="text-lg font-medium">
+                      {chat.participants.length > 2 ? (
+                        <Users className="h-6 w-6" />
+                      ) : (
+                        getChatDisplayName(chat).charAt(0).toUpperCase()
+                      )}
+                    </span>
+                    {storeUnreadCounts[chat.id] > 0 && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                        <span className="text-xs text-white font-medium">
+                          {storeUnreadCounts[chat.id] > 9 ? '9+' : storeUnreadCounts[chat.id]}
+                        </span>
+                      </div>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {chat.lastMessage?.content || 'No messages yet'}
-                  </p>
-                  {storeUnreadCounts[chat.id] > 0 && (
-                    <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded-full">
-                      {storeUnreadCounts[chat.id]}
-                    </span>
-                  )}
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className={cn(
+                        "truncate", 
+                        storeUnreadCounts[chat.id] > 0 ? "font-bold" : "font-medium"
+                      )}>
+                        {getChatDisplayName(chat)}
+                      </h3>
+                      {chat.lastMessageTime && (
+                        <span className={cn(
+                          "text-xs",
+                          storeUnreadCounts[chat.id] > 0 
+                            ? "text-primary font-medium" 
+                            : "text-muted-foreground"
+                        )}>
+                          {format(new Date(chat.lastMessageTime), 'HH:mm')}
+                        </span>
+                      )}
+                    </div>
+                    <p className={cn(
+                      "text-sm truncate",
+                      storeUnreadCounts[chat.id] > 0 
+                        ? "text-foreground" 
+                        : "text-muted-foreground"
+                    )}>
+                      {chat.lastMessage?.content || 'No messages yet'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center h-full p-4 text-center">
               <p className="text-muted-foreground mb-2">No chats found</p>
@@ -709,8 +815,149 @@ export const ChatPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* New Chat Dialog */}
+      <div className="flex flex-row gap-2 p-2">
+        <button
+          onClick={handleNewChat}
+          className="flex-1 text-sm px-2 py-1 rounded bg-primary text-white"
+        >
+          New Chat
+        </button>
+        <button
+          onClick={() => updateState({ showGroupDialog: true })}
+          className="flex-1 text-sm px-2 py-1 rounded bg-primary text-white"
+        >
+          New Group Chat
+        </button>
+        <button
+          onClick={handleClearCache}
+          className="flex-1 text-sm px-2 py-1 rounded bg-gray-200 text-gray-800"
+        >
+          Clear Cache
+        </button>
+        {import.meta.env.DEV && (
+          <>
+            <button
+              onClick={() => {
+                try {
+                  logger.info('Manually reconnecting to Socket.IO server');
+                  ChatService.reconnect();
+                  toast.success('Socket reconnect attempted');
+                } catch (error) {
+                  logger.error('Error during manual socket reconnection:', error);
+                  toast.error('Failed to reconnect socket');
+                }
+              }}
+              className="flex-1 text-sm px-2 py-1 rounded bg-blue-200 text-blue-800"
+            >
+              Reconnect Socket
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const status = await ChatService.checkSocketServerStatus();
+                  if (status.running) {
+                    toast.success(`Socket server is running at ${status.url}`);
+                  } else {
+                    toast.error(`Socket server is NOT running at ${status.url}`);
+                  }
+                  logger.info('Socket server status check:', status);
+                } catch (error) {
+                  logger.error('Error checking socket server:', error);
+                  toast.error('Failed to check socket server status');
+                }
+              }}
+              className="flex-1 text-sm px-2 py-1 rounded bg-green-200 text-green-800"
+            >
+              Check Socket
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  if (!currentChat || !authState.currentUser) {
+                    toast.error('No current chat or user found');
+                    return;
+                  }
+                  
+                  const testMsg = `Test message ${Date.now()}`;
+                  logger.info('Sending test message:', testMsg);
+                  await ChatService.sendMessage(
+                    currentChat.id, 
+                    authState.currentUser.studentId, 
+                    testMsg
+                  );
+                  toast.success('Test message sent');
+                } catch (error) {
+                  logger.error('Error sending test message:', error);
+                  toast.error('Failed to send test message');
+                }
+              }}
+              className="flex-1 text-sm px-2 py-1 rounded bg-yellow-200 text-yellow-800"
+            >
+              Test Message
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  const socketInfo = ChatService.getSocketInfo();
+                  const isConnected = ChatService.isSocketConnected();
+                  
+                  logger.info('Socket info:', { ...socketInfo, isConnected });
+                  
+                  toast.success(
+                    `Socket exists: ${socketInfo.socketExists}\n` +
+                    `Socket connected: ${isConnected}\n` +
+                    `URL: ${socketInfo.socketUrl}`
+                  );
+                } catch (error) {
+                  logger.error('Error getting socket info:', error);
+                  toast.error('Failed to get socket info');
+                }
+              }}
+              className="flex-1 text-sm px-2 py-1 rounded bg-purple-200 text-purple-800"
+            >
+              Socket Info
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  toast.loading('Starting chat server...');
+                  
+                  const startServerCommand = 'cd chat-server && npm start';
+                  logger.info('Trying to start chat server with command:', startServerCommand);
+                  
+                  // This is just a notification since we can't execute the command directly
+                  // from the client browser for security reasons
+                  setTimeout(() => {
+                    toast.dismiss();
+                    toast.success(
+                      'Please run this command in your terminal to start the chat server:\n\n' +
+                      startServerCommand
+                    );
+                  }, 1500);
+                } catch (error) {
+                  logger.error('Error starting chat server:', error);
+                  toast.error('Failed to start chat server');
+                }
+              }}
+              className="flex-1 text-sm px-2 py-1 rounded bg-red-200 text-red-800"
+            >
+              Start Server
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 };
+
+// Before return statement, add this type declaration for the window object
+declare global {
+  interface Window {
+    pendingRefreshTimeout?: NodeJS.Timeout;
+    debounceReloadTimer?: NodeJS.Timeout;
+  }
+}
 
 export default ChatPage; 

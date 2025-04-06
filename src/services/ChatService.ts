@@ -31,6 +31,8 @@ export class ChatService {
   private static currentUserId: string | null = null;
   private static socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3006';
   private static typingUsers: Record<string, Set<string>> = {};
+  private static processedMessageIds = new Set<string>();
+  private static recentMessageContents = new Map<string, number>();
 
   // Check if the service has been initialized
   static isInitialized(): boolean {
@@ -52,10 +54,47 @@ export class ChatService {
     }
   }
 
+  // Manually reconnect to socket server
+  static reconnect(): boolean {
+    try {
+      logger.info('Manually reconnecting to Socket.IO server');
+      
+      if (!this.currentUserId) {
+        logger.error('Cannot reconnect: No user ID available');
+        return false;
+      }
+      
+      // Disconnect existing socket if any
+      if (this.socket) {
+        logger.debug('Disconnecting existing socket connection');
+        this.socket.disconnect();
+        this.socket = null;
+      }
+      
+      // Reinitialize the connection
+      this.initialize(this.currentUserId);
+      
+      // Just return true - we've tried our best to reconnect
+      logger.info('Manual reconnection attempt completed');
+      return true;
+    } catch (error) {
+      logger.error('Error during manual reconnection:', error);
+      return false;
+    }
+  }
+
   // Initialize service with Socket.IO
   static initialize(userId: string): void {
     try {
       this.currentUserId = userId;
+      
+      // Log actual URL being used (not just the configured one)
+      const actualSocketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3006';
+      logger.info('Initializing Socket.IO connection', { 
+        configuredUrl: this.socketUrl,
+        actualUrl: actualSocketUrl,
+        envVariable: import.meta.env.VITE_SOCKET_URL ? 'defined' : 'undefined'
+      });
       
       // Initialize Socket.IO connection with reconnection options
       this.socket = io(this.socketUrl, {
@@ -70,7 +109,19 @@ export class ChatService {
       // Setup Socket.IO event handlers
       this.setupSocketHandlers();
 
-      logger.info('Chat service initialized', { userId });
+      // Add a timeout to check if connection was successful
+      setTimeout(() => {
+        if (this.socket?.connected) {
+          logger.info('Socket.IO connection verified as connected', { socketId: this.socket.id });
+        } else {
+          logger.warn('Socket.IO connection not established after timeout', { 
+            connected: this.socket?.connected,
+            socketId: this.socket?.id
+          });
+        }
+      }, 3000);
+
+      logger.info('Chat service initialized', { userId, socketConnected: !!this.socket });
     } catch (error) {
       logger.error('Failed to initialize chat service:', error);
     }
@@ -113,12 +164,19 @@ export class ChatService {
     }
   }
 
+  // Generate a unique message ID
+  private static generateUniqueId(): string {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 10000);
+    return `msg-${timestamp}-${random}`;
+  }
+
   // Send a message in a chat
   static async sendMessage(chatId: string, senderId: string, content: string): Promise<ChatMessage> {
     try {
       logger.debug('Sending message:', { chatId, senderId, contentLength: content.length });
       
-      const messageId = `msg-${Date.now()}`;
+      const messageId = this.generateUniqueId();
       const timestamp = new Date().toISOString();
       
       const message: ChatMessage = {
@@ -168,8 +226,16 @@ export class ChatService {
 
       // Send message through Socket.IO for real-time updates
       if (this.socket) {
+        logger.info('Socket.IO status before sending message:', {
+          connected: this.socket.connected,
+          id: this.socket.id
+        });
+        
         logger.debug('Emitting message through Socket.IO:', message);
         this.socket.emit('send_message', message);
+        
+        // Check if we've actually joined the chat room
+        logger.debug('Attempting to emit to chat room:', chatId);
       } else {
         logger.warn('Socket not connected, cannot send real-time update');
       }
@@ -365,19 +431,71 @@ export class ChatService {
     }
   }
 
-  // Join a chat room
+  // Set typing status and emit to other users
+  static setTypingStatus(chatId: string, userId: string, isTyping: boolean): void {
+    try {
+      logger.debug('Setting typing status:', { chatId, userId, isTyping });
+      
+      // Update local typing indicator state
+      if (isTyping) {
+        this.addTypingUser(chatId, userId);
+      } else {
+        this.removeTypingUser(chatId, userId);
+      }
+      
+      // Emit typing status to other users if socket is connected
+      if (this.socket) {
+        this.socket.emit('typing', { chatId, userId, isTyping });
+        logger.debug('Emitted typing status via Socket.IO');
+      } else {
+        logger.warn('Socket not connected, cannot emit typing status');
+      }
+    } catch (error) {
+      logger.error('Failed to set typing status:', error);
+    }
+  }
+
+  // Join a chat room for real-time updates
   static joinChat(chatId: string, userId: string): void {
-    if (this.socket) {
+    if (this.socket && this.socket.connected) {
       logger.debug('Joining chat room:', { chatId, userId });
+      
+      // First leave any existing rooms to prevent issues
+      this.leaveChat(chatId, userId);
+      
+      // Join the specific chat room
       this.socket.emit('join_chat', chatId);
+      
+      // IMPORTANT: Also join a user-specific room to ensure messages reach this client
+      // This is critical for real-time updates even if room joining fails
+      this.socket.emit('join_user_room', userId);
+      
+      // Log that we've attempted to join
+      logger.info('Join chat room commands sent for:', { chatId, userId });
+    } else {
+      logger.warn('Cannot join chat: Socket not connected', { 
+        socketExists: !!this.socket,
+        connected: this.socket?.connected
+      });
+      
+      // Try to reconnect if socket exists but isn't connected
+      if (this.socket && !this.socket.connected && this.currentUserId) {
+        logger.info('Attempting to reconnect socket before joining chat');
+        this.socket.connect();
+      }
     }
   }
 
   // Leave a chat room
   static leaveChat(chatId: string, userId: string): void {
-    if (this.socket) {
+    if (this.socket && this.socket.connected) {
       logger.debug('Leaving chat room:', { chatId, userId });
       this.socket.emit('leave_chat', chatId);
+    } else {
+      logger.debug('Cannot leave chat: Socket not connected', {
+        socketExists: !!this.socket,
+        connected: this.socket?.connected
+      });
     }
   }
 
@@ -567,33 +685,203 @@ export class ChatService {
     }
   }
 
-  // Subscribe to message updates
-  static subscribeToMessageUpdates(callback: (chatId: string) => void): void {
+  // Clear the processed IDs periodically
+  static {
+    setInterval(() => {
+      logger.debug(`Clearing processed message cache. Size: ${ChatService.processedMessageIds.size}`);
+      ChatService.processedMessageIds.clear();
+      
+      // Also clear content cache
+      logger.debug(`Clearing message content cache. Size: ${ChatService.recentMessageContents.size}`);
+      ChatService.recentMessageContents.clear();
+    }, 5 * 60 * 1000); // Clear every 5 minutes
+  }
+
+  // Subscribe to message updates with robust duplicate prevention
+  static subscribeToMessageUpdates(callback: (chatId: string, message?: ChatMessage) => void): void {
     if (!this.socket) {
       logger.error('Cannot subscribe to message updates: Socket not initialized');
       return;
     }
 
+    // Remove existing listeners to prevent duplicates
+    this.socket.off('message_update');
+    this.socket.off('new_message');
+
+    // Listen for new messages directly
+    this.socket.on('new_message', (message: any) => {
+      // 1. Check ID-based duplication
+      if (this.processedMessageIds.has(message.id)) {
+        logger.debug('Ignoring duplicate message by ID:', message.id);
+        return;
+      }
+      
+      // 2. Check content + chat based duplication within a time window
+      const contentKey = `${message.chatId}:${message.senderId}:${message.content}`;
+      const now = Date.now();
+      const recentTimestamp = this.recentMessageContents.get(contentKey);
+      
+      if (recentTimestamp && now - recentTimestamp < 5000) {
+        logger.debug('Ignoring duplicate message by content+time:', {
+          content: message.content,
+          chatId: message.chatId,
+          timeSinceLastSimilar: now - recentTimestamp + 'ms'
+        });
+        return;
+      }
+      
+      // Add to processed trackers
+      this.processedMessageIds.add(message.id);
+      this.recentMessageContents.set(contentKey, now);
+      
+      logger.debug('Received direct new message event:', {
+        chatId: message.chatId,
+        messageId: message.id,
+        content: message.content?.substring(0, 20) + (message.content?.length > 20 ? '...' : '')
+      });
+      
+      // Convert to ChatMessage format if needed
+      const chatMessage: ChatMessage = {
+        id: message.id,
+        chatId: message.chatId,
+        senderId: message.senderId,
+        content: message.content,
+        timestamp: message.timestamp,
+        readBy: message.readBy || []
+      };
+      
+      // Call callback with both chat ID and the message itself
+      callback(message.chatId, chatMessage);
+    });
+
+    // Also listen for message_update events as a fallback
     this.socket.on('message_update', (chatId: string) => {
-      logger.debug('Received message update for chat:', chatId);
+      logger.debug('Received message_update event for chat:', chatId);
       callback(chatId);
     });
+
+    logger.debug('Subscribed to real-time message updates with enhanced duplicate prevention');
   }
 
   // Setup Socket.IO event handlers
   private static setupSocketHandlers(): void {
-    if (!this.socket) return;
+    if (!this.socket) {
+      logger.error('Cannot setup Socket.IO handlers: Socket is null');
+      return;
+    }
 
     this.socket.on('connect', () => {
-      logger.info('Socket.IO connected');
+      logger.info('Socket.IO connected successfully', { 
+        socketId: this.socket?.id,
+        connected: this.socket?.connected
+      });
     });
 
-    this.socket.on('disconnect', () => {
-      logger.warn('Socket.IO disconnected');
+    this.socket.on('connect_error', (error) => {
+      logger.error('Socket.IO connection error:', error);
+    });
+
+    this.socket.on('disconnect', (reason) => {
+      logger.warn('Socket.IO disconnected', { reason });
     });
 
     this.socket.on('error', (error) => {
       logger.error('Socket.IO error:', error);
     });
+    
+    // Add handler for new messages
+    this.socket.on('new_message', (message: ChatMessage) => {
+      logger.debug('Received new message via Socket.IO:', { 
+        chatId: message.chatId,
+        messageId: message.id,
+        senderId: message.senderId,
+        content: message.content?.substring(0, 20) + '...'
+      });
+      
+      // We don't need to emit message_update here anymore
+      // That's now handled by the subscribeToMessageUpdates method
+    });
+    
+    // Add handler for typing indicators
+    this.socket.on('typing', ({chatId, userId, isTyping}: {chatId: string, userId: string, isTyping: boolean}) => {
+      logger.debug('Received typing indicator:', { chatId, userId, isTyping });
+      
+      if (isTyping) {
+        this.addTypingUser(chatId, userId);
+        logger.debug('Added typing user', { 
+          chatId, userId, 
+          currentTypingUsers: this.typingUsers[chatId] ? Array.from(this.typingUsers[chatId]) : [] 
+        });
+      } else {
+        this.removeTypingUser(chatId, userId);
+        logger.debug('Removed typing user', { 
+          chatId, userId, 
+          currentTypingUsers: this.typingUsers[chatId] ? Array.from(this.typingUsers[chatId]) : [] 
+        });
+      }
+    });
+    
+    logger.debug('Socket.IO event handlers set up successfully');
+  }
+
+  // Helper method to check if socket server is running
+  static async checkSocketServerStatus(): Promise<{ running: boolean; url: string }> {
+    try {
+      const url = this.socketUrl;
+      logger.debug('Checking Socket.IO server status:', url);
+      
+      // Try to make a simple HTTP request to the socket server
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(url, { 
+        method: 'GET',
+        signal: controller.signal 
+      });
+      
+      clearTimeout(timeoutId);
+      
+      const running = response.ok || response.status === 404; // Socket.IO often returns 404 but is still running
+      logger.info('Socket.IO server status check:', { 
+        url, 
+        running,
+        status: response.status
+      });
+      
+      return { running, url };
+    } catch (error) {
+      logger.error('Error checking Socket.IO server:', error);
+      return { running: false, url: this.socketUrl };
+    }
+  }
+
+  // Get debug info about the socket connection
+  static getSocketInfo(): any {
+    return {
+      socketExists: !!this.socket,
+      socketUrl: this.socketUrl,
+      currentUserId: this.currentUserId,
+      typingUsersCount: Object.keys(this.typingUsers).length
+    };
+  }
+  
+  // Add helper to check if socket is connected
+  static isSocketConnected(): boolean {
+    // @ts-ignore - Socket.IO has a connected property but TypeScript doesn't recognize it
+    return !!this.socket && this.socket.connected === true;
+  }
+
+  // Add an unsubscribe method to clean up event listeners
+  static unsubscribeFromMessageUpdates(): void {
+    if (!this.socket) {
+      logger.error('Cannot unsubscribe from message updates: Socket not initialized');
+      return;
+    }
+
+    // Remove existing listeners
+    this.socket.off('message_update');
+    this.socket.off('new_message');
+    
+    logger.debug('Unsubscribed from real-time message updates');
   }
 } 

@@ -44,13 +44,45 @@ testSupabaseConnection();
 // Store active users
 const activeUsers = new Map();
 
+// Add a Set to track recently processed message IDs to prevent duplicates
+const recentlyProcessedMessages = new Set();
+
+// Clear the set periodically to prevent memory leaks
+setInterval(() => {
+  console.log(`Clearing message ID cache. Size before clearing: ${recentlyProcessedMessages.size}`);
+  recentlyProcessedMessages.clear();
+}, 1000 * 60 * 5); // Clear every 5 minutes
+
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+  
+  // Get the userId from the auth data provided during connection
+  const userId = socket.handshake.auth.userId;
+  if (userId) {
+    console.log(`User ${socket.id} authenticated as user ID: ${userId}`);
+    
+    // Automatically join the user to their user-specific room
+    const userRoom = `user_${userId}`;
+    socket.join(userRoom);
+    console.log(`User ${socket.id} automatically joined room: ${userRoom}`);
+    
+    // Add to active users
+    activeUsers.set(userId, socket.id);
+    io.emit('user_status_change', { userId, status: 'online' });
+  } else {
+    console.log(`User ${socket.id} connected without authentication`);
+  }
 
   socket.on('join_chat', (chatId) => {
     console.log(`User ${socket.id} joining chat: ${chatId}`);
     socket.join(chatId);
     console.log(`User ${socket.id} joined chat: ${chatId}`);
+  });
+
+  socket.on('join_user_room', (userId) => {
+    console.log(`User ${socket.id} joining user-specific room: user_${userId}`);
+    socket.join(`user_${userId}`);
+    console.log(`User ${socket.id} joined user-specific room: user_${userId}`);
   });
 
   socket.on('leave_chat', (chatId) => {
@@ -59,43 +91,138 @@ io.on('connection', (socket) => {
     console.log(`User ${socket.id} left chat: ${chatId}`);
   });
 
+  // Improved message handling to prevent duplicates
   socket.on('send_message', async (message) => {
-    console.log('Received message to save:', message);
-    
     try {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .insert([{
-          id: message.id,
-          chat_id: message.chatId,
-          sender_id: message.senderId,
-          content: message.content,
-          created_at: message.timestamp,
-          read_by: message.readBy
-        }])
-        .select();
-
-      if (error) {
-        console.error('Error saving message:', error);
+      console.log('Received message to save:', message);
+      
+      // Check if we've recently processed this message ID
+      if (recentlyProcessedMessages.has(message.id)) {
+        console.log(`Ignoring duplicate message: ${message.id}`);
         return;
       }
-
-      console.log('Message saved successfully:', data);
       
-      // Log the room members before broadcasting
-      const room = io.sockets.adapter.rooms.get(message.chatId);
-      console.log(`Broadcasting message to chat ${message.chatId}. Room members:`, room ? Array.from(room) : 'No members');
+      // Add to recently processed messages
+      recentlyProcessedMessages.add(message.id);
       
-      // Broadcast to all clients in the chat room
-      io.to(message.chatId).emit('new_message', {
-        ...message,
-        id: data[0].id,
-        timestamp: data[0].created_at
-      });
+      // Generate a cleaner message ID for the database
+      const cleanerId = `msg_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      
+      // Before saving, check if a very similar message already exists in the database
+      // (prevents database duplicates by checking content + timestamp proximity)
+      try {
+        const { data: existingMessages } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('chat_id', message.chatId)
+          .eq('sender_id', message.senderId)
+          .eq('content', message.content)
+          .gte('created_at', new Date(new Date(message.timestamp).getTime() - 5000).toISOString())
+          .lte('created_at', new Date(new Date(message.timestamp).getTime() + 5000).toISOString());
+          
+        if (existingMessages && existingMessages.length > 0) {
+          console.log('Found existing similar message, not saving duplicate:', {
+            existingId: existingMessages[0].id,
+            content: message.content,
+            timeDiff: new Date(existingMessages[0].created_at) - new Date(message.timestamp) + 'ms'
+          });
+          
+          // Use the existing message ID for broadcasting
+          message.id = existingMessages[0].id;
+          
+          // Skip database save, but continue with broadcasting
+        } else {
+          // No similar message found, proceed with database save
+          const msgToSave = {
+            id: cleanerId,
+            chat_id: message.chatId,
+            sender_id: message.senderId,
+            content: message.content,
+            created_at: message.timestamp,
+            updated_at: new Date().toISOString(),
+            read_by: message.readBy || [message.senderId]
+          };
+          
+          // Save to database
+          const { data, error } = await supabase
+            .from('chat_messages')
+            .insert(msgToSave)
+            .select();
+            
+          if (error) {
+            console.error('Error saving message to database:', error);
+          } else {
+            console.log('Message saved successfully:', data);
+            
+            // Use the database ID for broadcasting to ensure consistency
+            message.id = data[0].id;
+            
+            // Also update the last message in the chat
+            try {
+              const { error: updateError } = await supabase
+                .from('chats')
+                .update({
+                  last_message_id: message.id,
+                  last_message_time: message.timestamp,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', message.chatId);
+                
+              if (updateError) {
+                console.error('Error updating chat last message:', updateError);
+              }
+            } catch (updateError) {
+              console.error('Failed to update chat with last message:', updateError);
+            }
+          }
+        }
+      } catch (dbError) {
+        console.error('Database error when checking for duplicates:', dbError);
+      }
+      
+      // Get the room for this chat
+      const roomName = message.chatId;
+      const room = io.sockets.adapter.rooms.get(roomName);
+      console.log(`Broadcasting to chat room ${roomName}. Members: ${room ? Array.from(room) : 'none'}`);
+      
+      // Broadcast to the specific chat room
+      socket.to(roomName).emit('new_message', message);
+      
+      // Also broadcast to user-specific rooms for participants
+      try {
+        // Get all participants for this chat
+        const { data: participants } = await supabase
+          .from('chat_participants')
+          .select('user_id')
+          .eq('chat_id', message.chatId);
+          
+        if (participants && participants.length) {
+          console.log(`Broadcasting to ${participants.length} participants in chat ${message.chatId}`);
+          
+          participants.forEach(p => {
+            const userRoom = `user_${p.user_id}`;
+            console.log(`Broadcasting to user-specific room: ${userRoom}`);
+            socket.to(userRoom).emit('new_message', message);
+          });
+        }
+      } catch (participantError) {
+        console.error('Error getting chat participants:', participantError);
+      }
+      
+      // Also emit a message_update event for older clients
+      io.emit('message_update', message.chatId);
       
       console.log(`Message broadcasted to chat ${message.chatId}`);
     } catch (error) {
-      console.error('Error in send_message handler:', error);
+      console.error('Error processing message:', error);
+      
+      // Still try to broadcast the message even if there was an error
+      try {
+        socket.to(message.chatId).emit('new_message', message);
+        io.emit('message_update', message.chatId);
+      } catch (broadcastError) {
+        console.error('Failed to broadcast message after error:', broadcastError);
+      }
     }
   });
 
@@ -217,17 +344,91 @@ io.on('connection', (socket) => {
 
   // Handle typing indicator
   socket.on('typing', (data) => {
-    socket.to(data.chatId).emit('user_typing', {
+    console.log('Received typing notification:', data);
+    
+    // Log the room and members for debugging
+    const room = io.sockets.adapter.rooms.get(data.chatId);
+    console.log(`Sending typing notification to chat ${data.chatId}. Room members:`, room ? Array.from(room) : 'No members');
+    
+    // Broadcast to everyone in the room EXCEPT the sender (socket.to)
+    socket.to(data.chatId).emit('typing', {
+      chatId: data.chatId,
       userId: data.userId,
-      chatId: data.chatId
+      isTyping: true
     });
+    
+    // ALSO broadcast to user-specific rooms to ensure delivery
+    // First get chat participants
+    (async () => {
+      try {
+        const { data: participants, error: participantsError } = await supabase
+          .from('chat_participants')
+          .select('user_id')
+          .eq('chat_id', data.chatId);
+
+        if (!participantsError && participants) {
+          participants.forEach(p => {
+            // Don't send to the user who is typing
+            if (p.user_id !== data.userId) {
+              console.log(`Broadcasting typing to user-specific room: user_${p.user_id}`);
+              io.to(`user_${p.user_id}`).emit('typing', {
+                chatId: data.chatId,
+                userId: data.userId,
+                isTyping: true
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Error getting participants for typing notification:', err);
+      }
+    })();
+    
+    console.log(`Typing notification sent for user ${data.userId} in chat ${data.chatId}`);
   });
 
   socket.on('stop_typing', (data) => {
-    socket.to(data.chatId).emit('user_stop_typing', {
+    console.log('Received stop typing notification:', data);
+    
+    // Log the room and members for debugging
+    const room = io.sockets.adapter.rooms.get(data.chatId);
+    console.log(`Sending stop typing notification to chat ${data.chatId}. Room members:`, room ? Array.from(room) : 'No members');
+    
+    // Broadcast to everyone in the room EXCEPT the sender (socket.to)
+    socket.to(data.chatId).emit('typing', {
+      chatId: data.chatId,
       userId: data.userId,
-      chatId: data.chatId
+      isTyping: false
     });
+    
+    // ALSO broadcast to user-specific rooms to ensure delivery
+    // First get chat participants
+    (async () => {
+      try {
+        const { data: participants, error: participantsError } = await supabase
+          .from('chat_participants')
+          .select('user_id')
+          .eq('chat_id', data.chatId);
+
+        if (!participantsError && participants) {
+          participants.forEach(p => {
+            // Don't send to the user who stopped typing
+            if (p.user_id !== data.userId) {
+              console.log(`Broadcasting stop typing to user-specific room: user_${p.user_id}`);
+              io.to(`user_${p.user_id}`).emit('typing', {
+                chatId: data.chatId,
+                userId: data.userId,
+                isTyping: false
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Error getting participants for stop typing notification:', err);
+      }
+    })();
+    
+    console.log(`Stop typing notification sent for user ${data.userId} in chat ${data.chatId}`);
   });
 
   // Handle user joining (online status)

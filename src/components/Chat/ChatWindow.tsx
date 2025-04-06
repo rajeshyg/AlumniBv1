@@ -37,10 +37,11 @@ import {
 } from '../ui/context-menu';
 import { supabase } from '../../lib/supabaseClient';
 
-interface ChatWindowProps {
-  chat: Chat;
-  onBack?: () => void;
-  isMobile?: boolean;
+// Global declarations should go at the top level
+declare global {
+  interface Window {
+    scrollTimeoutId?: NodeJS.Timeout;
+  }
 }
 
 // Add type for the payload
@@ -52,6 +53,12 @@ interface MessagePayload {
     content: string;
     timestamp: string;
   };
+}
+
+interface ChatWindowProps {
+  chat: Chat;
+  onBack?: () => void;
+  isMobile?: boolean;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }) => {
@@ -67,6 +74,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   const parentRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [chatUsers, setChatUsers] = useState<Record<string, User>>({});
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
 
   const {
     messages,
@@ -154,21 +162,100 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     );
   }, [chatMessages, chat.id]);
 
-  // Ensure scroll to bottom on initial load and when messages change
-  useEffect(() => {
-    if (parentRef.current && sortedMessages.length > 0) {
-      logger.debug(`Scrolling to bottom for chat ${chat.id} with ${sortedMessages.length} messages`);
-      parentRef.current.scrollTop = parentRef.current.scrollHeight;
-    }
-  }, [sortedMessages.length, chat.id]);
+  // Create a ref to store timeouts and control scroll operations
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollOperationInProgress = useRef<boolean>(false);
 
-  // Add debug logging for messages state
+  // Dedicated scroll to bottom function with debounce to prevent duplicate scrolls
+  const scrollToBottom = (immediate = false) => {
+    // If a scroll operation is already in progress, cancel it
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+    }
+    
+    // Mark that a scroll operation is starting
+    scrollOperationInProgress.current = true;
+    
+    // Execute the scroll
+    if (parentRef.current) {
+      if (immediate) {
+        // Force immediate scroll without animation
+        parentRef.current.scrollTop = parentRef.current.scrollHeight;
+        logger.debug('Executed immediate scroll to bottom');
+        
+        // Set a timeout to allow further scrolls
+        setTimeout(() => {
+          scrollOperationInProgress.current = false;
+        }, 300);
+      } else {
+        // Smooth scroll with animation
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+          logger.debug('Executed smooth scroll to bottom');
+          
+          // Set a timeout to allow further scrolls
+          setTimeout(() => {
+            scrollOperationInProgress.current = false;
+          }, 500); // Longer timeout for smooth scrolls
+        }
+      }
+    }
+  };
+
+  // Single scroll effect that manages all scroll triggers
   useEffect(() => {
-    logger.debug(`Chat messages state updated for chat ${chat.id}:`, {
-      messageCount: chatMessages.length,
-      messages: chatMessages.map(m => ({ id: m.id, content: m.content }))
-    });
-  }, [chatMessages, chat.id]);
+    // Function to determine if we should scroll
+    const shouldScrollToBottom = () => {
+      // Don't interrupt an ongoing scroll operation
+      if (scrollOperationInProgress.current) {
+        return false;
+      }
+      
+      // Always scroll when messages change
+      return sortedMessages.length > 0;
+    };
+    
+    // If we should scroll, schedule a scroll operation
+    if (shouldScrollToBottom()) {
+      logger.debug(`Scheduling scroll for chat ${chat.id}`);
+      
+      // Clear any existing scroll timeouts
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      
+      // Schedule a new scroll with a small delay to let the DOM update
+      scrollTimeoutRef.current = setTimeout(() => {
+        scrollToBottom(true);
+      }, 150);
+    }
+    
+    // Cleanup function
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [sortedMessages, chat.id]); // Only re-run if messages or chat changes
+
+  // Initial scroll when changing chats
+  useEffect(() => {
+    if (parentRef.current) {
+      // Force immediate scroll without animation
+      parentRef.current.scrollTop = parentRef.current.scrollHeight;
+      logger.debug(`Initial scroll for new chat ${chat.id}`);
+    }
+  }, [chat.id]); // Only when chat changes
+
+  // Clean up any timeouts when component unmounts
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Mark messages as read when opening chat
@@ -179,22 +266,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     // Load chat members
     loadMembers();
   }, [chat.id, authState.currentUser, chat.participants]);
-
-  // Scroll to bottom when new messages arrive
-  useEffect(() => {
-    const scrollToBottom = () => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-      }
-    };
-
-    // Scroll immediately when component mounts or messages change
-    scrollToBottom();
-
-    // Also scroll after a short delay to handle dynamic content
-    const timeoutId = setTimeout(scrollToBottom, 100);
-    return () => clearTimeout(timeoutId);
-  }, [chatMessages.length]);
 
   const loadMembers = async () => {
     try {
@@ -255,6 +326,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           chatId: chat.id,
           userId: authState.currentUser.studentId
         });
+        
+        // Single scroll operation after sending
+        scrollToBottom(true);
       } catch (sendError) {
         logger.error('Failed to send message to database:', sendError);
         
@@ -288,17 +362,129 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
   };
 
+  // Subscribe to real-time message updates
+  useEffect(() => {
+    logger.debug('Setting up real-time message subscription in ChatWindow', { 
+      currentChatId: chat?.id,
+      isAuthenticated: !!authState.currentUser
+    });
+
+    if (authState.currentUser && chat) {
+      // Join the chat room (critical for real-time updates)
+      ChatService.joinChat(chat.id, authState.currentUser.studentId);
+      
+      // Subscribe to Supabase real-time updates for this chat
+      const channel = supabase
+        .channel(`chat:${chat.id}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `chat_id=eq.${chat.id}`
+        }, (payload: any) => {
+          logger.info('Received Supabase real-time message update:', {
+            chatId: chat.id,
+            messageId: payload.new.id
+          });
+          
+          // Process the new message in the appropriate format
+          const newMessage: ChatMessage = {
+            id: payload.new.id,
+            chatId: payload.new.chat_id,
+            senderId: payload.new.sender_id,
+            content: payload.new.content,
+            timestamp: payload.new.created_at,
+            readBy: payload.new.read_by || []
+          };
+          
+          // Add the message to the chat store
+          useChatStore.getState().addOrUpdateMessage(newMessage);
+          
+          // Also mark messages as read immediately when received
+          if (authState.currentUser) {
+            markAsRead(chat.id);
+          }
+          
+          // Ensure we scroll to the latest message
+          setTimeout(() => scrollToBottom(true), 100);
+        })
+        .subscribe();
+      
+      // Socket.IO message updates
+      const handleMessageUpdate = (updatedChatId: string, newMessage?: ChatMessage) => {
+        logger.info('Received Socket.IO real-time message update', { 
+          updatedChatId, 
+          currentChatId: chat.id,
+          isCurrentChat: updatedChatId === chat.id,
+          hasMessagePayload: !!newMessage
+        });
+        
+        if (updatedChatId === chat.id) {
+          if (newMessage) {
+            // If we have the actual message object, add it directly
+            useChatStore.getState().addOrUpdateMessage(newMessage);
+            
+            // Mark as read
+            markAsRead(chat.id);
+            
+            // Scroll to latest message
+            setTimeout(() => scrollToBottom(true), 100);
+          } else {
+            // Fallback: reload if we don't have the message object
+            logger.debug('Reloading messages due to Socket.IO update without message payload');
+            loadMessages(chat.id);
+            
+            // Mark messages as read immediately when received
+            markAsRead(chat.id);
+          }
+        }
+      };
+      
+      ChatService.subscribeToMessageUpdates(handleMessageUpdate);
+      logger.debug('All real-time subscriptions established');
+      
+      // Store the user information to prevent null reference in cleanup
+      const currentUser = authState.currentUser;
+      
+      return () => {
+        // Clean up Supabase subscription
+        channel.unsubscribe();
+        
+        // Leave the chat room when component unmounts
+        if (currentUser) {
+          ChatService.leaveChat(chat.id, currentUser.studentId);
+          logger.debug('Cleaned up all subscriptions and left chat room');
+        }
+      };
+    }
+  }, [authState.currentUser, chat, loadMessages, markAsRead]);
+
+  // Check for typing users every second
+  useEffect(() => {
+    if (authState.currentUser && chat) {
+      // Set up polling to check for typing users
+      const interval = setInterval(() => {
+        const typing = ChatService.getTypingUsers(chat.id, authState.currentUser!.studentId);
+        setTypingUsers(typing);
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [chat, authState.currentUser]);
+
   const handleTyping = () => {
     if (!authState.currentUser) return;
     
-    // Just add typing indicator locally
+    // Use the ChatService to set typing status
     try {
-      // Set local typing state if needed
-      // Since the setTypingStatus method doesn't exist, we'll just log this
-      logger.debug('User typing:', {
-        chatId: chat.id,
-        userId: authState.currentUser.studentId
-      });
+      ChatService.setTypingStatus(chat.id, authState.currentUser.studentId, true);
+      
+      // Clear typing indicator after a delay
+      setTimeout(() => {
+        if (authState.currentUser) {
+          ChatService.setTypingStatus(chat.id, authState.currentUser.studentId, false);
+        }
+      }, 3000);
     } catch (error) {
       logger.error('Error handling typing indicator:', error);
     }
@@ -402,6 +588,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
   });
 
+  // Add a function to get proper chat display name
+  const getChatDisplayName = (): string => {
+    if (chat.type === 'group') {
+      return chat.name;
+    }
+    
+    // For direct chats, show the other person's name
+    if (chat.participants.length === 2 && authState.currentUser) {
+      // Find the other participant (not the current user)
+      const otherUserId = chat.participants.find(
+        id => id !== authState.currentUser?.studentId
+      );
+      
+      if (otherUserId && chatUsers[otherUserId]) {
+        return chatUsers[otherUserId].name || 
+          `${chatUsers[otherUserId].firstName || ''} ${chatUsers[otherUserId].lastName || ''}`.trim() || 
+          'Chat Participant';
+      }
+    }
+    
+    return chat.name;
+  };
+
   return (
     <div className={cn(
       "flex flex-col bg-background",
@@ -422,11 +631,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           )}
           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
             <span className="text-primary font-medium">
-              {chat.name.charAt(0).toUpperCase()}
+              {getChatDisplayName().charAt(0).toUpperCase()}
             </span>
           </div>
           <div className="flex-1">
-            <h2 className="font-semibold text-lg">{chat.name}</h2>
+            <h2 className="font-semibold text-lg">{getChatDisplayName()}</h2>
             <p className="text-sm text-muted-foreground">
               {chat.participants.length} participants
             </p>
@@ -515,6 +724,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </div>
         )}
       </div>
+
+      {/* Typing indicator */}
+      {typingUsers.length > 0 && (
+        <div className="typing-indicator px-4 py-1 text-sm text-muted-foreground">
+          {typingUsers.map(userId => chatUsers[userId]?.name || 'Someone').join(', ')}{' '}
+          {typingUsers.length === 1 ? 'is' : 'are'} typing...
+        </div>
+      )}
 
       {/* Message Input */}
       <div className="chat-input-container">
