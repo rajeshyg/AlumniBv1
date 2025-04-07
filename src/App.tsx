@@ -5,6 +5,7 @@ import { router } from './routes/index';
 import { LoadingSpinner } from './components/shared/LoadingSpinner';
 import { AuthProvider } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
+import { LogViewer } from './components/Debug/LogViewer';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,6 +23,7 @@ function App() {
         <Suspense fallback={<LoadingSpinner />}>
           <RouterProvider router={router} />
           <Toaster position="top-right" />
+          {import.meta.env.DEV && <LogViewer />}
         </Suspense>
       </AuthProvider>
     </QueryClientProvider>

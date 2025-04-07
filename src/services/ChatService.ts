@@ -26,6 +26,9 @@ interface SerializedMessage {
   readBy: string[];
 }
 
+// Global callback for message updates - allows direct store updates from anywhere
+let globalMessageCallback: ((chatId: string, message?: ChatMessage) => void) | null = null;
+
 export class ChatService {
   private static socket: Socket | null = null;
   private static currentUserId: string | null = null;
@@ -121,9 +124,39 @@ export class ChatService {
         }
       }, 3000);
 
+      // CRITICAL: Set up a periodic health check to ensure socket stays connected
+      const healthCheckIntervalId = setInterval(() => {
+        if (!this.socket?.connected && this.currentUserId) {
+          logger.warn('Socket disconnected during health check - forcing reconnection');
+          this.socket?.connect();
+        }
+      }, 30000); // Check every 30 seconds
+
+      // Store the interval ID so we can clear it if needed
+      // @ts-ignore - Adding custom property to socket
+      this.socket._healthCheckIntervalId = healthCheckIntervalId;
+
       logger.info('Chat service initialized', { userId, socketConnected: !!this.socket });
     } catch (error) {
       logger.error('Failed to initialize chat service:', error);
+    }
+  }
+
+  // Cleanup on socket destruction
+  static cleanup(): void {
+    if (this.socket) {
+      // @ts-ignore - Clear health check interval
+      if (this.socket._healthCheckIntervalId) {
+        // @ts-ignore
+        clearInterval(this.socket._healthCheckIntervalId);
+      }
+      
+      this.socket.disconnect();
+      this.socket = null;
+      this.currentUserId = null;
+      this.typingUsers = {};
+      globalMessageCallback = null;
+      logger.debug('Chat service cleaned up');
     }
   }
 
@@ -704,54 +737,18 @@ export class ChatService {
       return;
     }
 
+    // Store the callback globally to allow direct calls from socket handlers
+    globalMessageCallback = callback;
+    logger.debug('Set global message callback');
+
     // Remove existing listeners to prevent duplicates
     this.socket.off('message_update');
     this.socket.off('new_message');
 
     // Listen for new messages directly
     this.socket.on('new_message', (message: any) => {
-      // 1. Check ID-based duplication
-      if (this.processedMessageIds.has(message.id)) {
-        logger.debug('Ignoring duplicate message by ID:', message.id);
-        return;
-      }
-      
-      // 2. Check content + chat based duplication within a time window
-      const contentKey = `${message.chatId}:${message.senderId}:${message.content}`;
-      const now = Date.now();
-      const recentTimestamp = this.recentMessageContents.get(contentKey);
-      
-      if (recentTimestamp && now - recentTimestamp < 5000) {
-        logger.debug('Ignoring duplicate message by content+time:', {
-          content: message.content,
-          chatId: message.chatId,
-          timeSinceLastSimilar: now - recentTimestamp + 'ms'
-        });
-        return;
-      }
-      
-      // Add to processed trackers
-      this.processedMessageIds.add(message.id);
-      this.recentMessageContents.set(contentKey, now);
-      
-      logger.debug('Received direct new message event:', {
-        chatId: message.chatId,
-        messageId: message.id,
-        content: message.content?.substring(0, 20) + (message.content?.length > 20 ? '...' : '')
-      });
-      
-      // Convert to ChatMessage format if needed
-      const chatMessage: ChatMessage = {
-        id: message.id,
-        chatId: message.chatId,
-        senderId: message.senderId,
-        content: message.content,
-        timestamp: message.timestamp,
-        readBy: message.readBy || []
-      };
-      
-      // Call callback with both chat ID and the message itself
-      callback(message.chatId, chatMessage);
+      // Process the message through our duplicate prevention logic
+      this.processNewMessageEvent(message);
     });
 
     // Also listen for message_update events as a fallback
@@ -761,6 +758,57 @@ export class ChatService {
     });
 
     logger.debug('Subscribed to real-time message updates with enhanced duplicate prevention');
+  }
+
+  // Process a new message event with duplicate prevention
+  private static processNewMessageEvent(message: any): void {
+    // 1. Check ID-based duplication
+    if (this.processedMessageIds.has(message.id)) {
+      logger.debug('Ignoring duplicate message by ID:', message.id);
+      return;
+    }
+    
+    // 2. Check content + chat based duplication within a time window
+    const contentKey = `${message.chatId}:${message.senderId}:${message.content}`;
+    const now = Date.now();
+    const recentTimestamp = this.recentMessageContents.get(contentKey);
+    
+    if (recentTimestamp && now - recentTimestamp < 5000) {
+      logger.debug('Ignoring duplicate message by content+time:', {
+        content: message.content,
+        chatId: message.chatId,
+        timeSinceLastSimilar: now - recentTimestamp + 'ms'
+      });
+      return;
+    }
+    
+    // Add to processed trackers
+    this.processedMessageIds.add(message.id);
+    this.recentMessageContents.set(contentKey, now);
+    
+    logger.debug('Received direct new message event:', {
+      chatId: message.chatId,
+      messageId: message.id,
+      content: message.content?.substring(0, 20) + (message.content?.length > 20 ? '...' : '')
+    });
+    
+    // Convert to ChatMessage format if needed
+    const chatMessage: ChatMessage = {
+      id: message.id,
+      chatId: message.chatId,
+      senderId: message.senderId,
+      content: message.content,
+      timestamp: message.timestamp,
+      readBy: message.readBy || []
+    };
+    
+    // Call the global callback if available
+    if (globalMessageCallback) {
+      logger.debug('Calling global message callback with message:', message.id);
+      globalMessageCallback(message.chatId, chatMessage);
+    } else {
+      logger.warn('No global message callback available to process message:', message.id);
+    }
   }
 
   // Setup Socket.IO event handlers
@@ -789,17 +837,16 @@ export class ChatService {
       logger.error('Socket.IO error:', error);
     });
     
-    // Add handler for new messages
-    this.socket.on('new_message', (message: ChatMessage) => {
-      logger.debug('Received new message via Socket.IO:', { 
+    // Add handler for new messages - CRITICAL for real-time updates
+    this.socket.on('new_message', (message: any) => {
+      logger.debug('Received new message via Socket.IO directly:', { 
         chatId: message.chatId,
         messageId: message.id,
-        senderId: message.senderId,
         content: message.content?.substring(0, 20) + '...'
       });
       
-      // We don't need to emit message_update here anymore
-      // That's now handled by the subscribeToMessageUpdates method
+      // Process the message through our duplicate prevention logic
+      this.processNewMessageEvent(message);
     });
     
     // Add handler for typing indicators
@@ -881,6 +928,12 @@ export class ChatService {
     // Remove existing listeners
     this.socket.off('message_update');
     this.socket.off('new_message');
+    
+    // IMPORTANT: Check connection and reconnect if needed
+    if (!this.socket.connected && this.currentUserId) {
+      logger.warn('Socket not connected during unsubscribe - attempting reconnection');
+      this.socket.connect();
+    }
     
     logger.debug('Unsubscribed from real-time message updates');
   }

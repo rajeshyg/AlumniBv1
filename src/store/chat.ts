@@ -48,6 +48,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (user) {
       if (!ChatService.isInitialized()) {
         ChatService.initialize(user.studentId);
+        
+        // CRITICAL: Set up a direct message handler that updates the store
+        // This ensures the UI updates immediately when new messages arrive
+        ChatService.subscribeToMessageUpdates((chatId, message) => {
+          if (message) {
+            logger.debug('Direct store update from ChatService subscription:', message.id);
+            get().addOrUpdateMessage(message);
+          } else {
+            // Fallback to loading messages if we just got a chat ID
+            const state = get();
+            if (state.currentUser) {
+              logger.debug('Fallback chat update from ChatService subscription:', chatId);
+              // Ensure the chat list is updated
+              get().loadChats();
+            }
+          }
+        });
       }
     }
   },

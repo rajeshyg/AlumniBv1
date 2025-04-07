@@ -1,13 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { logger } from '../../utils/logger';
-import { X, Maximize2, Minimize2, Trash2, Database } from 'lucide-react';
+import { X, Maximize2, Minimize2, Trash2, Database, Wifi, Send, RefreshCw, Info, Play } from 'lucide-react';
 import { useChatStore } from '../../store/chat';
+import { ChatService } from '../../services/ChatService';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
 
 export const LogViewer: React.FC = () => {
   const [logs, setLogs] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'logs' | 'storage'>('logs');
+  const [activeTab, setActiveTab] = useState<'logs' | 'storage' | 'socket'>('logs');
   const [storageData, setStorageData] = useState<Record<string, any>>({});
+  const [socketStatus, setSocketStatus] = useState<{
+    exists: boolean;
+    connected: boolean;
+    url: string;
+  }>({ exists: false, connected: false, url: '' });
   const chatState = useChatStore();
+  const { authState } = useAuth();
   
   // Set default to false to start minimized
   const [isVisible, setIsVisible] = useState(() => {
@@ -47,15 +56,34 @@ export const LogViewer: React.FC = () => {
           // Add chat store state
           data['__chatState'] = {
             chats: chatState.chats,
-            currentChat: chatState.currentChat,
-            currentUser: chatState.currentUser,
             messagesCount: Object.keys(chatState.messages).reduce(
               (acc, chatId) => acc + chatState.messages[chatId].length, 0
             ),
             messageChatIds: Object.keys(chatState.messages)
           };
           
+          // Add current user if available
+          if (chatState.currentUser) {
+            data['__chatState'].currentUser = chatState.currentUser;
+          }
+          
           setStorageData(data);
+        }
+        
+        if (activeTab === 'socket') {
+          // Update socket status
+          try {
+            const socketInfo = ChatService.getSocketInfo();
+            const isConnected = ChatService.isSocketConnected();
+            
+            setSocketStatus({
+              exists: socketInfo.socketExists,
+              connected: isConnected,
+              url: socketInfo.socketUrl
+            });
+          } catch (error) {
+            logger.error('Error getting socket info in LogViewer:', error);
+          }
         }
       }
     }, 1000);
@@ -102,6 +130,16 @@ export const LogViewer: React.FC = () => {
             }`}
           >
             <Database className="w-3 h-3" /> Storage
+          </button>
+          <button 
+            onClick={() => setActiveTab('socket')}
+            className={`px-2 py-1 rounded flex items-center gap-1 ${
+              activeTab === 'socket' 
+                ? 'bg-blue-500 text-white' 
+                : 'text-gray-700 dark:text-gray-300'
+            }`}
+          >
+            <Wifi className="w-3 h-3" /> Socket
           </button>
         </div>
         <div className="flex items-center space-x-2">
@@ -185,6 +223,151 @@ export const LogViewer: React.FC = () => {
                 </pre>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+      
+      {activeTab === 'socket' && (
+        <div className="flex-1 overflow-auto p-2 text-xs">
+          <div className="flex flex-col gap-3">
+            {/* Socket Status */}
+            <div className="bg-gray-100 dark:bg-gray-900 p-2 rounded">
+              <div className="font-bold mb-1">Socket Status</div>
+              <div className="grid grid-cols-2 gap-1">
+                <div>Socket Exists:</div>
+                <div className={socketStatus.exists ? "text-green-600" : "text-red-600"}>
+                  {socketStatus.exists ? "Yes" : "No"}
+                </div>
+                <div>Connected:</div>
+                <div className={socketStatus.connected ? "text-green-600" : "text-red-600"}>
+                  {socketStatus.connected ? "Yes" : "No"}
+                </div>
+                <div>URL:</div>
+                <div className="truncate">{socketStatus.url}</div>
+              </div>
+            </div>
+            
+            {/* Socket Actions */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  try {
+                    logger.info('Manually reconnecting to Socket.IO server');
+                    ChatService.reconnect();
+                    toast.success('Socket reconnect attempted');
+                  } catch (error) {
+                    logger.error('Error during manual socket reconnection:', error);
+                    toast.error('Failed to reconnect socket');
+                  }
+                }}
+                className="p-2 rounded bg-blue-200 text-blue-800 hover:bg-blue-300 flex items-center justify-center"
+              >
+                <RefreshCw className="w-3 h-3 mr-1" /> Reconnect Socket
+              </button>
+              
+              <button
+                onClick={async () => {
+                  try {
+                    const status = await ChatService.checkSocketServerStatus();
+                    if (status.running) {
+                      toast.success(`Socket server is running at ${status.url}`);
+                    } else {
+                      toast.error(`Socket server is NOT running at ${status.url}`);
+                    }
+                    logger.info('Socket server status check:', status);
+                  } catch (error) {
+                    logger.error('Error checking socket server:', error);
+                    toast.error('Failed to check socket server status');
+                  }
+                }}
+                className="p-2 rounded bg-green-200 text-green-800 hover:bg-green-300 flex items-center justify-center"
+              >
+                <Info className="w-3 h-3 mr-1" /> Check Socket
+              </button>
+              
+              <button
+                onClick={async () => {
+                  try {
+                    // Get current chat from chat store if it exists
+                    // This circumvents TypeScript errors by not assuming it's a property of the store
+                    const currentUser = authState.currentUser;
+                    const currentUserChat = currentUser?.studentId ? 
+                      chatState.chats.find(c => c.participants.includes(currentUser.studentId)) : 
+                      null;
+                    
+                    if (!currentUserChat || !currentUser) {
+                      toast.error('No current chat or user found');
+                      return;
+                    }
+                    
+                    const testMsg = `Test message ${Date.now()}`;
+                    logger.info('Sending test message:', testMsg);
+                    await ChatService.sendMessage(
+                      currentUserChat.id, 
+                      currentUser.studentId, 
+                      testMsg
+                    );
+                    toast.success('Test message sent');
+                  } catch (error) {
+                    logger.error('Error sending test message:', error);
+                    toast.error('Failed to send test message');
+                  }
+                }}
+                className="p-2 rounded bg-yellow-200 text-yellow-800 hover:bg-yellow-300 flex items-center justify-center"
+              >
+                <Send className="w-3 h-3 mr-1" /> Test Message
+              </button>
+              
+              <button
+                onClick={() => {
+                  try {
+                    const socketInfo = ChatService.getSocketInfo();
+                    const isConnected = ChatService.isSocketConnected();
+                    
+                    logger.info('Socket info:', { ...socketInfo, isConnected });
+                    
+                    toast.success(
+                      `Socket exists: ${socketInfo.socketExists}\n` +
+                      `Socket connected: ${isConnected}\n` +
+                      `URL: ${socketInfo.socketUrl}`
+                    );
+                  } catch (error) {
+                    logger.error('Error getting socket info:', error);
+                    toast.error('Failed to get socket info');
+                  }
+                }}
+                className="p-2 rounded bg-purple-200 text-purple-800 hover:bg-purple-300 flex items-center justify-center"
+              >
+                <Info className="w-3 h-3 mr-1" /> Socket Info
+              </button>
+              
+              <button
+                onClick={async () => {
+                  try {
+                    toast.loading('Starting chat server...');
+                    
+                    const startServerCommand = 'cd chat-server && npm start';
+                    logger.info('Trying to start chat server with command:', startServerCommand);
+                    
+                    // This is just a notification since we can't execute the command directly
+                    // from the client browser for security reasons
+                    setTimeout(() => {
+                      toast.dismiss();
+                      toast.success(
+                        'Please run this command in your terminal to start the chat server:\n\n' +
+                        startServerCommand
+                      );
+                    }, 1500);
+                  } catch (error) {
+                    logger.error('Error starting chat server:', error);
+                    toast.error('Failed to start chat server');
+                  }
+                }}
+                className="p-2 rounded bg-red-200 text-red-800 hover:bg-red-300 flex items-center justify-center col-span-2"
+              >
+                <Play className="w-3 h-3 mr-1" /> Start Server
+              </button>
+            </div>
           </div>
         </div>
       )}

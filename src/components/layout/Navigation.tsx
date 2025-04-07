@@ -53,8 +53,6 @@ export function Navigation({ className }: NavigationProps) {
         ] 
       : []
     ),
-    { to: '/profile', icon: User, label: 'Profile' },
-    { to: '/settings', icon: Settings, label: 'Settings' },
   ], [adminData]);
 
   if (isMobile) {

@@ -166,27 +166,53 @@ export const ChatPage: React.FC = () => {
         isCurrentChat: currentChat?.id === updatedChatId
       });
 
-      // Use addOrUpdateMessage to handle all the store updates
-      // This will update the message list, chat list, and unread counts
+      // CRITICAL: Force UI update by explicitly updating local state
       if (newMessage) {
-        // Process the message in the store - this will trigger UI updates
+        // First add the message to the global store
         addOrUpdateMessage(newMessage);
         
-        // If this is the current chat, ensure messages are loaded
+        // Then IMMEDIATELY update our local state to refresh the UI
+        const updatedChats = [...filteredChats];
+        const chatIndex = updatedChats.findIndex(c => c.id === updatedChatId);
+        
+        if (chatIndex >= 0) {
+          // Create a new chat object with the updated message
+          const chatToUpdate = {...updatedChats[chatIndex]};
+          
+          // Update last message time and move to top
+          chatToUpdate.lastMessageTime = newMessage.timestamp;
+          chatToUpdate.lastMessage = {
+            id: newMessage.id,
+            content: newMessage.content,
+            senderId: newMessage.senderId,
+            timestamp: newMessage.timestamp,
+            chatId: newMessage.chatId,
+            readBy: newMessage.readBy || []
+          };
+          
+          // Remove from current position
+          updatedChats.splice(chatIndex, 1);
+          // Add to the top
+          updatedChats.unshift(chatToUpdate);
+          
+          logger.debug('Forcing UI update by moving chat to top:', updatedChatId);
+          
+          // Update local state to trigger re-render
+          updateState({
+            filteredChats: updatedChats,
+            isRefreshing: false
+          });
+        }
+        
+        // If this is the current chat, mark as read
         if (currentChat?.id === updatedChatId) {
-          // Mark as read if this is the current chat
           markAsRead(updatedChatId);
         }
       } else {
-        // If we don't have the message, do a background refresh
-        // with a significant delay to prevent flickering
+        // Fallback: just reload the chat list (but with delay to prevent flicker)
         setTimeout(() => {
-          loadChats().then(() => {
-            if (currentChat?.id === updatedChatId) {
-              loadMessages(updatedChatId);
-            }
-          });
-        }, 1000);
+          loadUserChats();
+        }, 500);
       }
     };
 
@@ -238,6 +264,53 @@ export const ChatPage: React.FC = () => {
       loadMessages(currentChat.id);
     }
   }, [currentChat, loadMessages]);
+
+  // Load user data for all chats
+  useEffect(() => {
+    const loadChatUsers = async () => {
+      try {
+        const users: Record<string, User> = {};
+        // First add the current user
+        if (authState.currentUser) {
+          users[authState.currentUser.studentId] = authState.currentUser;
+        }
+        
+        // Then load all unique participants from all chats
+        const uniqueUserIds = new Set<string>();
+        chats.forEach(chat => {
+          chat.participants.forEach(userId => {
+            if (!users[userId] && userId !== authState.currentUser?.studentId) {
+              uniqueUserIds.add(userId);
+            }
+          });
+        });
+        
+        // Fetch all needed users in parallel
+        const userPromises = Array.from(uniqueUserIds).map(id => UserService.findUserById(id));
+        const loadedUsers = await Promise.all(userPromises);
+        
+        // Add to users object
+        loadedUsers.forEach(user => {
+          if (user) {
+            users[user.studentId] = user;
+          }
+        });
+        
+        logger.debug('Loaded chat users:', { 
+          count: Object.keys(users).length,
+          userIds: Object.keys(users)
+        });
+        
+        updateState({ chatUsers: users });
+      } catch (error) {
+        logger.error('Error loading chat users:', error);
+      }
+    };
+    
+    if (chats.length > 0) {
+      loadChatUsers();
+    }
+  }, [chats, authState.currentUser]);
 
   useEffect(() => {
     // Check for mobile viewport on mount and window resize
@@ -400,7 +473,8 @@ export const ChatPage: React.FC = () => {
     if (chat.type === 'group') return chat.name;
     
     // For direct chats, show the other person's name
-    if (chat.participants.length === 2) {
+    if (chat.participants.length === 2 && authState.currentUser) {
+      // Find the other participant (not the current user)
       const otherUserId = chat.participants.find(
         id => id !== authState.currentUser?.studentId
       );
@@ -815,139 +889,6 @@ export const ChatPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* New Chat Dialog */}
-      <div className="flex flex-row gap-2 p-2">
-        <button
-          onClick={handleNewChat}
-          className="flex-1 text-sm px-2 py-1 rounded bg-primary text-white"
-        >
-          New Chat
-        </button>
-        <button
-          onClick={() => updateState({ showGroupDialog: true })}
-          className="flex-1 text-sm px-2 py-1 rounded bg-primary text-white"
-        >
-          New Group Chat
-        </button>
-        <button
-          onClick={handleClearCache}
-          className="flex-1 text-sm px-2 py-1 rounded bg-gray-200 text-gray-800"
-        >
-          Clear Cache
-        </button>
-        {import.meta.env.DEV && (
-          <>
-            <button
-              onClick={() => {
-                try {
-                  logger.info('Manually reconnecting to Socket.IO server');
-                  ChatService.reconnect();
-                  toast.success('Socket reconnect attempted');
-                } catch (error) {
-                  logger.error('Error during manual socket reconnection:', error);
-                  toast.error('Failed to reconnect socket');
-                }
-              }}
-              className="flex-1 text-sm px-2 py-1 rounded bg-blue-200 text-blue-800"
-            >
-              Reconnect Socket
-            </button>
-            <button
-              onClick={async () => {
-                try {
-                  const status = await ChatService.checkSocketServerStatus();
-                  if (status.running) {
-                    toast.success(`Socket server is running at ${status.url}`);
-                  } else {
-                    toast.error(`Socket server is NOT running at ${status.url}`);
-                  }
-                  logger.info('Socket server status check:', status);
-                } catch (error) {
-                  logger.error('Error checking socket server:', error);
-                  toast.error('Failed to check socket server status');
-                }
-              }}
-              className="flex-1 text-sm px-2 py-1 rounded bg-green-200 text-green-800"
-            >
-              Check Socket
-            </button>
-            <button
-              onClick={async () => {
-                try {
-                  if (!currentChat || !authState.currentUser) {
-                    toast.error('No current chat or user found');
-                    return;
-                  }
-                  
-                  const testMsg = `Test message ${Date.now()}`;
-                  logger.info('Sending test message:', testMsg);
-                  await ChatService.sendMessage(
-                    currentChat.id, 
-                    authState.currentUser.studentId, 
-                    testMsg
-                  );
-                  toast.success('Test message sent');
-                } catch (error) {
-                  logger.error('Error sending test message:', error);
-                  toast.error('Failed to send test message');
-                }
-              }}
-              className="flex-1 text-sm px-2 py-1 rounded bg-yellow-200 text-yellow-800"
-            >
-              Test Message
-            </button>
-            <button
-              onClick={() => {
-                try {
-                  const socketInfo = ChatService.getSocketInfo();
-                  const isConnected = ChatService.isSocketConnected();
-                  
-                  logger.info('Socket info:', { ...socketInfo, isConnected });
-                  
-                  toast.success(
-                    `Socket exists: ${socketInfo.socketExists}\n` +
-                    `Socket connected: ${isConnected}\n` +
-                    `URL: ${socketInfo.socketUrl}`
-                  );
-                } catch (error) {
-                  logger.error('Error getting socket info:', error);
-                  toast.error('Failed to get socket info');
-                }
-              }}
-              className="flex-1 text-sm px-2 py-1 rounded bg-purple-200 text-purple-800"
-            >
-              Socket Info
-            </button>
-            <button
-              onClick={async () => {
-                try {
-                  toast.loading('Starting chat server...');
-                  
-                  const startServerCommand = 'cd chat-server && npm start';
-                  logger.info('Trying to start chat server with command:', startServerCommand);
-                  
-                  // This is just a notification since we can't execute the command directly
-                  // from the client browser for security reasons
-                  setTimeout(() => {
-                    toast.dismiss();
-                    toast.success(
-                      'Please run this command in your terminal to start the chat server:\n\n' +
-                      startServerCommand
-                    );
-                  }, 1500);
-                } catch (error) {
-                  logger.error('Error starting chat server:', error);
-                  toast.error('Failed to start chat server');
-                }
-              }}
-              className="flex-1 text-sm px-2 py-1 rounded bg-red-200 text-red-800"
-            >
-              Start Server
-            </button>
-          </>
-        )}
-      </div>
     </div>
   );
 };
