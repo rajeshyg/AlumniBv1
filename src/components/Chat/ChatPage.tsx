@@ -119,6 +119,23 @@ export const ChatPage: React.FC = () => {
         // Perform the actual load
         await loadChats();
 
+        // Get the latest chats from the store after loading
+        const latestChats = useChatStore.getState().chats;
+
+        // Sort chats by last message time, most recent first
+        const sortedChats = [...latestChats].sort((a, b) => {
+          const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+          const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+          return timeB - timeA;
+        });
+
+        // CRITICAL FIX: Update the filtered chats with the newly loaded chats
+        // This ensures the chat list shows the correct last message preview
+        updateState({
+          filteredChats: sortedChats,
+          isRefreshing: false
+        });
+
         // Clear timer if it hasn't triggered yet
         clearTimeout(loadingTimer);
 
@@ -132,14 +149,39 @@ export const ChatPage: React.FC = () => {
         }
       } else {
         // For background refreshes just update the data without visual indicators
+        updateState({ isRefreshing: true });
         await loadChats();
-        updateState({ isRefreshing: false });
+
+        // Get the latest chats from the store after loading
+        const latestChats = useChatStore.getState().chats;
+
+        // Apply search filter if query exists
+        let filtered = latestChats;
+        if (searchQuery) {
+          filtered = latestChats.filter(chat =>
+            chat.name.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+        }
+
+        // Sort chats by last message time, most recent first
+        filtered = [...filtered].sort((a, b) => {
+          const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+          const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+          return timeB - timeA;
+        });
+
+        // CRITICAL FIX: Update the filtered chats with the newly loaded chats
+        // This ensures the chat list shows the correct last message preview
+        updateState({
+          filteredChats: filtered,
+          isRefreshing: false
+        });
       }
     } catch (error) {
       logger.error('Error loading chats:', error);
       updateState({ isLoading: false, isRefreshing: false });
     }
-  }, [chats.length, loadChats]);
+  }, [loadChats, searchQuery]);
 
   // Setup real-time message subscription - ONLY ONCE when component mounts
   useEffect(() => {
@@ -239,17 +281,17 @@ export const ChatPage: React.FC = () => {
     };
   }, [authState.currentUser, setCurrentUser, loadMessages, addOrUpdateMessage, loadChats, loadUserChats, currentChat]);
 
-  // Separate effect for filtered chats to avoid constantly re-adding message subscriptions
+  // Handle search query changes
   useEffect(() => {
-    if (chats.length > 0) {
-      let filtered = chats;
+    // Only update filtered chats if we have chats and a search query
+    if (chats.length > 0 && searchQuery) {
+      // Get the latest chats from the store
+      const latestChats = useChatStore.getState().chats;
 
-      // Apply search filter if query exists
-      if (searchQuery) {
-        filtered = chats.filter(chat =>
-          chat.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-      }
+      // Apply search filter
+      let filtered = latestChats.filter(chat =>
+        chat.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
 
       // Sort chats by last message time, most recent first
       filtered = [...filtered].sort((a, b) => {
@@ -259,10 +301,8 @@ export const ChatPage: React.FC = () => {
       });
 
       updateState({ filteredChats: filtered });
-    } else {
-      updateState({ filteredChats: [] });
     }
-  }, [chats, searchQuery]);
+  }, [searchQuery, chats.length]);
 
   useEffect(() => {
     if (currentChat) {
@@ -481,6 +521,26 @@ export const ChatPage: React.FC = () => {
 
   const handleSearch = (query: string) => {
     updateState({ searchQuery: query });
+
+    // Immediately update filtered chats based on search query
+    if (chats.length > 0) {
+      // Get the latest chats from the store
+      const latestChats = useChatStore.getState().chats;
+
+      // Apply search filter if query exists, otherwise show all chats
+      let filtered = query.trim()
+        ? latestChats.filter(chat => chat.name.toLowerCase().includes(query.toLowerCase()))
+        : latestChats;
+
+      // Sort chats by last message time, most recent first
+      filtered = [...filtered].sort((a, b) => {
+        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      updateState({ filteredChats: filtered });
+    }
   };
 
   const handleNewChat = () => {

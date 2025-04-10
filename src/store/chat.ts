@@ -161,13 +161,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         // Update last message properties
         updatedChat.lastMessageId = message.id;
         updatedChat.lastMessageTime = message.timestamp;
+        // CRITICAL FIX: Ensure the lastMessage object is properly set
+        // This ensures the chat list shows the correct last message preview
         updatedChat.lastMessage = {
           id: message.id,
           content: message.content,
           senderId: message.senderId,
           timestamp: message.timestamp,
           chatId: message.chatId,
-          readBy: message.readBy || []
+          readBy: message.readBy || [],
+          source: message.source,
+          sequence: message.sequence
         };
 
         // Remove the chat from its current position
@@ -179,6 +183,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           chatId: message.chatId,
           messageId: message.id
         });
+      } else {
+        // If the chat doesn't exist in our list, we might need to fetch it
+        // This can happen if a new chat was created while the app is running
+        logger.debug('Chat not found in state, might need to reload chats');
+
+        // We'll trigger a chat reload in the next tick to avoid state conflicts
+        setTimeout(() => {
+          get().loadChats();
+        }, 100);
       }
 
       // If this is a new message and it's not from the current user, increment unread count
@@ -237,7 +250,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               senderId: lastMessage.senderId,
               timestamp: lastMessage.timestamp,
               chatId: lastMessage.chatId,
-              readBy: lastMessage.readBy
+              readBy: lastMessage.readBy,
+              source: lastMessage.source,
+              sequence: lastMessage.sequence
             }
           };
         }

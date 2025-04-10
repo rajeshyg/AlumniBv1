@@ -599,13 +599,79 @@ export class ChatService {
           return [];
         }
 
+        // CRITICAL FIX: Get the last message for each chat
+        // This ensures the chat list shows the correct last message preview
+        const lastMessagesPromises = chatData.map(async (chat: any) => {
+          try {
+            // Even if there's no last_message_id, try to get the most recent message
+            const { data, error } = await supabase
+              .from('chat_messages')
+              .select('*')
+              .eq('chat_id', chat.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+
+            if (error || !data) {
+              if (chat.last_message_id) {
+                logger.error('Error fetching last message:', {
+                  chatId: chat.id,
+                  messageId: chat.last_message_id,
+                  error
+                });
+              } else {
+                logger.debug('No messages found for chat:', chat.id);
+              }
+              return null;
+            }
+
+            // If we found a message but it's not the one referenced by last_message_id,
+            // update the chat record to fix the inconsistency
+            if (chat.last_message_id && chat.last_message_id !== data.id) {
+              logger.warn('Fixing inconsistent last_message_id for chat:', {
+                chatId: chat.id,
+                storedLastMessageId: chat.last_message_id,
+                actualLastMessageId: data.id
+              });
+
+              // Update the chat record with the correct last message ID
+              await supabase
+                .from('chats')
+                .update({
+                  last_message_id: data.id,
+                  last_message_time: data.created_at,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', chat.id);
+            }
+
+            return {
+              id: data.id,
+              chatId: data.chat_id,
+              senderId: data.sender_id,
+              content: data.content,
+              timestamp: data.created_at,
+              readBy: data.read_by || []
+            };
+          } catch (err) {
+            logger.error('Exception fetching last message:', err);
+            return null;
+          }
+        });
+
+        // Wait for all last message queries to complete
+        const lastMessages = await Promise.all(lastMessagesPromises);
+
         // Convert to the format expected by the store
-        const chats: Chat[] = chatData.map((chat: any) => {
+        const chats: Chat[] = chatData.map((chat: any, index: number) => {
           // Get participants for this chat
           const chatParticipants = allParticipants
             ? allParticipants.filter((p: any) => p.chat_id === chat.id)
                               .map((p: any) => p.user_id)
             : [userId];
+
+          // Get the last message for this chat
+          const lastMessage = lastMessages[index];
 
           return {
             id: chat.id,
@@ -615,7 +681,8 @@ export class ChatService {
             createdAt: chat.created_at,
             updatedAt: chat.updated_at,
             lastMessageId: chat.last_message_id,
-            lastMessageTime: chat.last_message_time
+            lastMessageTime: chat.last_message_time,
+            lastMessage: lastMessage || undefined
           };
         });
 
