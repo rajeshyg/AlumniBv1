@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Chat } from '../../models/Chat';
 import { useChatStore } from '../../store/chat';
 import { ChatService } from '../../services/ChatService';
@@ -67,7 +67,16 @@ interface ChatPageState {
 
 export const ChatPage: React.FC = () => {
   const { authState } = useAuth();
-  const { chats, loadChats, loadMessages, sendMessage, markAsRead, setCurrentUser, unreadCounts: storeUnreadCounts, addOrUpdateMessage } = useChatStore();
+
+  // Use proper reactive selectors for Zustand state
+  const chats = useChatStore(state => state.chats);
+  const loadChats = useChatStore(state => state.loadChats);
+  const loadMessages = useChatStore(state => state.loadMessages);
+  const sendMessage = useChatStore(state => state.sendMessage);
+  const markAsRead = useChatStore(state => state.markAsRead);
+  const setCurrentUser = useChatStore(state => state.setCurrentUser);
+  const storeUnreadCounts = useChatStore(state => state.unreadCounts);
+  const addOrUpdateMessage = useChatStore(state => state.addOrUpdateMessage);
 
   // Keep track of subscription status to prevent duplicates
   const subscriptionRef = useRef<boolean>(false);
@@ -103,6 +112,21 @@ export const ChatPage: React.FC = () => {
     setState(prev => ({ ...prev, ...updates }));
   };
 
+  // Use useMemo for derived state to avoid unnecessary recalculations
+  const filteredAndSortedChats = useMemo(() => {
+    // Apply search filter if query exists
+    let filtered = searchQuery?.trim()
+      ? chats.filter(chat => chat.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      : chats;
+
+    // Sort by last message time
+    return [...filtered].sort((a, b) => {
+      const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+      const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [chats, searchQuery]);
+
   // Load chats without triggering excessive refreshes
   const loadUserChats = useCallback(async (forceFullLoading = false) => {
     try {
@@ -119,20 +143,9 @@ export const ChatPage: React.FC = () => {
         // Perform the actual load
         await loadChats();
 
-        // Get the latest chats from the store after loading
-        const latestChats = useChatStore.getState().chats;
-
-        // Sort chats by last message time, most recent first
-        const sortedChats = [...latestChats].sort((a, b) => {
-          const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-          const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
-          return timeB - timeA;
-        });
-
-        // CRITICAL FIX: Update the filtered chats with the newly loaded chats
-        // This ensures the chat list shows the correct last message preview
+        // CRITICAL FIX: Don't update filteredChats here
+        // Let the useEffect handle it to avoid duplicate updates
         updateState({
-          filteredChats: sortedChats,
           isRefreshing: false
         });
 
@@ -152,28 +165,9 @@ export const ChatPage: React.FC = () => {
         updateState({ isRefreshing: true });
         await loadChats();
 
-        // Get the latest chats from the store after loading
-        const latestChats = useChatStore.getState().chats;
-
-        // Apply search filter if query exists
-        let filtered = latestChats;
-        if (searchQuery) {
-          filtered = latestChats.filter(chat =>
-            chat.name.toLowerCase().includes(searchQuery.toLowerCase())
-          );
-        }
-
-        // Sort chats by last message time, most recent first
-        filtered = [...filtered].sort((a, b) => {
-          const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-          const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
-          return timeB - timeA;
-        });
-
-        // CRITICAL FIX: Update the filtered chats with the newly loaded chats
-        // This ensures the chat list shows the correct last message preview
+        // CRITICAL FIX: Don't update filteredChats here
+        // Let the useEffect handle it to avoid duplicate updates
         updateState({
-          filteredChats: filtered,
           isRefreshing: false
         });
       }
@@ -181,7 +175,7 @@ export const ChatPage: React.FC = () => {
       logger.error('Error loading chats:', error);
       updateState({ isLoading: false, isRefreshing: false });
     }
-  }, [loadChats, searchQuery]);
+  }, [loadChats, chats.length]);
 
   // Setup real-time message subscription - ONLY ONCE when component mounts
   useEffect(() => {
@@ -281,28 +275,30 @@ export const ChatPage: React.FC = () => {
     };
   }, [authState.currentUser, setCurrentUser, loadMessages, addOrUpdateMessage, loadChats, loadUserChats, currentChat]);
 
-  // Handle search query changes
+  // CRITICAL FIX: Only update filteredChats when necessary, not on every render
+  // This prevents the infinite re-render loop
+  const prevChatsRef = useRef<string>('');
+  const prevSearchRef = useRef<string>('');
+
   useEffect(() => {
-    // Only update filtered chats if we have chats and a search query
-    if (chats.length > 0 && searchQuery) {
-      // Get the latest chats from the store
-      const latestChats = useChatStore.getState().chats;
+    if (chats.length > 0) {
+      // Check if chats or search query has actually changed
+      const chatsJson = JSON.stringify(chats.map(c => c.id));
+      const searchChanged = prevSearchRef.current !== searchQuery;
+      const chatsChanged = prevChatsRef.current !== chatsJson;
 
-      // Apply search filter
-      let filtered = latestChats.filter(chat =>
-        chat.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      // Only update if something relevant has changed
+      if (chatsChanged || searchChanged) {
+        // Update our refs
+        prevChatsRef.current = chatsJson;
+        prevSearchRef.current = searchQuery || '';
 
-      // Sort chats by last message time, most recent first
-      filtered = [...filtered].sort((a, b) => {
-        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
-        return timeB - timeA;
-      });
-
-      updateState({ filteredChats: filtered });
+        // Update the state
+        logger.debug('Updating filtered chats due to change in chats or search');
+        updateState({ filteredChats: filteredAndSortedChats });
+      }
     }
-  }, [searchQuery, chats.length]);
+  }, [chats, searchQuery, filteredAndSortedChats]);
 
   useEffect(() => {
     if (currentChat) {
@@ -369,21 +365,42 @@ export const ChatPage: React.FC = () => {
 
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+
+      // Clean up any pending search timeout
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, []);
 
+  // CRITICAL FIX: Improve chat selection responsiveness
   const handleChatSelect = (chat: Chat) => {
+    // Check if we're already on this chat to prevent unnecessary updates
+    if (currentChat?.id === chat.id) {
+      logger.debug('Chat already selected, skipping update');
+      return;
+    }
+
+    logger.debug('Selecting chat:', { chatId: chat.id, chatName: chat.name });
+
     // First update the UI to show the selected chat immediately
     updateState({ currentChat: chat });
 
-    // Then load messages and mark as read in the background
-    // This prevents the blank screen while loading
-    Promise.all([
-      loadMessages(chat.id),
-      markAsRead(chat.id)
-    ]).catch(error => {
-      logger.error('Error loading messages or marking as read:', error);
-    });
+    // Use setTimeout to ensure the UI updates first before potentially
+    // blocking with message loading
+    setTimeout(() => {
+      // Then load messages and mark as read in the background
+      // This prevents the blank screen while loading
+      Promise.all([
+        loadMessages(chat.id),
+        markAsRead(chat.id)
+      ]).catch(error => {
+        logger.error('Error loading messages or marking as read:', error);
+      });
+    }, 0);
   };
 
   const handleUserSearch = async (query: string) => {
@@ -519,28 +536,22 @@ export const ChatPage: React.FC = () => {
     }
   };
 
+  // Debounce search to prevent excessive updates
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleSearch = (query: string) => {
-    updateState({ searchQuery: query });
-
-    // Immediately update filtered chats based on search query
-    if (chats.length > 0) {
-      // Get the latest chats from the store
-      const latestChats = useChatStore.getState().chats;
-
-      // Apply search filter if query exists, otherwise show all chats
-      let filtered = query.trim()
-        ? latestChats.filter(chat => chat.name.toLowerCase().includes(query.toLowerCase()))
-        : latestChats;
-
-      // Sort chats by last message time, most recent first
-      filtered = [...filtered].sort((a, b) => {
-        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
-        return timeB - timeA;
-      });
-
-      updateState({ filteredChats: filtered });
+    // Clear any existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
     }
+
+    // Set a new timeout to update the search query after a short delay
+    // This prevents excessive updates while the user is typing
+    searchTimeoutRef.current = setTimeout(() => {
+      // Just update the search query - the memoized filteredAndSortedChats will handle the filtering
+      updateState({ searchQuery: query });
+      searchTimeoutRef.current = null;
+    }, 300);
   };
 
   const handleNewChat = () => {
@@ -691,6 +702,14 @@ export const ChatPage: React.FC = () => {
                     currentChat?.id === chat.id && "bg-accent"
                   )}
                   onClick={() => handleChatSelect(chat)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    // Add keyboard accessibility
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleChatSelect(chat);
+                    }
+                  }}
                 >
                   {/* Show a subtle indicator for new messages */}
                   {storeUnreadCounts[chat.id] > 0 && (

@@ -166,14 +166,49 @@ export class ChatService {
     try {
       logger.debug('Getting messages for chat:', { chatId });
 
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: true });
+      // Validate input
+      if (!chatId) {
+        logger.error('Invalid chatId provided to getChatMessages');
+        return [];
+      }
+
+      // Add retry logic for network failures
+      let retries = 0;
+      const maxRetries = 3;
+      let data;
+      let error;
+
+      while (retries < maxRetries) {
+        try {
+          const response = await supabase
+            .from('chat_messages')
+            .select('*')
+            .eq('chat_id', chatId)
+            .order('created_at', { ascending: true });
+
+          data = response.data;
+          error = response.error;
+
+          // If successful or there's a non-network error, break out of retry loop
+          if (data || (error && error.code !== 'NETWORK_ERROR')) {
+            break;
+          }
+        } catch (e) {
+          logger.warn(`Network error fetching messages (attempt ${retries + 1}/${maxRetries}):`, e);
+        }
+
+        // Exponential backoff before retrying
+        const backoffTime = Math.min(1000 * Math.pow(2, retries), 5000);
+        await new Promise(resolve => setTimeout(resolve, backoffTime));
+        retries++;
+      }
 
       if (error) {
-        logger.error('Error loading messages from Supabase:', error);
+        logger.error('Error loading messages from Supabase:', {
+          error,
+          chatId,
+          retryAttempts: retries
+        });
         return [];
       }
 
@@ -190,10 +225,16 @@ export class ChatService {
         senderId: msg.sender_id,
         content: msg.content,
         timestamp: msg.created_at,
-        readBy: msg.read_by || []
+        readBy: msg.read_by || [],
+        // Add source tracking to help with debugging
+        source: 'supabase'
       }));
     } catch (error) {
-      logger.error('Failed to get chat messages:', error);
+      logger.error('Failed to get chat messages:', {
+        error,
+        chatId,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
       return [];
     }
   }
@@ -540,158 +581,220 @@ export class ChatService {
     try {
       logger.debug('Getting user chats from Supabase:', { userId });
 
-      // Try to fetch existing chats
-      try {
-        logger.debug('Fetching chats for user:', { userId });
-
-        // Query for all chats where this user is a participant
-        const { data: participantData, error: participantError } = await supabase
-          .from('chat_participants')
-          .select('chat_id')
-          .eq('user_id', userId);
-
-        if (participantError) {
-          logger.error('Error querying chat_participants:', {
-            error: participantError,
-            message: participantError.message
-          });
-          return [];
-        }
-
-        if (!participantData || participantData.length === 0) {
-          logger.debug('No chat participants found for user');
-          return [];
-        }
-
-        const chatIds = participantData.map((p: { chat_id: string }) => p.chat_id);
-        logger.debug('Found chat IDs:', chatIds);
-
-        // Get chat details
-        const { data: chatData, error: chatError } = await supabase
-          .from('chats')
-          .select('*')
-          .in('id', chatIds);
-
-        if (chatError) {
-          logger.error('Error querying chats:', {
-            error: chatError,
-            message: chatError.message
-          });
-          return [];
-        }
-
-        if (!chatData || chatData.length === 0) {
-          logger.debug('No chats found for user');
-          return [];
-        }
-
-        // Get all participants for these chats
-        const { data: allParticipants, error: allParticipantsError } = await supabase
-          .from('chat_participants')
-          .select('*')
-          .in('chat_id', chatIds);
-
-        if (allParticipantsError) {
-          logger.error('Error fetching all participants:', {
-            error: allParticipantsError,
-            message: allParticipantsError.message
-          });
-          return [];
-        }
-
-        // CRITICAL FIX: Get the last message for each chat
-        // This ensures the chat list shows the correct last message preview
-        const lastMessagesPromises = chatData.map(async (chat: any) => {
-          try {
-            // Even if there's no last_message_id, try to get the most recent message
-            const { data, error } = await supabase
-              .from('chat_messages')
-              .select('*')
-              .eq('chat_id', chat.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
-
-            if (error || !data) {
-              if (chat.last_message_id) {
-                logger.error('Error fetching last message:', {
-                  chatId: chat.id,
-                  messageId: chat.last_message_id,
-                  error
-                });
-              } else {
-                logger.debug('No messages found for chat:', chat.id);
-              }
-              return null;
-            }
-
-            // If we found a message but it's not the one referenced by last_message_id,
-            // update the chat record to fix the inconsistency
-            if (chat.last_message_id && chat.last_message_id !== data.id) {
-              logger.warn('Fixing inconsistent last_message_id for chat:', {
-                chatId: chat.id,
-                storedLastMessageId: chat.last_message_id,
-                actualLastMessageId: data.id
-              });
-
-              // Update the chat record with the correct last message ID
-              await supabase
-                .from('chats')
-                .update({
-                  last_message_id: data.id,
-                  last_message_time: data.created_at,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', chat.id);
-            }
-
-            return {
-              id: data.id,
-              chatId: data.chat_id,
-              senderId: data.sender_id,
-              content: data.content,
-              timestamp: data.created_at,
-              readBy: data.read_by || []
-            };
-          } catch (err) {
-            logger.error('Exception fetching last message:', err);
-            return null;
-          }
-        });
-
-        // Wait for all last message queries to complete
-        const lastMessages = await Promise.all(lastMessagesPromises);
-
-        // Convert to the format expected by the store
-        const chats: Chat[] = chatData.map((chat: any, index: number) => {
-          // Get participants for this chat
-          const chatParticipants = allParticipants
-            ? allParticipants.filter((p: any) => p.chat_id === chat.id)
-                              .map((p: any) => p.user_id)
-            : [userId];
-
-          // Get the last message for this chat
-          const lastMessage = lastMessages[index];
-
-          return {
-            id: chat.id,
-            name: chat.name,
-            type: chat.type || 'direct',
-            participants: chatParticipants,
-            createdAt: chat.created_at,
-            updatedAt: chat.updated_at,
-            lastMessageId: chat.last_message_id,
-            lastMessageTime: chat.last_message_time,
-            lastMessage: lastMessage || undefined
-          };
-        });
-
-        logger.debug('Returning chats from database:', { count: chats.length });
-        return chats;
-      } catch (dbError) {
-        logger.error('Failed to query database:', dbError);
+      // Validate input
+      if (!userId) {
+        logger.error('Invalid userId provided to getUserChats');
         return [];
       }
+
+      // Try to fetch existing chats with retry logic
+      let retries = 0;
+      const maxRetries = 3;
+
+      // Variables to store our query results
+      let participantData: any = null;
+      let chatData: any = null;
+      let allParticipants: any = null;
+      let allParticipantsError: any = null;
+
+      while (retries < maxRetries) {
+        try {
+          logger.debug(`Fetching chats for user (attempt ${retries + 1}/${maxRetries}):`, { userId });
+
+          // Query for all chats where this user is a participant
+          const participantResponse = await supabase
+            .from('chat_participants')
+            .select('chat_id')
+            .eq('user_id', userId);
+
+          if (participantResponse.error) {
+            // If it's a network error, retry
+            if (participantResponse.error.code === 'NETWORK_ERROR') {
+              logger.warn(`Network error fetching chat participants (attempt ${retries + 1}/${maxRetries}):`, participantResponse.error);
+              retries++;
+              // Exponential backoff before retrying
+              const backoffTime = Math.min(1000 * Math.pow(2, retries), 5000);
+              await new Promise(resolve => setTimeout(resolve, backoffTime));
+              continue;
+            }
+
+            logger.error('Error querying chat_participants:', {
+              error: participantResponse.error,
+              message: participantResponse.error.message,
+              userId
+            });
+            return [];
+          }
+
+          participantData = participantResponse.data;
+
+          if (!participantData || participantData.length === 0) {
+            logger.debug('No chat participants found for user:', { userId });
+            return [];
+          }
+
+          const chatIds = participantData.map((p: { chat_id: string }) => p.chat_id);
+          logger.debug('Found chat IDs:', { userId, chatIds, count: chatIds.length });
+
+          // Get chat details
+          const chatResponse = await supabase
+            .from('chats')
+            .select('*')
+            .in('id', chatIds);
+
+          if (chatResponse.error) {
+            // If it's a network error, retry
+            if (chatResponse.error.code === 'NETWORK_ERROR') {
+              logger.warn(`Network error fetching chats (attempt ${retries + 1}/${maxRetries}):`, chatResponse.error);
+              retries++;
+              // Exponential backoff before retrying
+              const backoffTime = Math.min(1000 * Math.pow(2, retries), 5000);
+              await new Promise(resolve => setTimeout(resolve, backoffTime));
+              continue;
+            }
+
+            logger.error('Error querying chats:', {
+              error: chatResponse.error,
+              message: chatResponse.error.message,
+              userId,
+              chatIds
+            });
+            return [];
+          }
+
+          chatData = chatResponse.data;
+
+          if (!chatData || chatData.length === 0) {
+            logger.debug('No chats found for user:', { userId, chatIds });
+            return [];
+          }
+
+          // Get all participants for these chats
+          const participantsResponse = await supabase
+            .from('chat_participants')
+            .select('*')
+            .in('chat_id', chatIds);
+
+          allParticipants = participantsResponse.data;
+          allParticipantsError = participantsResponse.error;
+
+          // If we got this far, we've successfully retrieved the data
+          // Break out of the retry loop
+          break;
+        } catch (e) {
+          logger.warn(`Exception fetching chats (attempt ${retries + 1}/${maxRetries}):`, e);
+          retries++;
+
+          if (retries >= maxRetries) {
+            logger.error('Max retries exceeded fetching chats:', { userId, maxRetries });
+            return [];
+          }
+
+          // Exponential backoff before retrying
+          const backoffTime = Math.min(1000 * Math.pow(2, retries), 5000);
+          await new Promise(resolve => setTimeout(resolve, backoffTime));
+        }
+      }
+
+      if (allParticipantsError) {
+        logger.error('Error fetching all participants:', {
+          error: allParticipantsError,
+          message: allParticipantsError.message
+        });
+        return [];
+      }
+
+      // CRITICAL FIX: Get the last message for each chat
+      // This ensures the chat list shows the correct last message preview
+      const lastMessagesPromises = chatData.map(async (chat: any) => {
+        try {
+          // Even if there's no last_message_id, try to get the most recent message
+          const { data, error } = await supabase
+            .from('chat_messages')
+            .select('*')
+            .eq('chat_id', chat.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (error || !data) {
+            if (chat.last_message_id) {
+              logger.error('Error fetching last message:', {
+                chatId: chat.id,
+                messageId: chat.last_message_id,
+                error
+              });
+            } else {
+              logger.debug('No messages found for chat:', chat.id);
+            }
+            return null;
+          }
+
+          // If we found a message but it's not the one referenced by last_message_id,
+          // update the chat record to fix the inconsistency
+          if (chat.last_message_id && chat.last_message_id !== data.id) {
+            logger.warn('Fixing inconsistent last_message_id for chat:', {
+              chatId: chat.id,
+              storedLastMessageId: chat.last_message_id,
+              actualLastMessageId: data.id
+            });
+
+            // Update the chat record with the correct last message ID
+            await supabase
+              .from('chats')
+              .update({
+                last_message_id: data.id,
+                last_message_time: data.created_at,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', chat.id);
+          }
+
+          return {
+            id: data.id,
+            chatId: data.chat_id,
+            senderId: data.sender_id,
+            content: data.content,
+            timestamp: data.created_at,
+            readBy: data.read_by || [],
+            // Add source tracking to help with debugging
+            source: 'supabase'
+          };
+        } catch (err) {
+          logger.error('Exception fetching last message:', err);
+          return null;
+        }
+      });
+
+      // Wait for all last message queries to complete
+      const lastMessages = await Promise.all(lastMessagesPromises);
+
+      // Convert to the format expected by the store
+      const chats: Chat[] = chatData.map((chat: any, index: number) => {
+        // Get participants for this chat
+        const chatParticipants = allParticipants
+          ? allParticipants.filter((p: any) => p.chat_id === chat.id)
+                            .map((p: any) => p.user_id)
+          : [userId];
+
+        // Get the last message for this chat
+        const lastMessage = lastMessages[index];
+
+        return {
+          id: chat.id,
+          name: chat.name,
+          type: chat.type || 'direct',
+          participants: chatParticipants,
+          createdAt: chat.created_at,
+          updatedAt: chat.updated_at,
+          lastMessageId: chat.last_message_id,
+          lastMessageTime: chat.last_message_time,
+          lastMessage: lastMessage || undefined
+        };
+      });
+
+      logger.debug('Returning chats from database:', { count: chats.length });
+      return chats;
     } catch (error) {
       logger.error('Error in getUserChats:', error);
       return [];

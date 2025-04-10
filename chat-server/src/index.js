@@ -47,6 +47,9 @@ const activeUsers = new Map();
 // Add a Set to track recently processed message IDs to prevent duplicates
 const recentlyProcessedMessages = new Set();
 
+// Add a map to track typing timeouts
+const typingTimeouts = new Map();
+
 // Clear the set periodically to prevent memory leaks
 setInterval(() => {
   console.log(`Clearing message ID cache. Size before clearing: ${recentlyProcessedMessages.size}`);
@@ -375,17 +378,71 @@ io.on('connection', (socket) => {
   // Handle typing indicator
   socket.on('typing', (data) => {
     console.log('Received typing notification:', data);
+    const { chatId, userId, isTyping } = data;
+
+    // Clear any existing timeout for this user in this chat
+    const timeoutKey = `${chatId}:${userId}`;
+    if (typingTimeouts.has(timeoutKey)) {
+      console.log(`Clearing existing typing timeout for ${userId} in chat ${chatId}`);
+      clearTimeout(typingTimeouts.get(timeoutKey));
+      typingTimeouts.delete(timeoutKey);
+    }
+
+    // If user is typing, set a timeout to automatically clear typing status
+    if (isTyping) {
+      console.log(`Setting typing timeout for ${userId} in chat ${chatId}`);
+      const timeout = setTimeout(() => {
+        console.log(`Auto-clearing typing status for user ${userId} in chat ${chatId} after timeout`);
+
+        // Broadcast typing stopped to all clients in the chat room
+        io.to(chatId).emit('typing', {
+          chatId,
+          userId,
+          isTyping: false
+        });
+
+        // Also broadcast to user-specific rooms
+        (async () => {
+          try {
+            const { data: participants } = await supabase
+              .from('chat_participants')
+              .select('user_id')
+              .eq('chat_id', chatId);
+
+            if (participants) {
+              participants.forEach(p => {
+                if (p.user_id !== userId) {
+                  io.to(`user_${p.user_id}`).emit('typing', {
+                    chatId,
+                    userId,
+                    isTyping: false
+                  });
+                }
+              });
+            }
+          } catch (err) {
+            console.error('Error in typing timeout handler:', err);
+          }
+        })();
+
+        // Remove the timeout from our tracking map
+        typingTimeouts.delete(timeoutKey);
+      }, 5000); // 5 seconds is a common timeout for typing indicators
+
+      // Store the timeout
+      typingTimeouts.set(timeoutKey, timeout);
+    }
 
     // Log the room and members for debugging
-    const room = io.sockets.adapter.rooms.get(data.chatId);
-    console.log(`Sending typing notification to chat ${data.chatId}. Room members:`, room ? Array.from(room) : 'No members');
+    const room = io.sockets.adapter.rooms.get(chatId);
+    console.log(`Sending typing notification to chat ${chatId}. Room members:`, room ? Array.from(room) : 'No members');
 
     // CRITICAL FIX: Use io.to instead of socket.to to ensure all clients receive the update
     // This is the same fix we applied to message broadcasting
-    io.to(data.chatId).emit('typing', {
-      chatId: data.chatId,
-      userId: data.userId,
-      isTyping: data.isTyping // Use the isTyping value from the data object
+    io.to(chatId).emit('typing', {
+      chatId,
+      userId,
+      isTyping
     });
 
     // ALSO broadcast to user-specific rooms to ensure delivery
@@ -395,17 +452,17 @@ io.on('connection', (socket) => {
         const { data: participants, error: participantsError } = await supabase
           .from('chat_participants')
           .select('user_id')
-          .eq('chat_id', data.chatId);
+          .eq('chat_id', chatId);
 
         if (!participantsError && participants) {
           participants.forEach(p => {
             // Don't send to the user who is typing
-            if (p.user_id !== data.userId) {
+            if (p.user_id !== userId) {
               console.log(`Broadcasting typing to user-specific room: user_${p.user_id}`);
               io.to(`user_${p.user_id}`).emit('typing', {
-                chatId: data.chatId,
-                userId: data.userId,
-                isTyping: data.isTyping // Use the isTyping value from the data object
+                chatId,
+                userId,
+                isTyping
               });
             }
           });
@@ -415,7 +472,7 @@ io.on('connection', (socket) => {
       }
     })();
 
-    console.log(`Typing notification sent for user ${data.userId} in chat ${data.chatId}, isTyping: ${data.isTyping}`);
+    console.log(`Typing notification sent for user ${userId} in chat ${chatId}, isTyping: ${isTyping}`);
   });
 
   // We don't need a separate stop_typing event handler since we're using the isTyping flag
@@ -431,13 +488,37 @@ io.on('connection', (socket) => {
   // Handle disconnection
   socket.on('disconnect', () => {
     // Find and remove user from active users
+    let disconnectedUserId = null;
     for (const [userId, socketId] of activeUsers.entries()) {
       if (socketId === socket.id) {
+        disconnectedUserId = userId;
         activeUsers.delete(userId);
         io.emit('user_status_change', { userId, status: 'offline' });
         break;
       }
     }
+
+    // Clean up any typing timeouts for this user
+    if (disconnectedUserId) {
+      for (const [key, timeout] of typingTimeouts.entries()) {
+        if (key.includes(`:${disconnectedUserId}`)) {
+          console.log(`Clearing typing timeout for disconnected user: ${key}`);
+          clearTimeout(timeout);
+          typingTimeouts.delete(key);
+
+          // Extract chatId from the key (format is "chatId:userId")
+          const chatId = key.split(':')[0];
+
+          // Notify others that user is no longer typing
+          io.to(chatId).emit('typing', {
+            chatId,
+            userId: disconnectedUserId,
+            isTyping: false
+          });
+        }
+      }
+    }
+
     console.log('User disconnected:', socket.id);
   });
 });
