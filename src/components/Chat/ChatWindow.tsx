@@ -5,7 +5,7 @@ import { ChatService } from '../../services/ChatService';
 import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
 import { Button } from '../ui/button';
-import { Send, Paperclip, MoreVertical, Users, X, UserPlus, MoreHorizontal, Reply, Edit, Trash2, ArrowLeft } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Users, X, UserPlus, MoreHorizontal, Reply, Edit, Trash2, ArrowLeft, CheckCheck, Share } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { useThemeStore } from '../../store/theme';
 import { cn } from '../../lib/utils';
@@ -36,6 +36,7 @@ import {
   ContextMenuTrigger,
 } from '../ui/context-menu';
 import { supabase } from '../../lib/supabaseClient';
+import './chat.css';
 
 // Global declarations should go at the top level
 declare global {
@@ -63,7 +64,6 @@ interface ChatWindowProps {
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }) => {
   const { authState } = useAuth();
-  const { device } = useThemeStore();
   const [newMessage, setNewMessage] = useState('');
   const [showMembers, setShowMembers] = useState(false);
   const [members, setMembers] = useState<User[]>([]);
@@ -81,7 +81,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     sendMessage,
     markAsRead,
     loadMessages
-  } = useChatStore();
+  } = useChatStore(state => ({
+    messages: state.messages,
+    sendMessage: state.sendMessage,
+    markAsRead: state.markAsRead,
+    loadMessages: state.loadMessages
+  }));
 
   const chatMessages = messages[chat.id] || [];
 
@@ -174,33 +179,46 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       scrollTimeoutRef.current = null;
     }
 
-    // Mark that a scroll operation is starting
-    scrollOperationInProgress.current = true;
+    // Use requestAnimationFrame for better performance
+    requestAnimationFrame(() => {
+      // Mark that a scroll operation is starting
+      scrollOperationInProgress.current = true;
 
-    // Execute the scroll
-    if (parentRef.current) {
-      if (immediate) {
-        // Force immediate scroll without animation
-        parentRef.current.scrollTop = parentRef.current.scrollHeight;
-        logger.debug('Executed immediate scroll to bottom');
-
-        // Set a timeout to allow further scrolls
-        setTimeout(() => {
-          scrollOperationInProgress.current = false;
-        }, 300);
-      } else {
-        // Smooth scroll with animation
-        if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-          logger.debug('Executed smooth scroll to bottom');
+      // Execute the scroll
+      if (parentRef.current) {
+        if (immediate) {
+          // Force immediate scroll without animation
+          parentRef.current.scrollTop = parentRef.current.scrollHeight;
 
           // Set a timeout to allow further scrolls
           setTimeout(() => {
             scrollOperationInProgress.current = false;
-          }, 500); // Longer timeout for smooth scrolls
+          }, 100); // Reduced from 300ms
+        } else {
+          // Use a more efficient approach for smooth scrolling
+          scrollTimeoutRef.current = setTimeout(() => {
+            if (parentRef.current) {
+              // Use native smooth scrolling when available
+              try {
+                parentRef.current.scrollTo({
+                  top: parentRef.current.scrollHeight,
+                  behavior: 'smooth'
+                });
+              } catch (e) {
+                // Fallback for browsers that don't support smooth scrolling
+                parentRef.current.scrollTop = parentRef.current.scrollHeight;
+              }
+
+              // Set a timeout to allow further scrolls after animation completes
+              setTimeout(() => {
+                scrollOperationInProgress.current = false;
+                scrollTimeoutRef.current = null;
+              }, 300); // Reduced from 500ms
+            }
+          }, 10);
         }
       }
-    }
+    });
   };
 
   // Single scroll effect that manages all scroll triggers
@@ -316,6 +334,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       // Store the message content before clearing the input
       const messageContent = newMessage.trim();
 
+      // Prepare message metadata for replies
+      let messageMetadata = null;
+      if (replyToMessage) {
+        messageMetadata = {
+          replyTo: {
+            messageId: replyToMessage.id,
+            senderId: replyToMessage.senderId,
+            content: replyToMessage.content
+          }
+        };
+        // Clear the reply after sending
+        setReplyToMessage(null);
+      }
+
       // Clear input right away for better user experience
       setNewMessage('');
 
@@ -325,7 +357,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
       // Try to send the message
       try {
-        await sendMessage(chat.id, messageContent);
+        // Pass message metadata for replies
+        await sendMessage(chat.id, messageContent, messageMetadata);
         logger.debug('Message sent successfully:', {
           chatId: chat.id,
           userId: authState.currentUser.studentId
@@ -465,8 +498,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
             typingTimeoutRef.current = null;
           }
           ChatService.setTypingStatus(chat.id, currentUser.studentId, false);
-
           ChatService.leaveChat(chat.id, currentUser.studentId);
+          ChatService.unsubscribeFromMessageUpdates();
+
           logger.debug('Cleaned up all subscriptions and left chat room');
         }
       };
@@ -489,6 +523,90 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   // Track the last time the user typed to avoid sending too many typing events
   const lastTypingTime = useRef<number>(0);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get sender name from user ID
+  const getSenderName = (senderId: string): string => {
+    // If it's the current user
+    if (senderId === authState.currentUser?.studentId) {
+      return 'You';
+    }
+
+    // Try to get from chatUsers
+    const user = chatUsers[senderId];
+    if (user) {
+      return user.name ||
+             `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+             user.email ||
+             'Unknown User';
+    }
+
+    // Fallback
+    return 'Unknown User';
+  };
+
+  // Message action handlers
+  const [replyToMessage, setReplyToMessage] = useState<any>(null);
+  const [forwardMessageDialogOpen, setForwardMessageDialogOpen] = useState(false);
+  const [messageToForward, setMessageToForward] = useState<any>(null);
+
+  const handleReplyToMessage = (message: any) => {
+    setReplyToMessage(message);
+    // Focus the input field
+    const inputElement = document.querySelector('.chat-input') as HTMLInputElement;
+    if (inputElement) {
+      inputElement.focus();
+    }
+    logger.debug('Replying to message:', { messageId: message.id, content: message.content });
+  };
+
+  const handleForwardMessage = (message: any) => {
+    setMessageToForward(message);
+    setForwardMessageDialogOpen(true);
+    logger.debug('Forwarding message:', { messageId: message.id, content: message.content });
+  };
+
+  // State for delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<any>(null);
+
+  // Handle message deletion with confirmation
+  const handleDeleteMessage = (message: any) => {
+    logger.debug('Preparing to delete message:', { messageId: message.id });
+    setMessageToDelete(message);
+    setDeleteDialogOpen(true);
+  };
+
+  // Get the deleteMessage function from the store
+  const deleteMessage = useChatStore(state => state.deleteMessage);
+
+  // Confirm and execute message deletion
+  const confirmDeleteMessage = async () => {
+    if (!messageToDelete || !authState.currentUser) return;
+
+    logger.debug('Confirming message deletion:', { messageId: messageToDelete.id });
+
+    try {
+      // Use the store's deleteMessage function with proper reactivity
+      const success = await deleteMessage(messageToDelete.id);
+
+      if (success) {
+        logger.debug('Message deleted successfully');
+        // Close the dialog
+        setDeleteDialogOpen(false);
+        setMessageToDelete(null);
+      } else {
+        logger.error('Failed to delete message');
+        alert('Failed to delete message. Please try again.');
+      }
+    } catch (error) {
+      logger.error('Error deleting message:', error);
+      alert('An error occurred while deleting the message.');
+    }
+  };
+
+  const handleCancelReply = () => {
+    setReplyToMessage(null);
+  };
 
   const handleTyping = () => {
     if (!authState.currentUser) return;
@@ -605,12 +723,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   const rowVirtualizer = useVirtualizer({
     count: sortedMessages.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 120,
-    overscan: 5,
-    paddingStart: 20,
-    paddingEnd: 20,
+    // Increase the estimated size to prevent overlapping
+    estimateSize: (index) => {
+      // Check if the message has metadata (like replies) which need more space
+      const message = sortedMessages[index];
+      const hasMetadata = message?.metadata?.replyTo;
+      const isLongMessage = message?.content?.length > 100;
+      const isVeryLongMessage = message?.content?.length > 300;
+      const isExtremelyLongMessage = message?.content?.length > 500;
+
+      // Base size + extra for metadata or long content
+      // Significantly increase size for very long messages
+      return 200 + // Increased base size from 150 to 200
+             (hasMetadata ? 100 : 0) + // Increased from 80 to 100
+             (isLongMessage ? 100 : 0) + // Increased from 70 to 100
+             (isVeryLongMessage ? 200 : 0) + // Increased from 150 to 200
+             (isExtremelyLongMessage ? 300 : 0); // Added extra for extremely long messages
+    },
+    overscan: 20, // Increased from 15 to 20 for smoother scrolling
+    paddingStart: 30, // Increased from 20 to 30
+    paddingEnd: 100, // Increased from 60 to 100 for more padding at the bottom
     initialRect: { width: 0, height: 0 },
-    scrollToFn: (offset, { behavior }) => {
+    scrollToFn: (offset) => { // Removed unused behavior parameter
       if (parentRef.current) {
         parentRef.current.scrollTop = offset;
       }
@@ -724,25 +858,68 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                     </div>
                   )}
                   <div className={cn(
-                    "flex w-full",
-                    isCurrentUser ? "justify-end" : "justify-start"
+                    "message-row",
+                    isCurrentUser ? "sent" : "received"
                   )}>
                     <div className="message-container">
-                      <div
-                        className={cn(
-                          "chat-bubble",
-                          isCurrentUser ? "chat-bubble-sent" : "chat-bubble-received"
-                        )}
-                      >
-                        <div>{message.content}</div>
-                      </div>
+                      {/* Show sender name for messages from others in group chats */}
+                      {!isCurrentUser && chat.type === 'group' && (
+                        <div className="message-sender-name text-xs font-medium text-primary mb-1 ml-1">
+                          {getSenderName(message.senderId)}
+                        </div>
+                      )}
+                      <ContextMenu>
+                        <ContextMenuTrigger>
+                          <div className="message-content-wrapper">
+                            <div
+                              className={cn(
+                                "chat-bubble",
+                                isCurrentUser ? "chat-bubble-sent" : "chat-bubble-received"
+                              )}
+                            >
+                              {/* Show reply information if this message is a reply */}
+                              {message.metadata?.replyTo && (
+                                <div className="reply-reference bg-accent/20 p-1 mb-1 rounded text-xs">
+                                  <div className="flex items-center">
+                                    <Reply className="h-3 w-3 mr-1 text-primary" />
+                                    <span className="font-medium">Reply to {getSenderName(message.metadata.replyTo.senderId)}</span>
+                                  </div>
+                                  <p className="text-muted-foreground truncate">{message.metadata.replyTo.content}</p>
+                                </div>
+                              )}
+                              <div>{message.content}</div>
+                            </div>
+                          </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem onClick={() => handleReplyToMessage(message)}>
+                            <Reply className="h-4 w-4 mr-2" />
+                            <span>Reply</span>
+                          </ContextMenuItem>
+                          <ContextMenuItem onClick={() => handleForwardMessage(message)}>
+                            <Share className="h-4 w-4 mr-2" />
+                            <span>Forward</span>
+                          </ContextMenuItem>
+                          {isCurrentUser && (
+                            <ContextMenuItem onClick={() => handleDeleteMessage(message)}>
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              <span>Delete</span>
+                            </ContextMenuItem>
+                          )}
+                        </ContextMenuContent>
+                      </ContextMenu>
                       <div className={cn(
-                        "flex",
+                        "flex items-center gap-1",
                         isCurrentUser ? "justify-end" : "justify-start"
                       )}>
-                        <span className="chat-timestamp">
+                        <span className="chat-timestamp text-xs text-muted-foreground">
                           {format(messageDate, 'h:mm a')}
                         </span>
+                        {isCurrentUser && (
+                          <span className="message-status">
+                            <CheckCheck className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -756,14 +933,39 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
       {/* Typing indicator */}
       {typingUsers.length > 0 && (
-        <div className="typing-indicator px-4 py-1 text-sm text-muted-foreground">
-          {typingUsers.map(userId => chatUsers[userId]?.name || 'Someone').join(', ')}{' '}
-          {typingUsers.length === 1 ? 'is' : 'are'} typing...
+        <div className="typing-indicator px-4 py-1 text-sm text-muted-foreground flex items-center">
+          <div className="typing-animation mr-2">
+            <span className="dot"></span>
+            <span className="dot"></span>
+            <span className="dot"></span>
+          </div>
+          {typingUsers.length === 1 ? (
+            <span>{getSenderName(typingUsers[0])} is typing...</span>
+          ) : typingUsers.length === 2 ? (
+            <span>{getSenderName(typingUsers[0])} and {getSenderName(typingUsers[1])} are typing...</span>
+          ) : (
+            <span>{getSenderName(typingUsers[0])} and {typingUsers.length - 1} others are typing...</span>
+          )}
         </div>
       )}
 
       {/* Message Input */}
       <div className="chat-input-container">
+        {/* Reply UI */}
+        {replyToMessage && (
+          <div className="reply-container bg-accent/30 p-2 mb-2 rounded flex items-center justify-between">
+            <div className="flex items-center">
+              <Reply className="h-4 w-4 mr-2 text-primary" />
+              <div className="text-sm">
+                <span className="font-medium">Replying to {getSenderName(replyToMessage.senderId)}</span>
+                <p className="text-muted-foreground truncate max-w-[200px]">{replyToMessage.content}</p>
+              </div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={handleCancelReply} className="h-6 w-6">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         <form onSubmit={handleSendMessage} className="flex items-center gap-2">
           <Input
             value={newMessage}
@@ -771,7 +973,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
               setNewMessage(e.target.value);
               handleTyping();
             }}
-            placeholder="Type your message here..."
+            placeholder={replyToMessage ? "Type your reply..." : "Type your message here..."}
             className="chat-input flex-1"
           />
           <Button
@@ -784,6 +986,62 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </Button>
         </form>
       </div>
+
+      {/* Forward Message Dialog */}
+      <Dialog open={forwardMessageDialogOpen} onOpenChange={setForwardMessageDialogOpen}>
+        <DialogContent className={cn(
+          "sm:max-w-[425px]",
+          isMobile && "w-full h-full max-w-none m-0 rounded-none"
+        )}>
+          <DialogHeader>
+            <DialogTitle>Forward Message</DialogTitle>
+            <DialogDescription>
+              Select a chat to forward this message to
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {messageToForward && (
+              <div className="bg-accent/20 p-2 rounded mb-4">
+                <p className="text-sm font-medium">Message to forward:</p>
+                <p className="text-sm text-muted-foreground">{messageToForward.content}</p>
+              </div>
+            )}
+            <div className="max-h-[300px] overflow-y-auto">
+              {/* This would be populated with a list of chats */}
+              <p className="text-muted-foreground text-center py-4">Forward message functionality not yet implemented</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForwardMessageDialogOpen(false)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Message Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Message</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this message? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {messageToDelete && (
+            <div className="my-4 p-3 bg-accent/20 rounded-md">
+              <p className="text-sm text-muted-foreground">Message content:</p>
+              <p className="mt-1">{messageToDelete.content}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteMessage}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Members Dialog */}
       <Dialog open={showMembers} onOpenChange={setShowMembers}>

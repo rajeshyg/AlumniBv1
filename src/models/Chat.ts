@@ -10,6 +10,7 @@ export interface ChatMessage {
   sender?: User; // Optional because we might not always have the full user object
   sequence?: number; // For message ordering
   source?: 'socket' | 'supabase' | 'unknown'; // Track message source
+  metadata?: any; // For additional data like reply information
 }
 
 export interface Chat {

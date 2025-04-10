@@ -13,9 +13,13 @@ export interface ChatStore {
   error: string | null;
   loadChats: () => Promise<void>;
   loadMessages: (chatId: string) => Promise<void>;
-  sendMessage: (chatId: string, content: string) => Promise<void>;
+  sendMessage: (chatId: string, content: string, metadata?: any) => Promise<void>;
   markAsRead: (chatId: string) => Promise<void>;
   setCurrentUser: (user: User | null) => void;
+
+  // Message deletion
+  deleteMessage: (messageId: string) => Promise<boolean>;
+  removeMessage: (chatId: string, messageId: string) => void;
 
   // Methods for real-time updates
   addOrUpdateMessage: (message: ChatMessage) => void;
@@ -310,9 +314,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   // Send a message
-  sendMessage: async (chatId: string, content: string) => {
+  sendMessage: async (chatId: string, content: string, metadata?: any) => {
     try {
-      logger.debug('Sending message:', { chatId, content });
+      logger.debug('Sending message:', {
+        chatId,
+        content,
+        hasMetadata: !!metadata,
+        metadataType: metadata ? Object.keys(metadata) : null
+      });
 
       const currentUser = get().currentUser;
       if (!currentUser) {
@@ -321,14 +330,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
 
       // Create the message in Supabase
-      const message = await ChatService.sendMessage(chatId, currentUser.studentId, content);
+      const message = await ChatService.sendMessage(chatId, currentUser.studentId, content, metadata);
 
       if (!message) {
         logger.error('No message returned from sendMessage');
         return;
       }
 
-      logger.debug('Message sent successfully:', { messageId: message.id });
+      logger.debug('Message sent successfully:', {
+        messageId: message.id,
+        hasMetadata: !!message.metadata
+      });
 
       // Add the message to the store directly
       get().addOrUpdateMessage(message);
@@ -367,6 +379,72 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch (error) {
       logger.error('Failed to mark messages as read:', error);
     }
+  },
+
+  // Delete a message
+  deleteMessage: async (messageId: string) => {
+    try {
+      logger.debug('Deleting message:', { messageId });
+
+      const currentUser = get().currentUser;
+      if (!currentUser) {
+        logger.error('Cannot delete message: No current user');
+        return false;
+      }
+
+      // Call the service to delete the message
+      const success = await ChatService.deleteMessage(messageId, currentUser.studentId);
+
+      if (success) {
+        logger.debug('Message deleted successfully:', { messageId });
+
+        // Find which chat this message belongs to
+        let chatId = null;
+        const allMessages = get().messages;
+
+        // Search through all chats to find the message
+        for (const [cId, messages] of Object.entries(allMessages)) {
+          if (messages.some(m => m.id === messageId)) {
+            chatId = cId;
+            break;
+          }
+        }
+
+        if (chatId) {
+          // Remove the message from the store
+          get().removeMessage(chatId, messageId);
+        }
+
+        return true;
+      } else {
+        logger.error('Failed to delete message:', { messageId });
+        return false;
+      }
+    } catch (error) {
+      logger.error('Error deleting message:', error);
+      return false;
+    }
+  },
+
+  // Remove a message from the store (used after deletion or for local cleanup)
+  removeMessage: (chatId: string, messageId: string) => {
+    logger.debug('Removing message from store:', { chatId, messageId });
+
+    set(state => {
+      // Get the current messages for this chat
+      const chatMessages = state.messages[chatId] || [];
+
+      // Filter out the deleted message
+      const updatedMessages = chatMessages.filter(m => m.id !== messageId);
+
+      // Update the messages state
+      return {
+        messages: {
+          ...state.messages,
+          [chatId]: updatedMessages
+        }
+      };
+    });
   },
 
   // Add a property to track processed messages by content

@@ -247,9 +247,14 @@ export class ChatService {
   }
 
   // Send a message in a chat
-  static async sendMessage(chatId: string, senderId: string, content: string): Promise<ChatMessage> {
+  static async sendMessage(chatId: string, senderId: string, content: string, metadata?: any): Promise<ChatMessage> {
     try {
-      logger.debug('Sending message:', { chatId, senderId, contentLength: content.length });
+      logger.debug('Sending message:', {
+        chatId,
+        senderId,
+        contentLength: content.length,
+        hasMetadata: !!metadata
+      });
 
       const messageId = this.generateUniqueId();
       const timestamp = new Date().toISOString();
@@ -260,7 +265,8 @@ export class ChatService {
         senderId,
         content,
         timestamp,
-        readBy: [senderId]
+        readBy: [senderId],
+        metadata: metadata || undefined
       };
 
       // Try to insert message into Supabase
@@ -273,7 +279,8 @@ export class ChatService {
           content: message.content,
           created_at: message.timestamp,
           updated_at: message.timestamp,
-          read_by: message.readBy
+          read_by: message.readBy,
+          metadata: message.metadata // Include metadata in the database
         })
         .select()
         .single();
@@ -822,6 +829,62 @@ export class ChatService {
     }
   }
 
+  // Delete a message
+  static async deleteMessage(messageId: string, userId: string): Promise<boolean> {
+    try {
+      logger.debug('Deleting message:', { messageId, userId });
+
+      // First, check if the message exists and belongs to the user
+      const { data: message, error: fetchError } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+
+      if (fetchError) {
+        logger.error('Error fetching message to delete:', fetchError);
+        return false;
+      }
+
+      // Verify the user is the sender of the message
+      if (message.sender_id !== userId) {
+        logger.warn('User attempted to delete a message they did not send:', {
+          messageId,
+          userId,
+          senderId: message.sender_id
+        });
+        return false;
+      }
+
+      // Delete the message from the database
+      const { error: deleteError } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (deleteError) {
+        logger.error('Error deleting message:', deleteError);
+        return false;
+      }
+
+      // Notify other clients about the deletion via Socket.IO
+      if (this.socket && this.socket.connected) {
+        this.socket.emit('delete_message', {
+          messageId,
+          chatId: message.chat_id,
+          deletedBy: userId,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      logger.debug('Message successfully deleted:', { messageId });
+      return true;
+    } catch (error) {
+      logger.error('Failed to delete message:', error);
+      return false;
+    }
+  }
+
   // Mark messages as read
   static async markMessagesAsRead(chatId: string, userId: string): Promise<void> {
     try {
@@ -1007,6 +1070,12 @@ export class ChatService {
       // after any UI state changes. This helps with race conditions.
       setTimeout(() => {
         globalMessageCallback(message.chatId, chatMessage, chatMessage.source as 'socket' | 'supabase');
+
+        // Force a second callback after a slightly longer delay to ensure UI updates
+        // This helps with race conditions between Supabase and Socket.io
+        setTimeout(() => {
+          globalMessageCallback(message.chatId, chatMessage, chatMessage.source as 'socket' | 'supabase');
+        }, 50);
       }, 10);
     } else {
       logger.warn('No global message callback available to process message:', message.id);

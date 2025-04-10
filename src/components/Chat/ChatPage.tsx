@@ -81,6 +81,9 @@ export const ChatPage: React.FC = () => {
   // Keep track of subscription status to prevent duplicates
   const subscriptionRef = useRef<boolean>(false);
 
+  // Ref for debouncing chat list updates
+  const chatListUpdateTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Local component state
   const [state, setState] = useState<ChatPageState>({
     currentChat: null,
@@ -112,12 +115,65 @@ export const ChatPage: React.FC = () => {
     setState(prev => ({ ...prev, ...updates }));
   };
 
+  // Function to get display name for a chat
+  const getChatDisplayName = (chat: Chat): string => {
+    if (chat.type === 'group') return chat.name;
+
+    // For direct chats, show the other person's name
+    if (chat.participants.length === 2 && authState.currentUser) {
+      // Find the other participant (not the current user)
+      const otherUserId = chat.participants.find(
+        id => id !== authState.currentUser?.studentId
+      );
+
+      if (otherUserId && chatUsers[otherUserId]) {
+        const user = chatUsers[otherUserId];
+        // Try different name formats in order of preference
+        return user.name ||
+          `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+          user.email ||
+          'Chat Participant';
+      }
+    }
+
+    return chat.name;
+  };
+
   // Use useMemo for derived state to avoid unnecessary recalculations
   const filteredAndSortedChats = useMemo(() => {
     // Apply search filter if query exists
-    let filtered = searchQuery?.trim()
-      ? chats.filter(chat => chat.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      : chats;
+    let filtered = chats;
+
+    if (searchQuery?.trim()) {
+      const searchLower = searchQuery.toLowerCase();
+
+      filtered = chats.filter(chat => {
+        // For direct chats, try to find the other participant's name
+        let displayName = chat.name.toLowerCase();
+
+        if (chat.type === 'direct' && chat.participants.length === 2 && authState.currentUser) {
+          // Find the other participant (not the current user)
+          const otherUserId = chat.participants.find(
+            id => id !== authState.currentUser?.studentId
+          );
+
+          if (otherUserId && chatUsers[otherUserId]) {
+            const user = chatUsers[otherUserId];
+            // Use different name formats in order of preference
+            const userName = user.name ||
+                             `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+                             user.email ||
+                             'Chat Participant';
+            displayName = userName.toLowerCase();
+          }
+        }
+
+        return displayName.includes(searchLower) ||
+               chat.name.toLowerCase().includes(searchLower) ||
+               // Also search in last message content if available
+               (chat.lastMessage?.content?.toLowerCase()?.includes(searchLower));
+      });
+    }
 
     // Sort by last message time
     return [...filtered].sort((a, b) => {
@@ -125,7 +181,7 @@ export const ChatPage: React.FC = () => {
       const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
       return timeB - timeA;
     });
-  }, [chats, searchQuery]);
+  }, [chats, searchQuery, chatUsers, authState.currentUser]);
 
   // Load chats without triggering excessive refreshes
   const loadUserChats = useCallback(async (forceFullLoading = false) => {
@@ -193,71 +249,76 @@ export const ChatPage: React.FC = () => {
       ChatService.initialize(authState.currentUser.studentId);
     }
 
-    // This callback handles real-time message updates without causing UI flickering
-    const handleMessageUpdate = (updatedChatId: string, newMessage?: ChatMessage, source?: 'socket' | 'supabase') => {
-      // Log at debug level to reduce console noise
-      logger.debug('Received real-time message update:', {
-        updatedChatId,
-        hasNewMessage: !!newMessage,
-        isCurrentChat: currentChat?.id === updatedChatId,
-        source: source || 'unknown'
-      });
+    // Set up message update handler with debounced updates
 
-      // CRITICAL: Force UI update by explicitly updating local state
+    // This callback handles real-time message updates with lazy loading to reduce API calls
+    const handleMessageUpdate = (updatedChatId: string, newMessage?: ChatMessage, source?: 'socket' | 'supabase') => {
+      // Only log in development to reduce noise
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('Received real-time message update:', {
+          updatedChatId,
+          hasNewMessage: !!newMessage,
+          isCurrentChat: currentChat?.id === updatedChatId,
+          source: source || 'unknown'
+        });
+      }
+
+      // OPTIMIZATION: Only update if we have a new message
       if (newMessage) {
         // First add the message to the global store
         addOrUpdateMessage(newMessage);
 
-        // Then IMMEDIATELY update our local state to refresh the UI
-        const updatedChats = [...filteredChats];
-        const chatIndex = updatedChats.findIndex(c => c.id === updatedChatId);
-
-        if (chatIndex >= 0) {
-          // Create a new chat object with the updated message
-          const chatToUpdate = {...updatedChats[chatIndex]};
-
-          // Update last message time and move to top
-          chatToUpdate.lastMessageTime = newMessage.timestamp;
-          chatToUpdate.lastMessage = {
-            id: newMessage.id,
-            content: newMessage.content,
-            senderId: newMessage.senderId,
-            timestamp: newMessage.timestamp,
-            chatId: newMessage.chatId,
-            readBy: newMessage.readBy || [],
-            source: newMessage.source,
-            sequence: newMessage.sequence
-          };
-
-          // Remove from current position
-          updatedChats.splice(chatIndex, 1);
-          // Add to the top
-          updatedChats.unshift(chatToUpdate);
-
-          logger.debug('Forcing UI update by moving chat to top:', updatedChatId);
-
-          // Update local state to trigger re-render
-          updateState({
-            filteredChats: updatedChats,
-            isRefreshing: false
-          });
-
-          // CRITICAL: If this is the current chat, mark as read and reload messages
-          // This ensures the message appears in the chat window immediately
-          if (currentChat?.id === updatedChatId) {
-            markAsRead(updatedChatId);
-            loadMessages(updatedChatId);
-          }
-        } else {
-          // If the chat isn't in our list yet, reload all chats
-          logger.debug('Chat not found in list, reloading all chats');
-          loadUserChats(false);
+        // CRITICAL: If this is the current chat, mark as read and reload messages immediately
+        // This ensures the message appears in the chat window right away
+        if (currentChat?.id === updatedChatId) {
+          markAsRead(updatedChatId);
+          loadMessages(updatedChatId);
+          return; // No need to update the chat list if we're already in this chat
         }
-      } else {
-        // Fallback: just reload the chat list (but with delay to prevent flicker)
-        setTimeout(() => {
-          loadUserChats();
-        }, 500);
+
+        // For non-current chats, use a debounced update to prevent excessive refreshes
+        if (chatListUpdateTimerRef.current) {
+          clearTimeout(chatListUpdateTimerRef.current);
+        }
+
+        chatListUpdateTimerRef.current = setTimeout(() => {
+          // Update the chat list in a lazy way - only move the updated chat to the top
+          const updatedChats = [...filteredChats];
+          const chatIndex = updatedChats.findIndex(c => c.id === updatedChatId);
+
+          if (chatIndex >= 0) {
+            // Create a new chat object with the updated message
+            const chatToUpdate = {...updatedChats[chatIndex]};
+
+            // Update last message time and content
+            chatToUpdate.lastMessageTime = newMessage.timestamp;
+            chatToUpdate.lastMessage = {
+              id: newMessage.id,
+              content: newMessage.content,
+              senderId: newMessage.senderId,
+              timestamp: newMessage.timestamp,
+              chatId: newMessage.chatId,
+              readBy: newMessage.readBy || [],
+              source: newMessage.source,
+              sequence: newMessage.sequence
+            };
+
+            // Remove from current position and add to the top
+            updatedChats.splice(chatIndex, 1);
+            updatedChats.unshift(chatToUpdate);
+
+            // Update local state to trigger re-render
+            updateState({
+              filteredChats: updatedChats,
+              isRefreshing: false
+            });
+          } else {
+            // If the chat isn't in our list yet, reload all chats but with low priority
+            loadUserChats(false);
+          }
+
+          chatListUpdateTimerRef.current = null;
+        }, 500); // Delay updates by 500ms to batch multiple messages
       }
     };
 
@@ -294,7 +355,13 @@ export const ChatPage: React.FC = () => {
         prevSearchRef.current = searchQuery || '';
 
         // Update the state
-        logger.debug('Updating filtered chats due to change in chats or search');
+        logger.debug('Updating filtered chats due to change in chats or search', {
+          searchQuery,
+          searchChanged,
+          chatsChanged,
+          filteredCount: filteredAndSortedChats.length,
+          totalChats: chats.length
+        });
         updateState({ filteredChats: filteredAndSortedChats });
       }
     }
@@ -376,7 +443,7 @@ export const ChatPage: React.FC = () => {
     };
   }, []);
 
-  // CRITICAL FIX: Improve chat selection responsiveness
+  // EMERGENCY FIX: Restore simple chat selection to fix critical issue
   const handleChatSelect = (chat: Chat) => {
     // Check if we're already on this chat to prevent unnecessary updates
     if (currentChat?.id === chat.id) {
@@ -548,6 +615,7 @@ export const ChatPage: React.FC = () => {
     // Set a new timeout to update the search query after a short delay
     // This prevents excessive updates while the user is typing
     searchTimeoutRef.current = setTimeout(() => {
+      logger.debug('Updating search query:', { query });
       // Just update the search query - the memoized filteredAndSortedChats will handle the filtering
       updateState({ searchQuery: query });
       searchTimeoutRef.current = null;
@@ -556,29 +624,6 @@ export const ChatPage: React.FC = () => {
 
   const handleNewChat = () => {
     updateState({ showNewChatDialog: true });
-  };
-
-  const getChatDisplayName = (chat: Chat): string => {
-    if (chat.type === 'group') return chat.name;
-
-    // For direct chats, show the other person's name
-    if (chat.participants.length === 2 && authState.currentUser) {
-      // Find the other participant (not the current user)
-      const otherUserId = chat.participants.find(
-        id => id !== authState.currentUser?.studentId
-      );
-
-      if (otherUserId && chatUsers[otherUserId]) {
-        const user = chatUsers[otherUserId];
-        // Try different name formats in order of preference
-        return user.name ||
-          `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
-          user.email ||
-          'Chat Participant';
-      }
-    }
-
-    return chat.name;
   };
 
   // Handle clear cache with improved loading
