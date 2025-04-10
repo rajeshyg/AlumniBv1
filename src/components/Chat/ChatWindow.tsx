@@ -179,46 +179,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       scrollTimeoutRef.current = null;
     }
 
-    // Use requestAnimationFrame for better performance
-    requestAnimationFrame(() => {
-      // Mark that a scroll operation is starting
-      scrollOperationInProgress.current = true;
+    // Mark that a scroll operation is starting
+    scrollOperationInProgress.current = true;
 
-      // Execute the scroll
-      if (parentRef.current) {
-        if (immediate) {
-          // Force immediate scroll without animation
-          parentRef.current.scrollTop = parentRef.current.scrollHeight;
+    // Execute the scroll
+    if (parentRef.current) {
+      if (immediate) {
+        // Force immediate scroll without animation
+        parentRef.current.scrollTop = parentRef.current.scrollHeight;
+        logger.debug('Executed immediate scroll to bottom');
+
+        // Set a timeout to allow further scrolls
+        setTimeout(() => {
+          scrollOperationInProgress.current = false;
+        }, 300);
+      } else {
+        // Smooth scroll with animation
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+          logger.debug('Executed smooth scroll to bottom');
 
           // Set a timeout to allow further scrolls
           setTimeout(() => {
             scrollOperationInProgress.current = false;
-          }, 100); // Reduced from 300ms
-        } else {
-          // Use a more efficient approach for smooth scrolling
-          scrollTimeoutRef.current = setTimeout(() => {
-            if (parentRef.current) {
-              // Use native smooth scrolling when available
-              try {
-                parentRef.current.scrollTo({
-                  top: parentRef.current.scrollHeight,
-                  behavior: 'smooth'
-                });
-              } catch (e) {
-                // Fallback for browsers that don't support smooth scrolling
-                parentRef.current.scrollTop = parentRef.current.scrollHeight;
-              }
-
-              // Set a timeout to allow further scrolls after animation completes
-              setTimeout(() => {
-                scrollOperationInProgress.current = false;
-                scrollTimeoutRef.current = null;
-              }, 300); // Reduced from 500ms
-            }
-          }, 10);
+          }, 500); // Longer timeout for smooth scrolls
         }
       }
-    });
+    }
   };
 
   // Single scroll effect that manages all scroll triggers
@@ -498,9 +485,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
             typingTimeoutRef.current = null;
           }
           ChatService.setTypingStatus(chat.id, currentUser.studentId, false);
-          ChatService.leaveChat(chat.id, currentUser.studentId);
-          ChatService.unsubscribeFromMessageUpdates();
 
+          ChatService.leaveChat(chat.id, currentUser.studentId);
           logger.debug('Cleaned up all subscriptions and left chat room');
         }
       };
@@ -565,43 +551,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     logger.debug('Forwarding message:', { messageId: message.id, content: message.content });
   };
 
-  // State for delete confirmation dialog
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [messageToDelete, setMessageToDelete] = useState<any>(null);
-
-  // Handle message deletion with confirmation
   const handleDeleteMessage = (message: any) => {
-    logger.debug('Preparing to delete message:', { messageId: message.id });
-    setMessageToDelete(message);
-    setDeleteDialogOpen(true);
-  };
-
-  // Get the deleteMessage function from the store
-  const deleteMessage = useChatStore(state => state.deleteMessage);
-
-  // Confirm and execute message deletion
-  const confirmDeleteMessage = async () => {
-    if (!messageToDelete || !authState.currentUser) return;
-
-    logger.debug('Confirming message deletion:', { messageId: messageToDelete.id });
-
-    try {
-      // Use the store's deleteMessage function with proper reactivity
-      const success = await deleteMessage(messageToDelete.id);
-
-      if (success) {
-        logger.debug('Message deleted successfully');
-        // Close the dialog
-        setDeleteDialogOpen(false);
-        setMessageToDelete(null);
-      } else {
-        logger.error('Failed to delete message');
-        alert('Failed to delete message. Please try again.');
-      }
-    } catch (error) {
-      logger.error('Error deleting message:', error);
-      alert('An error occurred while deleting the message.');
-    }
+    // Implement message deletion logic
+    logger.debug('Deleting message:', { messageId: message.id, content: message.content });
+    // This would typically call a service method to delete the message
+    // For now, just log it
+    alert('Message deletion not implemented yet');
   };
 
   const handleCancelReply = () => {
@@ -723,28 +678,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   const rowVirtualizer = useVirtualizer({
     count: sortedMessages.length,
     getScrollElement: () => parentRef.current,
-    // Increase the estimated size to prevent overlapping
-    estimateSize: (index) => {
-      // Check if the message has metadata (like replies) which need more space
-      const message = sortedMessages[index];
-      const hasMetadata = message?.metadata?.replyTo;
-      const isLongMessage = message?.content?.length > 100;
-      const isVeryLongMessage = message?.content?.length > 300;
-      const isExtremelyLongMessage = message?.content?.length > 500;
-
-      // Base size + extra for metadata or long content
-      // Significantly increase size for very long messages
-      return 200 + // Increased base size from 150 to 200
-             (hasMetadata ? 100 : 0) + // Increased from 80 to 100
-             (isLongMessage ? 100 : 0) + // Increased from 70 to 100
-             (isVeryLongMessage ? 200 : 0) + // Increased from 150 to 200
-             (isExtremelyLongMessage ? 300 : 0); // Added extra for extremely long messages
-    },
-    overscan: 20, // Increased from 15 to 20 for smoother scrolling
-    paddingStart: 30, // Increased from 20 to 30
-    paddingEnd: 100, // Increased from 60 to 100 for more padding at the bottom
+    estimateSize: () => 120,
+    overscan: 5,
+    paddingStart: 20,
+    paddingEnd: 20,
     initialRect: { width: 0, height: 0 },
-    scrollToFn: (offset) => { // Removed unused behavior parameter
+    scrollToFn: (offset, { behavior }) => {
       if (parentRef.current) {
         parentRef.current.scrollTop = offset;
       }
@@ -858,8 +797,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                     </div>
                   )}
                   <div className={cn(
-                    "message-row",
-                    isCurrentUser ? "sent" : "received"
+                    "flex w-full",
+                    isCurrentUser ? "justify-end" : "justify-start"
                   )}>
                     <div className="message-container">
                       {/* Show sender name for messages from others in group chats */}
@@ -870,13 +809,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                       )}
                       <ContextMenu>
                         <ContextMenuTrigger>
-                          <div className="message-content-wrapper">
-                            <div
-                              className={cn(
-                                "chat-bubble",
-                                isCurrentUser ? "chat-bubble-sent" : "chat-bubble-received"
-                              )}
-                            >
+                          <div
+                            className={cn(
+                              "chat-bubble",
+                              isCurrentUser ? "chat-bubble-sent" : "chat-bubble-received"
+                            )}
+                          >
+                            <div>
                               {/* Show reply information if this message is a reply */}
                               {message.metadata?.replyTo && (
                                 <div className="reply-reference bg-accent/20 p-1 mb-1 rounded text-xs">
@@ -1013,32 +952,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setForwardMessageDialogOpen(false)}>Cancel</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Message Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Message</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this message? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          {messageToDelete && (
-            <div className="my-4 p-3 bg-accent/20 rounded-md">
-              <p className="text-sm text-muted-foreground">Message content:</p>
-              <p className="mt-1">{messageToDelete.content}</p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDeleteMessage}>
-              Delete
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

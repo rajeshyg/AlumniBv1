@@ -25,11 +25,11 @@
 }
 
 @keyframes typing-dot {
-  0%, 80%, 100% {
+  0%, 80%, 100% { 
     transform: scale(0.7);
     opacity: 0.5;
   }
-  40% {
+  40% { 
     transform: scale(1);
     opacity: 1;
   }
@@ -41,12 +41,6 @@
   border-radius: 12px;
   max-width: 80%;
   word-break: break-word;
-  overflow-wrap: break-word;
-  -webkit-hyphens: auto;
-  hyphens: auto;
-  white-space: pre-wrap; /* Preserve line breaks but wrap text */
-  box-sizing: border-box;
-  display: inline-block; /* Critical for proper sizing */
 }
 
 .chat-bubble-sent {
@@ -97,33 +91,8 @@
 
 /* Message container */
 .message-container {
-  margin: 8px 0; /* Increased margin for better separation */
+  margin: 4px 0;
   max-width: 80%;
-  width: fit-content; /* Prevent container from expanding beyond content */
-  clear: both; /* Prevent floating issues */
-  display: flex;
-  flex-direction: column;
-}
-
-/* Message row - critical for preventing overlap */
-.message-row {
-  width: 100%;
-  margin-bottom: 16px; /* Ensure adequate spacing between messages */
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.message-row.sent {
-  align-items: flex-end;
-}
-
-/* Message content wrapper */
-.message-content-wrapper {
-  display: flex;
-  flex-direction: column;
-  max-width: 100%;
 }
 
 /* Message sender name */
