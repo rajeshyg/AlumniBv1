@@ -27,7 +27,7 @@ interface SerializedMessage {
 }
 
 // Global callback for message updates - allows direct store updates from anywhere
-let globalMessageCallback: ((chatId: string, message?: ChatMessage) => void) | null = null;
+let globalMessageCallback: ((chatId: string, message?: ChatMessage, source?: 'socket' | 'supabase') => void) | null = null;
 
 export class ChatService {
   private static socket: Socket | null = null;
@@ -36,6 +36,7 @@ export class ChatService {
   private static typingUsers: Record<string, Set<string>> = {};
   private static processedMessageIds = new Set<string>();
   private static recentMessageContents = new Map<string, number>();
+  private static messageSequence = 0; // For tracking message order
 
   // Check if the service has been initialized
   static isInitialized(): boolean {
@@ -49,7 +50,7 @@ export class ChatService {
     this.socket = null;
     this.currentUserId = null;
     this.typingUsers = {};
-    
+
     // Reconnect if needed
     if (this.currentUserId) {
       this.initialize(this.currentUserId);
@@ -61,22 +62,22 @@ export class ChatService {
   static reconnect(): boolean {
     try {
       logger.info('Manually reconnecting to Socket.IO server');
-      
+
       if (!this.currentUserId) {
         logger.error('Cannot reconnect: No user ID available');
         return false;
       }
-      
+
       // Disconnect existing socket if any
       if (this.socket) {
         logger.debug('Disconnecting existing socket connection');
         this.socket.disconnect();
         this.socket = null;
       }
-      
+
       // Reinitialize the connection
       this.initialize(this.currentUserId);
-      
+
       // Just return true - we've tried our best to reconnect
       logger.info('Manual reconnection attempt completed');
       return true;
@@ -90,15 +91,15 @@ export class ChatService {
   static initialize(userId: string): void {
     try {
       this.currentUserId = userId;
-      
+
       // Log actual URL being used (not just the configured one)
       const actualSocketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3006';
-      logger.info('Initializing Socket.IO connection', { 
+      logger.info('Initializing Socket.IO connection', {
         configuredUrl: this.socketUrl,
         actualUrl: actualSocketUrl,
         envVariable: import.meta.env.VITE_SOCKET_URL ? 'defined' : 'undefined'
       });
-      
+
       // Initialize Socket.IO connection with reconnection options
       this.socket = io(this.socketUrl, {
         auth: { userId },
@@ -117,7 +118,7 @@ export class ChatService {
         if (this.socket?.connected) {
           logger.info('Socket.IO connection verified as connected', { socketId: this.socket.id });
         } else {
-          logger.warn('Socket.IO connection not established after timeout', { 
+          logger.warn('Socket.IO connection not established after timeout', {
             connected: this.socket?.connected,
             socketId: this.socket?.id
           });
@@ -150,7 +151,7 @@ export class ChatService {
         // @ts-ignore
         clearInterval(this.socket._healthCheckIntervalId);
       }
-      
+
       this.socket.disconnect();
       this.socket = null;
       this.currentUserId = null;
@@ -164,7 +165,7 @@ export class ChatService {
   static async getChatMessages(chatId: string): Promise<ChatMessage[]> {
     try {
       logger.debug('Getting messages for chat:', { chatId });
-      
+
       const { data, error } = await supabase
         .from('chat_messages')
         .select('*')
@@ -182,7 +183,7 @@ export class ChatService {
       }
 
       logger.debug('Loaded messages from database:', { chatId, count: data.length });
-      
+
       return data.map(msg => ({
         id: msg.id,
         chatId: msg.chat_id,
@@ -208,10 +209,10 @@ export class ChatService {
   static async sendMessage(chatId: string, senderId: string, content: string): Promise<ChatMessage> {
     try {
       logger.debug('Sending message:', { chatId, senderId, contentLength: content.length });
-      
+
       const messageId = this.generateUniqueId();
       const timestamp = new Date().toISOString();
-      
+
       const message: ChatMessage = {
         id: messageId,
         chatId,
@@ -263,10 +264,10 @@ export class ChatService {
           connected: this.socket.connected,
           id: this.socket.id
         });
-        
+
         logger.debug('Emitting message through Socket.IO:', message);
         this.socket.emit('send_message', message);
-        
+
         // Check if we've actually joined the chat room
         logger.debug('Attempting to emit to chat room:', chatId);
       } else {
@@ -276,11 +277,11 @@ export class ChatService {
       return message;
     } catch (error) {
       logger.error('Failed to send message:', error);
-      
+
       // Create a fallback message
       const messageId = `msg-error-${Date.now()}`;
       const timestamp = new Date().toISOString();
-      
+
       const fallbackMessage: ChatMessage = {
         id: messageId,
         chatId,
@@ -289,7 +290,7 @@ export class ChatService {
         timestamp,
         readBy: [senderId]
       };
-      
+
       logger.warn('Returning fallback message due to exception:', fallbackMessage);
       return fallbackMessage;
     }
@@ -297,17 +298,17 @@ export class ChatService {
 
   // Create a new chat (for both group and 1-1)
   static async createChat(
-    name: string, 
-    participants: string[], 
-    postId: string = '', 
+    name: string,
+    participants: string[],
+    postId: string = '',
     type: 'direct' | 'group' = 'group'
   ): Promise<Chat> {
     try {
       logger.debug(`Creating new chat "${name}" with participants:`, participants);
-      
+
       // Generate a unique ID for the chat
       const chatId = `chat-${Date.now()}`;
-      
+
       // Prepare chat object for Supabase
       const newChat = {
         id: chatId,
@@ -333,7 +334,7 @@ export class ChatService {
           message: chatError.message,
           details: chatError.details
         });
-        
+
         // Return a local chat object even if database insertion failed
         logger.debug('Returning local chat object after database error');
         return {
@@ -353,7 +354,7 @@ export class ChatService {
         chatId: chatData.id,
         name: chatData.name
       });
-      
+
       // Try to add participants
       const participantAddSuccess = await this.addParticipantsToChat(chatId, participants);
       if (!participantAddSuccess) {
@@ -375,15 +376,15 @@ export class ChatService {
         lastMessageId: chatData.last_message_id,
         lastMessageTime: chatData.last_message_time
       };
-      
+
       logger.debug('Returning chat:', chat);
       return chat;
     } catch (error) {
       logger.error('Error in createChat:', error);
-      
+
       // Create a fallback chat to ensure the UI can continue to function
       const fallbackChatId = `fallback-chat-${Date.now()}`;
-      
+
       logger.debug('Returning fallback chat due to error');
       return {
         id: fallbackChatId,
@@ -395,12 +396,12 @@ export class ChatService {
       };
     }
   }
-  
+
   // Helper to add participants to a chat
   private static async addParticipantsToChat(chatId: string, participants: string[]): Promise<boolean> {
     try {
       logger.debug('Adding participants to chat:', { chatId, participants });
-      
+
       const participantRecords = participants.map(userId => ({
         chat_id: chatId,
         user_id: userId,
@@ -419,7 +420,7 @@ export class ChatService {
         });
         return false;
       }
-      
+
       logger.debug('Successfully added participants to chat');
       return true;
     } catch (error) {
@@ -468,18 +469,20 @@ export class ChatService {
   static setTypingStatus(chatId: string, userId: string, isTyping: boolean): void {
     try {
       logger.debug('Setting typing status:', { chatId, userId, isTyping });
-      
+
       // Update local typing indicator state
       if (isTyping) {
         this.addTypingUser(chatId, userId);
       } else {
         this.removeTypingUser(chatId, userId);
       }
-      
+
       // Emit typing status to other users if socket is connected
       if (this.socket) {
+        // CRITICAL FIX: Always use the 'typing' event with isTyping flag
+        // instead of separate 'typing' and 'stop_typing' events
         this.socket.emit('typing', { chatId, userId, isTyping });
-        logger.debug('Emitted typing status via Socket.IO');
+        logger.debug('Emitted typing status via Socket.IO:', { isTyping });
       } else {
         logger.warn('Socket not connected, cannot emit typing status');
       }
@@ -492,25 +495,25 @@ export class ChatService {
   static joinChat(chatId: string, userId: string): void {
     if (this.socket && this.socket.connected) {
       logger.debug('Joining chat room:', { chatId, userId });
-      
+
       // First leave any existing rooms to prevent issues
       this.leaveChat(chatId, userId);
-      
+
       // Join the specific chat room
       this.socket.emit('join_chat', chatId);
-      
+
       // IMPORTANT: Also join a user-specific room to ensure messages reach this client
       // This is critical for real-time updates even if room joining fails
       this.socket.emit('join_user_room', userId);
-      
+
       // Log that we've attempted to join
       logger.info('Join chat room commands sent for:', { chatId, userId });
     } else {
-      logger.warn('Cannot join chat: Socket not connected', { 
+      logger.warn('Cannot join chat: Socket not connected', {
         socketExists: !!this.socket,
         connected: this.socket?.connected
       });
-      
+
       // Try to reconnect if socket exists but isn't connected
       if (this.socket && !this.socket.connected && this.currentUserId) {
         logger.info('Attempting to reconnect socket before joining chat');
@@ -536,17 +539,17 @@ export class ChatService {
   static async getUserChats(userId: string): Promise<Chat[]> {
     try {
       logger.debug('Getting user chats from Supabase:', { userId });
-      
+
       // Try to fetch existing chats
       try {
         logger.debug('Fetching chats for user:', { userId });
-        
+
         // Query for all chats where this user is a participant
         const { data: participantData, error: participantError } = await supabase
           .from('chat_participants')
           .select('chat_id')
           .eq('user_id', userId);
-          
+
         if (participantError) {
           logger.error('Error querying chat_participants:', {
             error: participantError,
@@ -554,21 +557,21 @@ export class ChatService {
           });
           return [];
         }
-        
+
         if (!participantData || participantData.length === 0) {
           logger.debug('No chat participants found for user');
           return [];
         }
-        
+
         const chatIds = participantData.map((p: { chat_id: string }) => p.chat_id);
         logger.debug('Found chat IDs:', chatIds);
-        
+
         // Get chat details
         const { data: chatData, error: chatError } = await supabase
           .from('chats')
           .select('*')
           .in('id', chatIds);
-          
+
         if (chatError) {
           logger.error('Error querying chats:', {
             error: chatError,
@@ -576,18 +579,18 @@ export class ChatService {
           });
           return [];
         }
-        
+
         if (!chatData || chatData.length === 0) {
           logger.debug('No chats found for user');
           return [];
         }
-        
+
         // Get all participants for these chats
         const { data: allParticipants, error: allParticipantsError } = await supabase
           .from('chat_participants')
           .select('*')
           .in('chat_id', chatIds);
-          
+
         if (allParticipantsError) {
           logger.error('Error fetching all participants:', {
             error: allParticipantsError,
@@ -595,7 +598,7 @@ export class ChatService {
           });
           return [];
         }
-        
+
         // Convert to the format expected by the store
         const chats: Chat[] = chatData.map((chat: any) => {
           // Get participants for this chat
@@ -603,7 +606,7 @@ export class ChatService {
             ? allParticipants.filter((p: any) => p.chat_id === chat.id)
                               .map((p: any) => p.user_id)
             : [userId];
-          
+
           return {
             id: chat.id,
             name: chat.name,
@@ -615,7 +618,7 @@ export class ChatService {
             lastMessageTime: chat.last_message_time
           };
         });
-        
+
         logger.debug('Returning chats from database:', { count: chats.length });
         return chats;
       } catch (dbError) {
@@ -653,13 +656,13 @@ export class ChatService {
   static async markMessagesAsRead(chatId: string, userId: string): Promise<void> {
     try {
       logger.debug('Marking messages as read:', { chatId, userId });
-      
+
       // Simple validation
       if (!chatId || !userId) {
         logger.error('Invalid parameters for markMessagesAsRead:', { chatId, userId });
         return;
       }
-      
+
       // Try to get unread messages
       const { data: messages, error: fetchError } = await supabase
         .from('chat_messages')
@@ -671,15 +674,15 @@ export class ChatService {
         logger.error('Error fetching unread messages:', fetchError);
         return;
       }
-      
+
       // No messages to mark as read
       if (!messages || messages.length === 0) {
         logger.debug('No unread messages found:', { chatId, userId });
         return;
       }
-      
-      logger.debug(`Found ${messages.length} messages to mark as read:`, { 
-        chatId, 
+
+      logger.debug(`Found ${messages.length} messages to mark as read:`, {
+        chatId,
         messageIds: messages.map(m => m.id)
       });
 
@@ -694,9 +697,9 @@ export class ChatService {
               .eq('id', message.id);
 
             if (updateError) {
-              logger.error('Error marking message as read:', { 
-                error: updateError, 
-                messageId: message.id 
+              logger.error('Error marking message as read:', {
+                error: updateError,
+                messageId: message.id
               });
             } else {
               logger.debug('Marked message as read:', { messageId: message.id });
@@ -706,12 +709,12 @@ export class ChatService {
           logger.error('Error in message update:', { error, messageId: message.id });
         }
       });
-      
+
       // Wait for all updates to complete
       await Promise.all(updatePromises);
-      logger.debug('All messages marked as read:', { 
-        chatId, 
-        count: messages.length 
+      logger.debug('All messages marked as read:', {
+        chatId,
+        count: messages.length
       });
     } catch (error) {
       logger.error('Failed to mark messages as read:', error);
@@ -723,7 +726,7 @@ export class ChatService {
     setInterval(() => {
       logger.debug(`Clearing processed message cache. Size: ${ChatService.processedMessageIds.size}`);
       ChatService.processedMessageIds.clear();
-      
+
       // Also clear content cache
       logger.debug(`Clearing message content cache. Size: ${ChatService.recentMessageContents.size}`);
       ChatService.recentMessageContents.clear();
@@ -731,7 +734,7 @@ export class ChatService {
   }
 
   // Subscribe to message updates with robust duplicate prevention
-  static subscribeToMessageUpdates(callback: (chatId: string, message?: ChatMessage) => void): void {
+  static subscribeToMessageUpdates(callback: (chatId: string, message?: ChatMessage, source?: 'socket' | 'supabase') => void): void {
     if (!this.socket) {
       logger.error('Cannot subscribe to message updates: Socket not initialized');
       return;
@@ -747,6 +750,16 @@ export class ChatService {
 
     // Listen for new messages directly
     this.socket.on('new_message', (message: any) => {
+      logger.debug('Received new_message event from socket:', {
+        messageId: message.id,
+        chatId: message.chatId,
+        senderId: message.senderId
+      });
+
+      // Add source information
+      message.source = 'socket';
+      message.sequence = this.messageSequence++;
+
       // Process the message through our duplicate prevention logic
       this.processNewMessageEvent(message);
     });
@@ -754,8 +767,14 @@ export class ChatService {
     // Also listen for message_update events as a fallback
     this.socket.on('message_update', (chatId: string) => {
       logger.debug('Received message_update event for chat:', chatId);
-      callback(chatId);
+      callback(chatId, undefined, 'socket');
     });
+
+    // CRITICAL: Check connection status and reconnect if needed
+    if (!this.socket.connected && this.currentUserId) {
+      logger.warn('Socket not connected during subscription - attempting reconnection');
+      this.socket.connect();
+    }
 
     logger.debug('Subscribed to real-time message updates with enhanced duplicate prevention');
   }
@@ -767,12 +786,12 @@ export class ChatService {
       logger.debug('Ignoring duplicate message by ID:', message.id);
       return;
     }
-    
+
     // 2. Check content + chat based duplication within a time window
     const contentKey = `${message.chatId}:${message.senderId}:${message.content}`;
     const now = Date.now();
     const recentTimestamp = this.recentMessageContents.get(contentKey);
-    
+
     if (recentTimestamp && now - recentTimestamp < 5000) {
       logger.debug('Ignoring duplicate message by content+time:', {
         content: message.content,
@@ -781,17 +800,23 @@ export class ChatService {
       });
       return;
     }
-    
+
     // Add to processed trackers
     this.processedMessageIds.add(message.id);
     this.recentMessageContents.set(contentKey, now);
-    
+
+    // Set expiration for the message ID (clear after 10 minutes)
+    setTimeout(() => {
+      this.processedMessageIds.delete(message.id);
+    }, 10 * 60 * 1000);
+
     logger.debug('Received direct new message event:', {
       chatId: message.chatId,
       messageId: message.id,
+      source: message.source || 'unknown',
       content: message.content?.substring(0, 20) + (message.content?.length > 20 ? '...' : '')
     });
-    
+
     // Convert to ChatMessage format if needed
     const chatMessage: ChatMessage = {
       id: message.id,
@@ -799,13 +824,20 @@ export class ChatService {
       senderId: message.senderId,
       content: message.content,
       timestamp: message.timestamp,
-      readBy: message.readBy || []
+      readBy: message.readBy || [],
+      sequence: message.sequence || this.messageSequence++,
+      source: message.source || 'unknown'
     };
-    
+
     // Call the global callback if available
     if (globalMessageCallback) {
       logger.debug('Calling global message callback with message:', message.id);
-      globalMessageCallback(message.chatId, chatMessage);
+
+      // CRITICAL: Force a small delay to ensure the message is processed
+      // after any UI state changes. This helps with race conditions.
+      setTimeout(() => {
+        globalMessageCallback(message.chatId, chatMessage, chatMessage.source as 'socket' | 'supabase');
+      }, 10);
     } else {
       logger.warn('No global message callback available to process message:', message.id);
     }
@@ -819,7 +851,7 @@ export class ChatService {
     }
 
     this.socket.on('connect', () => {
-      logger.info('Socket.IO connected successfully', { 
+      logger.info('Socket.IO connected successfully', {
         socketId: this.socket?.id,
         connected: this.socket?.connected
       });
@@ -836,38 +868,48 @@ export class ChatService {
     this.socket.on('error', (error) => {
       logger.error('Socket.IO error:', error);
     });
-    
+
     // Add handler for new messages - CRITICAL for real-time updates
     this.socket.on('new_message', (message: any) => {
-      logger.debug('Received new message via Socket.IO directly:', { 
+      logger.debug('Received new message via Socket.IO directly:', {
         chatId: message.chatId,
         messageId: message.id,
         content: message.content?.substring(0, 20) + '...'
       });
-      
+
       // Process the message through our duplicate prevention logic
       this.processNewMessageEvent(message);
     });
-    
+
     // Add handler for typing indicators
     this.socket.on('typing', ({chatId, userId, isTyping}: {chatId: string, userId: string, isTyping: boolean}) => {
       logger.debug('Received typing indicator:', { chatId, userId, isTyping });
-      
+
+      // CRITICAL FIX: Ensure we update the typing status correctly
       if (isTyping) {
         this.addTypingUser(chatId, userId);
-        logger.debug('Added typing user', { 
-          chatId, userId, 
-          currentTypingUsers: this.typingUsers[chatId] ? Array.from(this.typingUsers[chatId]) : [] 
+        logger.debug('Added typing user', {
+          chatId, userId,
+          currentTypingUsers: this.typingUsers[chatId] ? Array.from(this.typingUsers[chatId]) : []
         });
       } else {
         this.removeTypingUser(chatId, userId);
-        logger.debug('Removed typing user', { 
-          chatId, userId, 
-          currentTypingUsers: this.typingUsers[chatId] ? Array.from(this.typingUsers[chatId]) : [] 
+        logger.debug('Removed typing user', {
+          chatId, userId,
+          currentTypingUsers: this.typingUsers[chatId] ? Array.from(this.typingUsers[chatId]) : []
         });
       }
+
+      // Force a refresh of the typing users list
+      // This ensures the UI updates immediately
+      if (globalMessageCallback) {
+        // Use a small delay to ensure the typing state is updated first
+        setTimeout(() => {
+          globalMessageCallback(chatId);
+        }, 10);
+      }
     });
-    
+
     logger.debug('Socket.IO event handlers set up successfully');
   }
 
@@ -876,25 +918,25 @@ export class ChatService {
     try {
       const url = this.socketUrl;
       logger.debug('Checking Socket.IO server status:', url);
-      
+
       // Try to make a simple HTTP request to the socket server
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch(url, { 
+
+      const response = await fetch(url, {
         method: 'GET',
-        signal: controller.signal 
+        signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       const running = response.ok || response.status === 404; // Socket.IO often returns 404 but is still running
-      logger.info('Socket.IO server status check:', { 
-        url, 
+      logger.info('Socket.IO server status check:', {
+        url,
         running,
         status: response.status
       });
-      
+
       return { running, url };
     } catch (error) {
       logger.error('Error checking Socket.IO server:', error);
@@ -911,7 +953,7 @@ export class ChatService {
       typingUsersCount: Object.keys(this.typingUsers).length
     };
   }
-  
+
   // Add helper to check if socket is connected
   static isSocketConnected(): boolean {
     // @ts-ignore - Socket.IO has a connected property but TypeScript doesn't recognize it
@@ -928,13 +970,13 @@ export class ChatService {
     // Remove existing listeners
     this.socket.off('message_update');
     this.socket.off('new_message');
-    
+
     // IMPORTANT: Check connection and reconnect if needed
     if (!this.socket.connected && this.currentUserId) {
       logger.warn('Socket not connected during unsubscribe - attempting reconnection');
       this.socket.connect();
     }
-    
+
     logger.debug('Unsubscribed from real-time message updates');
   }
-} 
+}

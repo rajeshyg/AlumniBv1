@@ -283,7 +283,7 @@ const Home: React.FC = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Events</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between">
               <div className="text-2xl font-bold">{stats.events}</div>
               <Calendar className="w-8 h-8 text-primary/40" />
             </div>
@@ -394,7 +394,7 @@ const Home: React.FC = () => {
                       {formatTimeAgo(activity.timestamp)}
                     </p>
                   </div>
-                </div>
+          </div>
               ))}
             </CardContent>
             <CardFooter>

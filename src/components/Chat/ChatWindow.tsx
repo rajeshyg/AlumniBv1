@@ -124,10 +124,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
         chatId: chat.id,
         chatName: chat.name
       });
-      
+
       // Load messages immediately
       loadMessages(chat.id);
-      
+
       // Subscribe to real-time updates for this chat
       const channel = supabase
         .channel(`chat:${chat.id}`)
@@ -144,7 +144,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           }
         })
         .subscribe();
-      
+
       return () => {
         logger.debug('Unsubscribing from chat channel:', chat.id);
         channel.unsubscribe();
@@ -154,10 +154,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
   // Sort messages by timestamp and log for debugging
   const sortedMessages = React.useMemo(() => {
-    logger.debug(`Sorting ${chatMessages.length} messages for chat ${chat.id}:`, 
+    logger.debug(`Sorting ${chatMessages.length} messages for chat ${chat.id}:`,
       chatMessages.map(m => ({ id: m.id, content: m.content, timestamp: m.timestamp }))
     );
-    return [...chatMessages].sort((a, b) => 
+    return [...chatMessages].sort((a, b) =>
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
   }, [chatMessages, chat.id]);
@@ -173,17 +173,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       clearTimeout(scrollTimeoutRef.current);
       scrollTimeoutRef.current = null;
     }
-    
+
     // Mark that a scroll operation is starting
     scrollOperationInProgress.current = true;
-    
+
     // Execute the scroll
     if (parentRef.current) {
       if (immediate) {
         // Force immediate scroll without animation
         parentRef.current.scrollTop = parentRef.current.scrollHeight;
         logger.debug('Executed immediate scroll to bottom');
-        
+
         // Set a timeout to allow further scrolls
         setTimeout(() => {
           scrollOperationInProgress.current = false;
@@ -193,7 +193,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
         if (messagesEndRef.current) {
           messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
           logger.debug('Executed smooth scroll to bottom');
-          
+
           // Set a timeout to allow further scrolls
           setTimeout(() => {
             scrollOperationInProgress.current = false;
@@ -211,26 +211,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       if (scrollOperationInProgress.current) {
         return false;
       }
-      
+
       // Always scroll when messages change
       return sortedMessages.length > 0;
     };
-    
+
     // If we should scroll, schedule a scroll operation
     if (shouldScrollToBottom()) {
       logger.debug(`Scheduling scroll for chat ${chat.id}`);
-      
+
       // Clear any existing scroll timeouts
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
-      
+
       // Schedule a new scroll with a small delay to let the DOM update
       scrollTimeoutRef.current = setTimeout(() => {
         scrollToBottom(true);
       }, 150);
     }
-    
+
     // Cleanup function
     return () => {
       if (scrollTimeoutRef.current) {
@@ -299,9 +299,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !authState.currentUser) {
-      logger.debug('Cannot send message:', { 
+      logger.debug('Cannot send message:', {
         hasMessage: !!newMessage.trim(),
-        hasUser: !!authState.currentUser 
+        hasUser: !!authState.currentUser
       });
       return;
     }
@@ -312,13 +312,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
         messageLength: newMessage.trim().length,
         userId: authState.currentUser.studentId
       });
-      
+
       // Store the message content before clearing the input
       const messageContent = newMessage.trim();
-      
+
       // Clear input right away for better user experience
       setNewMessage('');
-      
+
+      // CRITICAL FIX: Explicitly clear typing status when sending a message
+      // This ensures the typing indicator is removed for all users
+      ChatService.setTypingStatus(chat.id, authState.currentUser.studentId, false);
+
       // Try to send the message
       try {
         await sendMessage(chat.id, messageContent);
@@ -326,12 +330,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           chatId: chat.id,
           userId: authState.currentUser.studentId
         });
-        
+
         // Single scroll operation after sending
         scrollToBottom(true);
       } catch (sendError) {
         logger.error('Failed to send message to database:', sendError);
-        
+
         // If message fails to send, add it locally to the UI
         // This gives the appearance of the message being sent
         // even if it failed to reach the database
@@ -343,7 +347,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           timestamp: new Date().toISOString(),
           readBy: [authState.currentUser.studentId]
         };
-        
+
         const existingMessages = messages[chat.id] || [];
         useChatStore.setState({
           messages: {
@@ -351,7 +355,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
             [chat.id]: [...existingMessages, tempMessage]
           }
         });
-        
+
         logger.debug('Added temporary message to UI for failed send:', {
           messageId: tempMessage.id,
           content: tempMessage.content
@@ -364,7 +368,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
   // Subscribe to real-time message updates
   useEffect(() => {
-    logger.debug('Setting up real-time message subscription in ChatWindow', { 
+    logger.debug('Setting up real-time message subscription in ChatWindow', {
       currentChatId: chat?.id,
       isAuthenticated: !!authState.currentUser
     });
@@ -372,7 +376,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     if (authState.currentUser && chat) {
       // Join the chat room (critical for real-time updates)
       ChatService.joinChat(chat.id, authState.currentUser.studentId);
-      
+
       // Subscribe to Supabase real-time updates for this chat
       const channel = supabase
         .channel(`chat:${chat.id}`)
@@ -386,7 +390,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
             chatId: chat.id,
             messageId: payload.new.id
           });
-          
+
           // Process the new message in the appropriate format
           const newMessage: ChatMessage = {
             id: payload.new.id,
@@ -394,64 +398,74 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
             senderId: payload.new.sender_id,
             content: payload.new.content,
             timestamp: payload.new.created_at,
-            readBy: payload.new.read_by || []
+            readBy: payload.new.read_by || [],
+            source: 'supabase',
+            sequence: Date.now() // Use timestamp as sequence for Supabase events
           };
-          
+
           // Add the message to the chat store
           useChatStore.getState().addOrUpdateMessage(newMessage);
-          
+
           // Also mark messages as read immediately when received
           if (authState.currentUser) {
             markAsRead(chat.id);
           }
-          
+
           // Ensure we scroll to the latest message
           setTimeout(() => scrollToBottom(true), 100);
         })
         .subscribe();
-      
+
       // Socket.IO message updates
       const handleMessageUpdate = (updatedChatId: string, newMessage?: ChatMessage) => {
-        logger.info('Received Socket.IO real-time message update', { 
-          updatedChatId, 
+        logger.info('Received Socket.IO real-time message update', {
+          updatedChatId,
           currentChatId: chat.id,
           isCurrentChat: updatedChatId === chat.id,
           hasMessagePayload: !!newMessage
         });
-        
+
         if (updatedChatId === chat.id) {
           if (newMessage) {
             // If we have the actual message object, add it directly
             useChatStore.getState().addOrUpdateMessage(newMessage);
-            
+
             // Mark as read
             markAsRead(chat.id);
-            
+
             // Scroll to latest message
             setTimeout(() => scrollToBottom(true), 100);
           } else {
             // Fallback: reload if we don't have the message object
             logger.debug('Reloading messages due to Socket.IO update without message payload');
             loadMessages(chat.id);
-            
+
             // Mark messages as read immediately when received
             markAsRead(chat.id);
           }
         }
       };
-      
+
       ChatService.subscribeToMessageUpdates(handleMessageUpdate);
       logger.debug('All real-time subscriptions established');
-      
+
       // Store the user information to prevent null reference in cleanup
       const currentUser = authState.currentUser;
-      
+
       return () => {
         // Clean up Supabase subscription
         channel.unsubscribe();
-        
+
         // Leave the chat room when component unmounts
         if (currentUser) {
+          // CRITICAL FIX: Clear typing status when leaving/switching chats
+          // This ensures typing indicators don't persist when switching between chats
+          if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = null;
+          }
+          ChatService.setTypingStatus(chat.id, currentUser.studentId, false);
+
           ChatService.leaveChat(chat.id, currentUser.studentId);
           logger.debug('Cleaned up all subscriptions and left chat room');
         }
@@ -467,23 +481,38 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
         const typing = ChatService.getTypingUsers(chat.id, authState.currentUser!.studentId);
         setTypingUsers(typing);
       }, 1000);
-      
+
       return () => clearInterval(interval);
     }
   }, [chat, authState.currentUser]);
 
+  // Track the last time the user typed to avoid sending too many typing events
+  const lastTypingTime = useRef<number>(0);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleTyping = () => {
     if (!authState.currentUser) return;
-    
+
     // Use the ChatService to set typing status
     try {
-      ChatService.setTypingStatus(chat.id, authState.currentUser.studentId, true);
-      
-      // Clear typing indicator after a delay
-      setTimeout(() => {
+      const now = Date.now();
+      // Only send typing event if it's been more than 2 seconds since the last one
+      if (now - lastTypingTime.current > 2000) {
+        ChatService.setTypingStatus(chat.id, authState.currentUser.studentId, true);
+        lastTypingTime.current = now;
+      }
+
+      // Clear any existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Set a new timeout to clear typing status after 3 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
         if (authState.currentUser) {
           ChatService.setTypingStatus(chat.id, authState.currentUser.studentId, false);
         }
+        typingTimeoutRef.current = null;
       }, 3000);
     } catch (error) {
       logger.error('Error handling typing indicator:', error);
@@ -523,14 +552,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const users = await UserService.searchUsers(query);
-        const filteredUsers = users.filter(user => 
+        const filteredUsers = users.filter(user =>
           user.studentId !== authState.currentUser?.studentId &&
           !chat.participants.includes(user.studentId)
         );
         setSearchResults(filteredUsers);
-        logger.info('User search completed', { 
-          query, 
-          resultCount: filteredUsers.length 
+        logger.info('User search completed', {
+          query,
+          resultCount: filteredUsers.length
         });
       } catch (error) {
         logger.error('Failed to search users', { error });
@@ -544,9 +573,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   const handleAddMember = async (user: User) => {
     try {
       // Since addParticipant doesn't exist, log this action instead
-      logger.info('Would add member to chat:', { 
-        chatId: chat.id, 
-        userId: user.studentId 
+      logger.info('Would add member to chat:', {
+        chatId: chat.id,
+        userId: user.studentId
       });
       setMembers(prev => [...prev, user]);
       setSearchResults(prev => prev.filter(u => u.studentId !== user.studentId));
@@ -560,9 +589,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   const handleRemoveMember = async (userId: string) => {
     try {
       // Since removeParticipant doesn't exist, log this action instead
-      logger.info('Would remove member from chat:', { 
-        chatId: chat.id, 
-        userId 
+      logger.info('Would remove member from chat:', {
+        chatId: chat.id,
+        userId
       });
       setMembers(prev => prev.filter(member => member.studentId !== userId));
       // Reload messages instead of using refreshChats
@@ -593,21 +622,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     if (chat.type === 'group') {
       return chat.name;
     }
-    
+
     // For direct chats, show the other person's name
     if (chat.participants.length === 2 && authState.currentUser) {
       // Find the other participant (not the current user)
       const otherUserId = chat.participants.find(
         id => id !== authState.currentUser?.studentId
       );
-      
+
       if (otherUserId && chatUsers[otherUserId]) {
-        return chatUsers[otherUserId].name || 
-          `${chatUsers[otherUserId].firstName || ''} ${chatUsers[otherUserId].lastName || ''}`.trim() || 
+        return chatUsers[otherUserId].name ||
+          `${chatUsers[otherUserId].firstName || ''} ${chatUsers[otherUserId].lastName || ''}`.trim() ||
           'Chat Participant';
       }
     }
-    
+
     return chat.name;
   };
 
@@ -647,10 +676,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       </div>
 
       {/* Messages Area */}
-      <div 
+      <div
         ref={parentRef}
         className="flex-1 overflow-y-auto px-4"
-        style={{ 
+        style={{
           height: isMobile ? 'calc(100vh - 130px)' : 'calc(100vh - 180px)',
         }}
       >
@@ -672,9 +701,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
               const currentUserId = authState.currentUser?.studentId;
               const isCurrentUser = Boolean(currentUserId && message.senderId === currentUserId);
               const messageDate = new Date(message.timestamp);
-              const showDateDivider = virtualRow.index === 0 || 
+              const showDateDivider = virtualRow.index === 0 ||
                 !isSameDay(messageDate, new Date(sortedMessages[virtualRow.index - 1].timestamp));
-              
+
               return (
                 <div
                   key={message.id}
@@ -745,9 +774,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
             placeholder="Type your message here..."
             className="chat-input flex-1"
           />
-          <Button 
-            type="submit" 
-            size="icon" 
+          <Button
+            type="submit"
+            size="icon"
             className="chat-send-button"
             disabled={!newMessage.trim()}
           >
@@ -863,4 +892,4 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       </Dialog>
     </div>
   );
-}; 
+};

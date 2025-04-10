@@ -8,6 +8,8 @@ export interface ChatMessage {
   timestamp: string;
   readBy: string[];
   sender?: User; // Optional because we might not always have the full user object
+  sequence?: number; // For message ordering
+  source?: 'socket' | 'supabase' | 'unknown'; // Track message source
 }
 
 export interface Chat {
@@ -36,4 +38,4 @@ export interface ChatState {
   messages: Record<string, ChatMessage[]>;
   loading: boolean;
   error: string | null;
-} 
+}

@@ -68,10 +68,10 @@ interface ChatPageState {
 export const ChatPage: React.FC = () => {
   const { authState } = useAuth();
   const { chats, loadChats, loadMessages, sendMessage, markAsRead, setCurrentUser, unreadCounts: storeUnreadCounts, addOrUpdateMessage } = useChatStore();
-  
+
   // Keep track of subscription status to prevent duplicates
   const subscriptionRef = useRef<boolean>(false);
-  
+
   // Local component state
   const [state, setState] = useState<ChatPageState>({
     currentChat: null,
@@ -92,10 +92,10 @@ export const ChatPage: React.FC = () => {
   });
 
   // Destructure state for easier access
-  const { 
-    currentChat, showNewChatDialog, showGroupDialog, selectedUsers, 
-    userSearchQuery, searchResults, isSearching, groupName, 
-    isMobile, searchQuery, filteredChats, chatUsers, isLoading, isRefreshing 
+  const {
+    currentChat, showNewChatDialog, showGroupDialog, selectedUsers,
+    userSearchQuery, searchResults, isSearching, groupName,
+    isMobile, searchQuery, filteredChats, chatUsers, isLoading, isRefreshing
   } = state;
 
   // Update specific state properties
@@ -109,19 +109,19 @@ export const ChatPage: React.FC = () => {
       // Only show loading indicator for initial or forced loads
       if (forceFullLoading || !chats.length) {
         let loadingShown = false;
-        
+
         // Only show loading after a delay if operation takes time
         const loadingTimer = setTimeout(() => {
           loadingShown = true;
           updateState({ isLoading: true, isRefreshing: false });
         }, 300);
-        
+
         // Perform the actual load
         await loadChats();
-        
+
         // Clear timer if it hasn't triggered yet
         clearTimeout(loadingTimer);
-        
+
         // If loading was shown, give a slight delay before hiding
         if (loadingShown) {
           setTimeout(() => {
@@ -144,41 +144,42 @@ export const ChatPage: React.FC = () => {
   // Setup real-time message subscription - ONLY ONCE when component mounts
   useEffect(() => {
     if (!authState.currentUser || subscriptionRef.current) return;
-    
+
     logger.debug('Setting up real-time message subscription in ChatPage - INITIAL SETUP');
-    
+
     // Mark that we've set up the subscription
     subscriptionRef.current = true;
-    
+
     // Initialize chat service and store with current user
     setCurrentUser(authState.currentUser);
-    
+
     if (!ChatService.isInitialized()) {
       ChatService.initialize(authState.currentUser.studentId);
     }
 
     // This callback handles real-time message updates without causing UI flickering
-    const handleMessageUpdate = (updatedChatId: string, newMessage?: ChatMessage) => {
+    const handleMessageUpdate = (updatedChatId: string, newMessage?: ChatMessage, source?: 'socket' | 'supabase') => {
       // Log at debug level to reduce console noise
-      logger.debug('Received real-time message update:', { 
+      logger.debug('Received real-time message update:', {
         updatedChatId,
         hasNewMessage: !!newMessage,
-        isCurrentChat: currentChat?.id === updatedChatId
+        isCurrentChat: currentChat?.id === updatedChatId,
+        source: source || 'unknown'
       });
 
       // CRITICAL: Force UI update by explicitly updating local state
       if (newMessage) {
         // First add the message to the global store
         addOrUpdateMessage(newMessage);
-        
+
         // Then IMMEDIATELY update our local state to refresh the UI
         const updatedChats = [...filteredChats];
         const chatIndex = updatedChats.findIndex(c => c.id === updatedChatId);
-        
+
         if (chatIndex >= 0) {
           // Create a new chat object with the updated message
           const chatToUpdate = {...updatedChats[chatIndex]};
-          
+
           // Update last message time and move to top
           chatToUpdate.lastMessageTime = newMessage.timestamp;
           chatToUpdate.lastMessage = {
@@ -187,26 +188,34 @@ export const ChatPage: React.FC = () => {
             senderId: newMessage.senderId,
             timestamp: newMessage.timestamp,
             chatId: newMessage.chatId,
-            readBy: newMessage.readBy || []
+            readBy: newMessage.readBy || [],
+            source: newMessage.source,
+            sequence: newMessage.sequence
           };
-          
+
           // Remove from current position
           updatedChats.splice(chatIndex, 1);
           // Add to the top
           updatedChats.unshift(chatToUpdate);
-          
+
           logger.debug('Forcing UI update by moving chat to top:', updatedChatId);
-          
+
           // Update local state to trigger re-render
           updateState({
             filteredChats: updatedChats,
             isRefreshing: false
           });
-        }
-        
-        // If this is the current chat, mark as read
-        if (currentChat?.id === updatedChatId) {
-          markAsRead(updatedChatId);
+
+          // CRITICAL: If this is the current chat, mark as read and reload messages
+          // This ensures the message appears in the chat window immediately
+          if (currentChat?.id === updatedChatId) {
+            markAsRead(updatedChatId);
+            loadMessages(updatedChatId);
+          }
+        } else {
+          // If the chat isn't in our list yet, reload all chats
+          logger.debug('Chat not found in list, reloading all chats');
+          loadUserChats(false);
         }
       } else {
         // Fallback: just reload the chat list (but with delay to prevent flicker)
@@ -218,10 +227,10 @@ export const ChatPage: React.FC = () => {
 
     // Set up the subscription
     ChatService.subscribeToMessageUpdates(handleMessageUpdate);
-    
+
     // Initial load of chats
     loadUserChats(true);
-    
+
     // Cleanup function
     return () => {
       logger.debug('Cleaning up message subscription');
@@ -234,7 +243,7 @@ export const ChatPage: React.FC = () => {
   useEffect(() => {
     if (chats.length > 0) {
       let filtered = chats;
-      
+
       // Apply search filter if query exists
       if (searchQuery) {
         filtered = chats.filter(chat =>
@@ -274,7 +283,7 @@ export const ChatPage: React.FC = () => {
         if (authState.currentUser) {
           users[authState.currentUser.studentId] = authState.currentUser;
         }
-        
+
         // Then load all unique participants from all chats
         const uniqueUserIds = new Set<string>();
         chats.forEach(chat => {
@@ -284,29 +293,29 @@ export const ChatPage: React.FC = () => {
             }
           });
         });
-        
+
         // Fetch all needed users in parallel
         const userPromises = Array.from(uniqueUserIds).map(id => UserService.findUserById(id));
         const loadedUsers = await Promise.all(userPromises);
-        
+
         // Add to users object
         loadedUsers.forEach(user => {
           if (user) {
             users[user.studentId] = user;
           }
         });
-        
-        logger.debug('Loaded chat users:', { 
+
+        logger.debug('Loaded chat users:', {
           count: Object.keys(users).length,
           userIds: Object.keys(users)
         });
-        
+
         updateState({ chatUsers: users });
       } catch (error) {
         logger.error('Error loading chat users:', error);
       }
     };
-    
+
     if (chats.length > 0) {
       loadChatUsers();
     }
@@ -324,13 +333,22 @@ export const ChatPage: React.FC = () => {
   }, []);
 
   const handleChatSelect = (chat: Chat) => {
+    // First update the UI to show the selected chat immediately
     updateState({ currentChat: chat });
-    markAsRead(chat.id);
+
+    // Then load messages and mark as read in the background
+    // This prevents the blank screen while loading
+    Promise.all([
+      loadMessages(chat.id),
+      markAsRead(chat.id)
+    ]).catch(error => {
+      logger.error('Error loading messages or marking as read:', error);
+    });
   };
 
   const handleUserSearch = async (query: string) => {
     updateState({ userSearchQuery: query });
-    
+
     if (!query.trim()) {
       updateState({ searchResults: [] });
       return;
@@ -340,7 +358,7 @@ export const ChatPage: React.FC = () => {
       updateState({ isSearching: true });
       const results = await UserService.searchUsers(query);
       // Filter out the current user and users already in the chat
-      const filteredResults = results.filter(user => 
+      const filteredResults = results.filter(user =>
         user.studentId !== authState.currentUser?.studentId &&
         !selectedUsers.some(selected => selected.studentId === user.studentId)
       );
@@ -352,7 +370,7 @@ export const ChatPage: React.FC = () => {
   };
 
   const handleAddUser = (user: User) => {
-    updateState({ 
+    updateState({
       selectedUsers: [...selectedUsers, user],
       searchResults: searchResults.filter(u => u.studentId !== user.studentId),
       userSearchQuery: ''
@@ -365,23 +383,23 @@ export const ChatPage: React.FC = () => {
 
   const handleCreateDirectChat = async (user: User) => {
     if (!authState.currentUser) return;
-    
+
     try {
       // Show loading state
       updateState({ isLoading: true });
-      logger.debug('Creating direct chat with user:', { 
-        userId: user.studentId, 
-        userName: user.name || user.email 
+      logger.debug('Creating direct chat with user:', {
+        userId: user.studentId,
+        userName: user.name || user.email
       });
-      
+
       // First check if a direct chat already exists with this user
-      const existingChat = chats.find(chat => 
-        chat.type === 'direct' && 
+      const existingChat = chats.find(chat =>
+        chat.type === 'direct' &&
         chat.participants.includes(user.studentId) &&
         chat.participants.includes(authState.currentUser!.studentId) &&
         chat.participants.length === 2
       );
-      
+
       if (existingChat) {
         // If a chat already exists, select it
         logger.debug('Using existing chat:', { chatId: existingChat.id });
@@ -389,26 +407,26 @@ export const ChatPage: React.FC = () => {
         updateState({ showNewChatDialog: false, isLoading: false });
         return;
       }
-      
+
       // Create a new direct chat
       const chatName = user.name || `${user.firstName} ${user.lastName}` || user.email;
       const participants = [authState.currentUser.studentId, user.studentId];
-      
+
       logger.debug('Creating new chat with name:', { chatName, participants });
-      
+
       try {
         const newChat = await ChatService.createChat(chatName, participants, '', 'direct');
         logger.debug('Created new chat:', { chatId: newChat.id, name: newChat.name });
-        
+
         // Add the new chat to our store
         await loadChats();
-        
+
         // Select the newly created chat
         handleChatSelect(newChat);
         updateState({ showNewChatDialog: false, isLoading: false });
       } catch (chatError) {
         logger.error('Failed to create chat in service:', chatError);
-        
+
         // Create a temporary chat if the service fails
         const tempChat: Chat = {
           id: `temp-chat-${Date.now()}`,
@@ -418,7 +436,7 @@ export const ChatPage: React.FC = () => {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
-        
+
         logger.debug('Created temporary chat:', { chatId: tempChat.id });
         handleChatSelect(tempChat);
         updateState({ showNewChatDialog: false, isLoading: false });
@@ -433,25 +451,25 @@ export const ChatPage: React.FC = () => {
     if (!authState.currentUser || selectedUsers.length === 0 || !groupName.trim()) {
       return;
     }
-    
+
     try {
       // Add current user to participants
       const participants = [
         authState.currentUser.studentId,
         ...selectedUsers.map(u => u.studentId)
       ];
-      
+
       // Create a new group chat
       const newChat = await ChatService.createChat(groupName.trim(), participants, '', 'group');
-      
+
       // Add the new chat to our store
       await loadChats();
-      
+
       // Select the newly created chat
       handleChatSelect(newChat);
-      
+
       // Reset the dialog state
-      updateState({ 
+      updateState({
         showGroupDialog: false,
         selectedUsers: [],
         groupName: ''
@@ -471,24 +489,24 @@ export const ChatPage: React.FC = () => {
 
   const getChatDisplayName = (chat: Chat): string => {
     if (chat.type === 'group') return chat.name;
-    
+
     // For direct chats, show the other person's name
     if (chat.participants.length === 2 && authState.currentUser) {
       // Find the other participant (not the current user)
       const otherUserId = chat.participants.find(
         id => id !== authState.currentUser?.studentId
       );
-      
+
       if (otherUserId && chatUsers[otherUserId]) {
         const user = chatUsers[otherUserId];
         // Try different name formats in order of preference
-        return user.name || 
-          `${user.firstName || ''} ${user.lastName || ''}`.trim() || 
-          user.email || 
+        return user.name ||
+          `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+          user.email ||
           'Chat Participant';
       }
     }
-    
+
     return chat.name;
   };
 
@@ -496,27 +514,27 @@ export const ChatPage: React.FC = () => {
   const handleClearCache = async () => {
     try {
       logger.debug('Clearing chat cache');
-      
-      updateState({ 
+
+      updateState({
         isLoading: true,
         currentChat: null,
         filteredChats: []
       });
-      
+
       // Cancel any pending refreshes
       if (window.pendingRefreshTimeout) {
         clearTimeout(window.pendingRefreshTimeout);
       }
-      
+
       if (window.debounceReloadTimer) {
         clearTimeout(window.debounceReloadTimer);
       }
-      
+
       // Wait longer for cache clear to prevent flickering
       setTimeout(async () => {
         await loadChats();
         logger.debug('Chats reloaded after cache clear');
-        
+
         setTimeout(() => {
           updateState({ isLoading: false });
         }, 300);
@@ -533,8 +551,8 @@ export const ChatPage: React.FC = () => {
       <div className={cn(
         "flex flex-col h-full",
         isMobile ? (
-          currentChat 
-            ? "hidden" 
+          currentChat
+            ? "hidden"
             : "w-full"
         ) : (
           "w-80 border-r border-border"
@@ -547,29 +565,29 @@ export const ChatPage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-2xl font-bold">Chats</h1>
               <div className="flex gap-2">
-                <Button 
-                  onClick={handleClearCache} 
-                  size="icon" 
+                <Button
+                  onClick={handleClearCache}
+                  size="icon"
                   variant="ghost"
-                  className="icon-button" 
+                  className="icon-button"
                   title="Clear Cache"
                 >
                   <X className="h-5 w-5" />
                 </Button>
-                <Button 
-                  onClick={() => updateState({ showNewChatDialog: true })} 
-                  size="icon" 
+                <Button
+                  onClick={() => updateState({ showNewChatDialog: true })}
+                  size="icon"
                   variant="ghost"
-                  className="icon-button" 
+                  className="icon-button"
                   title="New Direct Chat"
                 >
                   <MessageSquare className="h-5 w-5" />
                 </Button>
-                <Button 
-                  onClick={() => updateState({ showGroupDialog: true })} 
-                  size="icon" 
+                <Button
+                  onClick={() => updateState({ showGroupDialog: true })}
+                  size="icon"
                   variant="ghost"
-                  className="icon-button" 
+                  className="icon-button"
                   title="New Group Chat"
                 >
                   <Users className="h-5 w-5" />
@@ -618,7 +636,7 @@ export const ChatPage: React.FC = () => {
                   {storeUnreadCounts[chat.id] > 0 && (
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
                   )}
-                  
+
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mr-3 relative">
                     <span className="text-lg font-medium">
                       {chat.participants.length > 2 ? (
@@ -635,11 +653,11 @@ export const ChatPage: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <h3 className={cn(
-                        "truncate", 
+                        "truncate",
                         storeUnreadCounts[chat.id] > 0 ? "font-bold" : "font-medium"
                       )}>
                         {getChatDisplayName(chat)}
@@ -647,8 +665,8 @@ export const ChatPage: React.FC = () => {
                       {chat.lastMessageTime && (
                         <span className={cn(
                           "text-xs",
-                          storeUnreadCounts[chat.id] > 0 
-                            ? "text-primary font-medium" 
+                          storeUnreadCounts[chat.id] > 0
+                            ? "text-primary font-medium"
                             : "text-muted-foreground"
                         )}>
                           {format(new Date(chat.lastMessageTime), 'HH:mm')}
@@ -657,8 +675,8 @@ export const ChatPage: React.FC = () => {
                     </div>
                     <p className={cn(
                       "text-sm truncate",
-                      storeUnreadCounts[chat.id] > 0 
-                        ? "text-foreground" 
+                      storeUnreadCounts[chat.id] > 0
+                        ? "text-foreground"
                         : "text-muted-foreground"
                     )}>
                       {chat.lastMessage?.content || 'No messages yet'}
@@ -670,9 +688,9 @@ export const ChatPage: React.FC = () => {
           ) : (
             <div className="flex flex-col items-center justify-center h-full p-4 text-center">
               <p className="text-muted-foreground mb-2">No chats found</p>
-              <Button 
-                onClick={() => updateState({ showNewChatDialog: true })} 
-                variant="outline" 
+              <Button
+                onClick={() => updateState({ showNewChatDialog: true })}
+                variant="outline"
                 size="sm"
               >
                 Start a conversation
@@ -688,8 +706,8 @@ export const ChatPage: React.FC = () => {
         isMobile && !currentChat && "hidden"
       )}>
         {currentChat ? (
-          <ChatWindow 
-            chat={currentChat} 
+          <ChatWindow
+            chat={currentChat}
             onBack={() => {
               if (isMobile) {
                 updateState({ currentChat: null });
@@ -710,8 +728,8 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* New Chat Dialog */}
-      <Dialog 
-        open={showNewChatDialog} 
+      <Dialog
+        open={showNewChatDialog}
         onOpenChange={(open) => updateState({ showNewChatDialog: open })}
       >
         <DialogContent>
@@ -778,8 +796,8 @@ export const ChatPage: React.FC = () => {
       </Dialog>
 
       {/* Group Chat Dialog */}
-      <Dialog 
-        open={showGroupDialog} 
+      <Dialog
+        open={showGroupDialog}
         onOpenChange={(open) => updateState({ showGroupDialog: open })}
       >
         <DialogContent>
@@ -901,4 +919,4 @@ declare global {
   }
 }
 
-export default ChatPage; 
+export default ChatPage;

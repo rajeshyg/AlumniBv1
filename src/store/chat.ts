@@ -16,7 +16,7 @@ export interface ChatStore {
   sendMessage: (chatId: string, content: string) => Promise<void>;
   markAsRead: (chatId: string) => Promise<void>;
   setCurrentUser: (user: User | null) => void;
-  
+
   // Methods for real-time updates
   addOrUpdateMessage: (message: ChatMessage) => void;
   updateChatWithLastMessage: (chatId: string, lastMessage: ChatMessage) => void;
@@ -41,14 +41,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       name: user.name,
       email: user.email
     } : 'null');
-    
+
     set({ currentUser: user });
-    
+
     // Initialize Chat Service if user is set
     if (user) {
       if (!ChatService.isInitialized()) {
         ChatService.initialize(user.studentId);
-        
+
         // CRITICAL: Set up a direct message handler that updates the store
         // This ensures the UI updates immediately when new messages arrive
         ChatService.subscribeToMessageUpdates((chatId, message) => {
@@ -74,23 +74,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     try {
       set({ loading: true, error: null });
       logger.debug('Loading chats');
-      
+
       const currentUser = get().currentUser;
       if (!currentUser) {
         logger.error('Cannot load chats: No current user');
         set({ loading: false, error: 'No current user' });
         return;
       }
-      
+
       try {
         // Initialize chat service if needed
         if (!ChatService.isInitialized()) {
           ChatService.initialize(currentUser.studentId);
         }
-        
+
         const chats = await ChatService.getUserChats(currentUser.studentId);
         logger.debug('Chats loaded:', { count: chats.length });
-        
+
         set({ chats, loading: false });
       } catch (chatError) {
         logger.error('Error loading chats:', chatError);
@@ -104,21 +104,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   // Add or update a message in the store with enhanced duplicate protection
   addOrUpdateMessage: (message: ChatMessage) => {
-    logger.debug('Processing received message:', { 
+    logger.debug('Processing received message:', {
       messageId: message.id,
-      chatId: message.chatId 
+      chatId: message.chatId
     });
-    
+
     set(state => {
       // 1. Check if this exact message ID already exists to prevent duplicates
       const existingMessages = state.messages[message.chatId] || [];
       const messageExists = existingMessages.some(m => m.id === message.id);
-      
+
       if (messageExists) {
         logger.debug('Ignoring duplicate message by ID:', message.id);
         return state; // Return unchanged state
       }
-      
+
       // 2. Check for very similar content that might be a duplicate
       const contentKey = `${message.chatId}:${message.senderId}:${message.content}`;
       if (get().processedMessageContents.has(contentKey)) {
@@ -128,36 +128,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         });
         return state;
       }
-      
+
       // Add to processed message contents
       get().processedMessageContents.add(contentKey);
-      
+
       // Clear old entries after 10 minutes to prevent memory leaks
       setTimeout(() => {
         get().processedMessageContents.delete(contentKey);
       }, 10 * 60 * 1000);
-      
+
       logger.debug('Adding new message to store:', {
         messageId: message.id,
         chatId: message.chatId,
         content: message.content?.substring(0, 20) + (message.content?.length > 20 ? '...' : '')
       });
-      
+
       // Add the message to the messages array for this chat
       const updatedMessages = {
         ...state.messages,
         [message.chatId]: [...existingMessages, message]
       };
-      
+
       // CRITICAL: Find the chat in the state and update it directly
       // This ensures the UI updates properly without requiring a tap
       let updatedChats = [...state.chats];
       const chatIndex = updatedChats.findIndex(c => c.id === message.chatId);
-      
+
       if (chatIndex >= 0) {
         // Copy the chat to avoid reference issues
         const updatedChat = {...updatedChats[chatIndex]};
-        
+
         // Update last message properties
         updatedChat.lastMessageId = message.id;
         updatedChat.lastMessageTime = message.timestamp;
@@ -169,22 +169,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           chatId: message.chatId,
           readBy: message.readBy || []
         };
-        
+
         // Remove the chat from its current position
         updatedChats.splice(chatIndex, 1);
         // Add it to the top of the list
         updatedChats = [updatedChat, ...updatedChats];
-        
+
         logger.debug('Moved chat to top of list for new message:', {
           chatId: message.chatId,
           messageId: message.id
         });
       }
-      
+
       // If this is a new message and it's not from the current user, increment unread count
       const currentUser = state.currentUser;
       let unreadCounts = {...state.unreadCounts};
-      
+
       if (currentUser && message.senderId !== currentUser.studentId) {
         unreadCounts = {
           ...unreadCounts,
@@ -195,7 +195,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           newCount: unreadCounts[message.chatId]
         });
       }
-      
+
       // Force a UI refresh by returning a completely new state object
       return {
         ...state,
@@ -205,14 +205,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       };
     });
   },
-  
+
   // Update a chat with the latest message info (to update the chat list)
   updateChatWithLastMessage: (chatId: string, lastMessage: ChatMessage) => {
-    logger.debug('Updating chat with last message:', { 
+    logger.debug('Updating chat with last message:', {
       chatId,
-      messageId: lastMessage.id 
+      messageId: lastMessage.id
     });
-    
+
     set(state => {
       // Create a properly typed updatedChats array
       const updatedChats = state.chats.map(chat => {
@@ -225,7 +225,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               chat.lastMessageTime ? new Date(chat.lastMessageTime).getTime() : 0
             ) + 1
           ).toISOString();
-          
+
           // Create a simplified lastMessage object that matches the Chat type
           return {
             ...chat,
@@ -243,15 +243,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }
         return chat;
       });
-      
+
       return { chats: updatedChats };
     });
   },
-  
+
   // Increment the unread count for a chat
   incrementUnreadCount: (chatId: string) => {
     logger.debug('Incrementing unread count for chat:', { chatId });
-    
+
     set(state => ({
       unreadCounts: {
         ...state.unreadCounts,
@@ -265,18 +265,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     try {
       set({ loading: true, error: null });
       logger.debug('Loading messages for chat:', { chatId });
-      
+
       const currentUser = get().currentUser;
       if (!currentUser) {
         logger.error('Cannot load messages: No current user');
         set({ loading: false, error: 'No current user' });
         return;
       }
-      
+
       try {
         const messages = await ChatService.getChatMessages(chatId);
         logger.debug('Messages loaded:', { chatId, count: messages.length });
-        
+
         set(state => ({
           messages: {
             ...state.messages,
@@ -298,23 +298,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   sendMessage: async (chatId: string, content: string) => {
     try {
       logger.debug('Sending message:', { chatId, content });
-      
+
       const currentUser = get().currentUser;
       if (!currentUser) {
         logger.error('Cannot send message: No current user');
         return;
       }
-      
+
       // Create the message in Supabase
       const message = await ChatService.sendMessage(chatId, currentUser.studentId, content);
-      
+
       if (!message) {
         logger.error('No message returned from sendMessage');
         return;
       }
-      
+
       logger.debug('Message sent successfully:', { messageId: message.id });
-      
+
       // Add the message to the store directly
       get().addOrUpdateMessage(message);
     } catch (error) {
@@ -326,17 +326,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   markAsRead: async (chatId: string) => {
     try {
       logger.debug('Marking messages as read:', { chatId });
-      
+
       const currentUser = get().currentUser;
       if (!currentUser) {
         logger.error('Cannot mark messages as read: No current user');
         return;
       }
-      
+
       try {
         // Mark messages as read in Supabase
         await ChatService.markMessagesAsRead(chatId, currentUser.studentId);
-        
+
         // Reset the unread count in the store
         set(state => ({
           unreadCounts: {
@@ -344,7 +344,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             [chatId]: 0
           }
         }));
-        
+
         logger.debug('Messages marked as read, reset unread count:', { chatId });
       } catch (markError) {
         logger.error('Error marking messages as read:', markError);
@@ -356,4 +356,4 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   // Add a property to track processed messages by content
   processedMessageContents: new Set(),
-})); 
+}));
