@@ -1,5 +1,33 @@
 /* Chat styling */
 
+/* Main chat container */
+.flex.flex-col.bg-background {
+  background-color: #1a2b47 !important; /* Dark blue background from image */
+  color: white;
+}
+
+/* Chat header */
+.chat-header {
+  padding: 16px;
+  background-color: #1a2b47; /* Dark blue background */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.chat-header h2 {
+  color: white !important;
+}
+
+.chat-header p {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.icon-button {
+  color: white !important;
+}
+
 /* Typing animation */
 .typing-animation {
   display: flex;
@@ -12,7 +40,7 @@
   height: 5px;
   border-radius: 50%;
   margin-right: 3px;
-  background-color: #888;
+  background-color: rgba(255, 255, 255, 0.6);
   animation: typing-dot 1.4s infinite ease-in-out both;
 }
 
@@ -37,8 +65,8 @@
 
 /* Message bubbles */
 .chat-bubble {
-  padding: 8px 12px;
-  border-radius: 12px;
+  padding: 10px 12px;
+  border-radius: 18px;
   max-width: 100%;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -46,58 +74,113 @@
   white-space: pre-wrap;
   box-sizing: border-box;
   display: inline-block;
+  margin-bottom: 2px;
+  position: relative;
 }
 
-.chat-bubble-sent {
-  background-color: var(--primary-color, #3b82f6);
-  color: white;
+/* Enhanced chat bubble specificity to override global styles */
+.chat-bubble, 
+.chat-bubble * {
+  color: inherit !important;
+}
+
+/* Make sent bubbles have dark text with higher specificity */
+.chat-bubble.chat-bubble-sent {
+  color: #1a2b47 !important;
+  background-color: #a6d0f5 !important;
   border-bottom-right-radius: 4px;
+  margin-left: auto;
 }
 
-.chat-bubble-received {
-  background-color: var(--muted, #f3f4f6);
-  color: var(--foreground, #1f2937);
+/* Make received bubbles have white text with higher specificity */
+.chat-bubble.chat-bubble-received {
+  color: white !important;
+  background-color: rgba(255, 255, 255, 0.15) !important;
   border-bottom-left-radius: 4px;
+  margin-right: auto;
+}
+
+/* Remove any background colors from inner elements */
+.chat-bubble-sent *,
+.chat-bubble-received * {
+  background-color: transparent !important;
+}
+
+/* Additional selectors for position-based styling */
+.justify-end .chat-bubble,
+div[class*="justify-end"] .chat-bubble {
+  color: #1a2b47 !important;
+  background-color: #a6d0f5 !important;
+}
+
+.justify-start .chat-bubble,
+div[class*="justify-start"] .chat-bubble {
+  color: white !important;
+  background-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Child elements should inherit text color but NOT background */
+.justify-end .chat-bubble *,
+div[class*="justify-end"] .chat-bubble *,
+.justify-start .chat-bubble *,
+div[class*="justify-start"] .chat-bubble * {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+/* Override any global text color that might be applied */
+.chat-bubble div,
+.chat-bubble span,
+.chat-bubble p {
+  color: inherit !important;
 }
 
 /* Date divider */
 .chat-date-divider {
   text-align: center;
-  font-size: 0.75rem;
-  color: var(--muted-foreground, #6b7280);
-  margin: 8px 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6) !important;
+  margin: 12px 0;
   position: relative;
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 4px 12px;
+  border-radius: 12px;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .chat-date-divider::before,
 .chat-date-divider::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: 30%;
-  height: 1px;
-  background-color: var(--border, #e5e7eb);
-}
-
-.chat-date-divider::before {
-  left: 0;
-}
-
-.chat-date-divider::after {
-  right: 0;
+  display: none; /* Remove the lines before and after */
 }
 
 /* Message timestamp */
 .chat-timestamp {
   font-size: 0.7rem;
-  color: var(--muted-foreground, #6b7280);
+  color: rgba(255, 255, 255, 0.5) !important;
   margin-top: 2px;
+  position: relative;
+  bottom: 0;
+  align-self: flex-end;
+}
+
+.chat-bubble-sent + .chat-timestamp {
+  color: rgba(26, 43, 71, 0.7) !important;
+}
+
+.chat-bubble-received + .flex .chat-timestamp {
+  color: rgba(255, 255, 255, 0.7) !important;
 }
 
 /* Message container */
 .message-container {
-  margin: 8px 0;
-  max-width: 80%;
+  margin: 4px 0;
+  max-width: 70%;
   width: fit-content;
   clear: both;
   position: relative;
@@ -110,17 +193,262 @@
 .message-sender-name {
   margin-left: 4px;
   font-weight: 500;
+  color: rgba(255, 255, 255, 0.8) !important;
 }
 
 /* Message status indicators */
 .message-status {
   display: inline-flex;
   align-items: center;
+  color: rgba(255, 255, 255, 0.6) !important;
 }
 
 /* Chat input container */
 .chat-input-container {
   padding: 12px;
-  border-top: 1px solid var(--border, #e5e7eb);
-  background-color: var(--background, #ffffff);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #1a2b47 !important;
+  display: flex;
+  align-items: center;
+}
+
+.chat-input {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border: none !important;
+  border-radius: 20px !important;
+  color: white !important;
+  padding: 8px 12px !important;
+}
+
+.chat-input::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.chat-send-button {
+  background-color: #5b9bd5 !important;
+  border-radius: 50% !important;
+  width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  margin-left: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: none !important;
+  color: white !important;
+  min-width: 40px !important;
+}
+
+.chat-send-button svg {
+  color: white !important;
+}
+
+/* Typing indicator */
+.typing-indicator {
+  background-color: transparent;
+  color: rgba(255, 255, 255, 0.7) !important;
+  padding: 4px 12px;
+  margin-top: 4px;
+}
+
+/* Override for messages area */
+.flex-1.overflow-y-auto.px-4 {
+  background-color: #1a2b47 !important;
+  color: white;
+}
+
+/* Reply container */
+.reply-container {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  color: white;
+}
+
+.reply-reference {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+}
+
+/* Override for message virtualization container */
+.min-h-full {
+  background-color: #1a2b47 !important;
+}
+
+/* Chat list styling */
+.bg-card {
+  background-color: #1a2b47 !important;
+  color: white !important;
+}
+
+.border-border {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Chat list header */
+.bg-card h1 {
+  color: white !important;
+}
+
+/* Chat list items */
+.chat-list-item {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.chat-list-item:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.chat-list-item.active {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Chat preview text */
+.text-muted-foreground {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Search input */
+.bg-card .relative input {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: transparent !important;
+  color: white !important;
+}
+
+.bg-card .relative input::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.bg-card .relative svg {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Loading spinner */
+.animate-spin {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  border-top-color: white !important;
+}
+
+/* Empty state */
+.flex.items-center.justify-center.h-full p {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Dialog styling */
+.dialog-content {
+  background-color: #1a2b47 !important;
+  color: white !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.dialog-content h2 {
+  color: white !important;
+}
+
+.dialog-content p {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.dialog-content input {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: transparent !important;
+  color: white !important;
+}
+
+.dialog-content input::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Group chat avatar */
+.rounded-full {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Message bubble timestamp positioning */
+.chat-bubble + .chat-timestamp {
+  position: relative;
+  display: inline-block;
+  margin-top: 2px;
+  margin-left: 4px;
+  margin-right: 4px;
+}
+
+/* Fix positioning of message elements */
+.message-container > div {
+  width: 100%;
+}
+
+/* Improve date divider styling */
+.chat-date-divider {
+  font-size: 0.8rem;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Improve send button */
+.chat-send-button {
+  border: none !important;
+  color: white !important;
+  min-width: 40px !important;
+}
+
+/* Improve header and overall container */
+.chat-header {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+/* Override any tailwind background styles that might interfere */
+.bg-background, .bg-card, .min-h-full, .flex-1.overflow-y-auto {
+  background-color: #1a2b47 !important;
+}
+
+/* Ensure timestamps are properly colored */
+.chat-bubble-sent + .flex .chat-timestamp {
+  color: rgba(26, 43, 71, 0.7) !important;
+}
+
+.chat-bubble-received + .flex .chat-timestamp {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Explicit text styling classes */
+.sent-text {
+  color: #1a2b47 !important;
+}
+
+.sent-text * {
+  color: #1a2b47 !important;
+}
+
+.received-text {
+  color: white !important;
+}
+
+.received-text * {
+  color: white !important;
+}
+
+/* Global reset for Tailwind and other frameworks */
+.chat-bubble .text-white,
+.chat-bubble .text-black,
+.chat-bubble .text-foreground,
+.chat-bubble .text-background,
+.chat-bubble .text-primary,
+.chat-bubble .text-secondary,
+.chat-bubble .text-muted,
+.chat-bubble .text-muted-foreground,
+.chat-bubble [class*="text-"] {
+  color: inherit !important;
+}
+
+/* Specifically target any color-related classes */
+.chat-bubble-sent [class*="text-"] {
+  color: #1a2b47 !important;
+}
+
+.chat-bubble-received [class*="text-"] {
+  color: white !important;
 }

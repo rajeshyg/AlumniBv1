@@ -96,8 +96,8 @@ const ChatListItem = React.memo(({
   return (
     <div
       className={cn(
-        "flex items-center p-4 cursor-pointer hover:bg-accent transition-colors relative",
-        isActive && "bg-accent"
+        "flex items-center p-4 cursor-pointer hover:bg-accent transition-colors relative chat-list-item",
+        isActive && "bg-accent active"
       )}
       onClick={() => onClick(chat)}
       role="button"
@@ -114,10 +114,10 @@ const ChatListItem = React.memo(({
         <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
       )}
 
-      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mr-3 relative">
-        <span className="text-lg font-medium">
+      <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center mr-3 relative">
+        <span className="text-lg font-medium text-white">
           {chat.participants.length > 2 ? (
-            <Users className="h-6 w-6" />
+            <Users className="h-6 w-6 text-white" />
           ) : (
             displayName.charAt(0).toUpperCase()
           )}
@@ -134,7 +134,7 @@ const ChatListItem = React.memo(({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <h3 className={cn(
-            "truncate",
+            "truncate text-white",
             unreadCount > 0 ? "font-bold" : "font-medium"
           )}>
             {displayName}
@@ -142,7 +142,7 @@ const ChatListItem = React.memo(({
           {chat.lastMessageTime && (
             <span className={cn(
               "text-xs",
-              unreadCount > 0 ? "text-foreground font-medium" : "text-muted-foreground"
+              unreadCount > 0 ? "text-white font-medium" : "text-muted-foreground"
             )}>
               {format(new Date(chat.lastMessageTime), 'h:mm a')}
             </span>
@@ -151,7 +151,7 @@ const ChatListItem = React.memo(({
         {chat.lastMessage && (
           <p className={cn(
             "text-sm truncate",
-            unreadCount > 0 ? "text-foreground" : "text-muted-foreground"
+            unreadCount > 0 ? "text-white" : "text-muted-foreground"
           )}>
             {chat.lastMessage.senderId === authState?.currentUser?.studentId ? 'You: ' : ''}
             {chat.lastMessage.content}

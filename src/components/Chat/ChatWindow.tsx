@@ -816,15 +816,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
               <ArrowLeft className="h-5 w-5" />
             </Button>
           )}
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <span className="text-primary font-medium">
+          <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+            <span className="text-white font-medium">
               {getChatDisplayName().charAt(0).toUpperCase()}
             </span>
           </div>
           <div className="flex-1">
             <h2 className="font-semibold text-lg">{getChatDisplayName()}</h2>
             <p className="text-sm text-muted-foreground">
-              {chat.participants.length} participants
+              {chat.type === 'group' ? `${chat.participants.length} participants` : 'Online'}
             </p>
           </div>
           <Button variant="ghost" size="icon" className="icon-button">
@@ -878,7 +878,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                 >
                   {showDateDivider && (
                     <div className="chat-date-divider">
-                      {format(messageDate, 'MMMM d, yyyy')}
+                      {isSameDay(messageDate, new Date()) ? 'Today' : format(messageDate, 'MMMM d, yyyy')}
                     </div>
                   )}
                   <div className={cn(
@@ -900,19 +900,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                               isCurrentUser ? "chat-bubble-sent" : "chat-bubble-received"
                             )}
                           >
-                            <div>
+                            <div className={isCurrentUser ? "sent-text" : "received-text"}>
                               {/* Show reply information if this message is a reply */}
                               {message.metadata?.replyTo && (
-                                <div className="reply-reference bg-accent/20 p-1 mb-1 rounded text-xs">
+                                <div className="reply-reference p-1 mb-1 rounded text-xs">
                                   <div className="flex items-center">
-                                    <Reply className="h-3 w-3 mr-1 text-primary" />
+                                    <Reply className="h-3 w-3 mr-1" />
                                     <span className="font-medium">Reply to {getSenderName(message.metadata.replyTo.senderId)}</span>
                                   </div>
-                                  <p className="text-muted-foreground truncate">{message.metadata.replyTo.content}</p>
+                                  <p className="truncate">{message.metadata.replyTo.content}</p>
                                 </div>
                               )}
                               <div>{message.content}</div>
                             </div>
+                          </div>
+                          <div className={cn(
+                            "flex items-center gap-1 mt-1",
+                            isCurrentUser ? "justify-end" : "justify-start"
+                          )}>
+                            <span className="chat-timestamp">
+                              {format(messageDate, 'h:mm a')}
+                            </span>
+                            {isCurrentUser && (
+                              <span className="message-status">
+                                <CheckCheck className="h-3 w-3" />
+                              </span>
+                            )}
                           </div>
                         </ContextMenuTrigger>
                         <ContextMenuContent>
@@ -932,19 +945,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                           )}
                         </ContextMenuContent>
                       </ContextMenu>
-                      <div className={cn(
-                        "flex items-center gap-1",
-                        isCurrentUser ? "justify-end" : "justify-start"
-                      )}>
-                        <span className="chat-timestamp text-xs text-muted-foreground">
-                          {format(messageDate, 'h:mm a')}
-                        </span>
-                        {isCurrentUser && (
-                          <span className="message-status">
-                            <CheckCheck className="h-3 w-3 text-muted-foreground" />
-                          </span>
-                        )}
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -957,7 +957,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
       {/* Typing indicator */}
       {typingUsers.length > 0 && (
-        <div className="typing-indicator px-4 py-1 text-sm text-muted-foreground flex items-center">
+        <div className="typing-indicator px-4 py-1 text-sm flex items-center">
           <div className="typing-animation mr-2">
             <span className="dot"></span>
             <span className="dot"></span>
@@ -990,7 +990,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
             </Button>
           </div>
         )}
-        <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+        <form onSubmit={handleSendMessage} className="flex items-center gap-2 w-full">
           <Input
             value={newMessage}
             onChange={(e) => {
