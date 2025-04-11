@@ -829,6 +829,68 @@ export class ChatService {
     }
   }
 
+  // Delete a message
+  static async deleteMessage(messageId: string, userId: string): Promise<boolean> {
+    try {
+      logger.debug('Attempting to delete message:', { messageId, userId });
+
+      if (!messageId || !userId) {
+        logger.error('Invalid parameters for deleteMessage');
+        return false;
+      }
+
+      // First, check if the message exists and the user has permission to delete it
+      const { data: message, error: fetchError } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+
+      if (fetchError || !message) {
+        logger.error('Failed to fetch message for deletion:', { error: fetchError, messageId });
+        return false;
+      }
+
+      // Check if the user has permission (is the sender or an admin)
+      if (message.sender_id !== userId) {
+        logger.warn('User does not have permission to delete this message:', { 
+          userId, 
+          messageId,
+          senderId: message.sender_id 
+        });
+        return false;
+      }
+
+      // Delete the message from the database
+      const { error: deleteError } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (deleteError) {
+        logger.error('Failed to delete message from database:', { error: deleteError, messageId });
+        return false;
+      }
+
+      // If the Socket.io connection is available, emit an event to notify other clients
+      if (this.socket && this.socket.connected) {
+        this.socket?.emit('message_deleted', {
+          messageId,
+          chatId: message.chat_id,
+          userId
+        });
+        logger.debug('Emitted message_deleted event:', { messageId, chatId: message.chat_id });
+      } else {
+        logger.warn('Socket not available, message deletion will not be broadcast in real-time');
+      }
+
+      return true;
+    } catch (error) {
+      logger.error('Error deleting message:', error);
+      return false;
+    }
+  }
+
   // Mark messages as read
   static async markMessagesAsRead(chatId: string, userId: string): Promise<void> {
     try {

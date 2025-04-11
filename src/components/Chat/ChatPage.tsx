@@ -25,6 +25,14 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { toast } from 'react-hot-toast';
 import { ChatMessage } from '../../models/Chat';
 
+// TypeScript declarations for global window object
+declare global {
+  interface Window {
+    pendingRefreshTimeout?: NodeJS.Timeout;
+    debounceReloadTimer?: NodeJS.Timeout;
+  }
+}
+
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -65,6 +73,108 @@ interface ChatPageState {
   isRefreshing: boolean;
 }
 
+// Create a memoized chat list item component to prevent unnecessary re-renders
+const ChatListItem = React.memo(({ 
+  chat, 
+  isActive, 
+  unreadCount, 
+  onClick,
+  getChatDisplayName,
+  chatUsers,
+  authState
+}: {
+  chat: Chat;
+  isActive: boolean;
+  unreadCount: number;
+  onClick: (chat: Chat) => void;
+  getChatDisplayName: (chat: Chat) => string;
+  chatUsers: Record<string, User>;
+  authState: any;
+}) => {
+  const displayName = getChatDisplayName(chat);
+  
+  return (
+    <div
+      className={cn(
+        "flex items-center p-4 cursor-pointer hover:bg-accent transition-colors relative",
+        isActive && "bg-accent"
+      )}
+      onClick={() => onClick(chat)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        // Add keyboard accessibility
+        if (e.key === 'Enter' || e.key === ' ') {
+          onClick(chat);
+        }
+      }}
+    >
+      {/* Show a subtle indicator for new messages */}
+      {unreadCount > 0 && (
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+      )}
+
+      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mr-3 relative">
+        <span className="text-lg font-medium">
+          {chat.participants.length > 2 ? (
+            <Users className="h-6 w-6" />
+          ) : (
+            displayName.charAt(0).toUpperCase()
+          )}
+        </span>
+        {unreadCount > 0 && (
+          <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+            <span className="text-xs text-white font-medium">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between">
+          <h3 className={cn(
+            "truncate",
+            unreadCount > 0 ? "font-bold" : "font-medium"
+          )}>
+            {displayName}
+          </h3>
+          {chat.lastMessageTime && (
+            <span className={cn(
+              "text-xs",
+              unreadCount > 0 ? "text-foreground font-medium" : "text-muted-foreground"
+            )}>
+              {format(new Date(chat.lastMessageTime), 'h:mm a')}
+            </span>
+          )}
+        </div>
+        {chat.lastMessage && (
+          <p className={cn(
+            "text-sm truncate",
+            unreadCount > 0 ? "text-foreground" : "text-muted-foreground"
+          )}>
+            {chat.lastMessage.senderId === authState?.currentUser?.studentId ? 'You: ' : ''}
+            {chat.lastMessage.content}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Only re-render if these specific props change
+  return (
+    prevProps.chat.id === nextProps.chat.id &&
+    prevProps.isActive === nextProps.isActive &&
+    prevProps.unreadCount === nextProps.unreadCount &&
+    prevProps.chat.lastMessage?.id === nextProps.chat.lastMessage?.id &&
+    prevProps.chat.lastMessageTime === nextProps.chat.lastMessageTime
+  );
+});
+
+/**
+ * ChatPage Component
+ * Main component for displaying and managing chats
+ */
 export const ChatPage: React.FC = () => {
   const { authState } = useAuth();
 
@@ -376,8 +486,8 @@ export const ChatPage: React.FC = () => {
     };
   }, []);
 
-  // CRITICAL FIX: Improve chat selection responsiveness
-  const handleChatSelect = (chat: Chat) => {
+  // Optimize chat selection to prevent full chat list refresh
+  const handleChatSelect = useCallback((chat: Chat) => {
     // Check if we're already on this chat to prevent unnecessary updates
     if (currentChat?.id === chat.id) {
       logger.debug('Chat already selected, skipping update');
@@ -386,22 +496,25 @@ export const ChatPage: React.FC = () => {
 
     logger.debug('Selecting chat:', { chatId: chat.id, chatName: chat.name });
 
-    // First update the UI to show the selected chat immediately
+    // Fix: Directly update state instead of using the callback pattern with prevState
     updateState({ currentChat: chat });
 
-    // Use setTimeout to ensure the UI updates first before potentially
-    // blocking with message loading
+    // Ensure messages load properly
     setTimeout(() => {
-      // Then load messages and mark as read in the background
-      // This prevents the blank screen while loading
-      Promise.all([
-        loadMessages(chat.id),
-        markAsRead(chat.id)
-      ]).catch(error => {
-        logger.error('Error loading messages or marking as read:', error);
-      });
-    }, 0);
-  };
+      logger.debug(`Loading messages for selected chat: ${chat.id}`);
+      
+      // Explicitly load messages
+      loadMessages(chat.id)
+        .then(() => {
+          logger.debug(`Successfully loaded messages for selected chat: ${chat.id}`);
+          // Mark as read after messages are loaded
+          return markAsRead(chat.id);
+        })
+        .catch(error => {
+          logger.error(`Error loading messages for selected chat: ${chat.id}`, error);
+        });
+    }, 100);
+  }, [currentChat?.id, loadMessages, markAsRead]);
 
   const handleUserSearch = async (query: string) => {
     updateState({ userSearchQuery: query });
@@ -695,73 +808,16 @@ export const ChatPage: React.FC = () => {
                 </div>
               )}
               {filteredChats.map((chat) => (
-                <div
+                <ChatListItem
                   key={chat.id}
-                  className={cn(
-                    "flex items-center p-4 cursor-pointer hover:bg-accent transition-colors relative",
-                    currentChat?.id === chat.id && "bg-accent"
-                  )}
-                  onClick={() => handleChatSelect(chat)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    // Add keyboard accessibility
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      handleChatSelect(chat);
-                    }
-                  }}
-                >
-                  {/* Show a subtle indicator for new messages */}
-                  {storeUnreadCounts[chat.id] > 0 && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
-                  )}
-
-                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mr-3 relative">
-                    <span className="text-lg font-medium">
-                      {chat.participants.length > 2 ? (
-                        <Users className="h-6 w-6" />
-                      ) : (
-                        getChatDisplayName(chat).charAt(0).toUpperCase()
-                      )}
-                    </span>
-                    {storeUnreadCounts[chat.id] > 0 && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                        <span className="text-xs text-white font-medium">
-                          {storeUnreadCounts[chat.id] > 9 ? '9+' : storeUnreadCounts[chat.id]}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h3 className={cn(
-                        "truncate",
-                        storeUnreadCounts[chat.id] > 0 ? "font-bold" : "font-medium"
-                      )}>
-                        {getChatDisplayName(chat)}
-                      </h3>
-                      {chat.lastMessageTime && (
-                        <span className={cn(
-                          "text-xs",
-                          storeUnreadCounts[chat.id] > 0
-                            ? "text-primary font-medium"
-                            : "text-muted-foreground"
-                        )}>
-                          {format(new Date(chat.lastMessageTime), 'HH:mm')}
-                        </span>
-                      )}
-                    </div>
-                    <p className={cn(
-                      "text-sm truncate",
-                      storeUnreadCounts[chat.id] > 0
-                        ? "text-foreground"
-                        : "text-muted-foreground"
-                    )}>
-                      {chat.lastMessage?.content || 'No messages yet'}
-                    </p>
-                  </div>
-                </div>
+                  chat={chat}
+                  isActive={currentChat?.id === chat.id}
+                  unreadCount={storeUnreadCounts[chat.id] || 0}
+                  onClick={handleChatSelect}
+                  getChatDisplayName={getChatDisplayName}
+                  chatUsers={chatUsers}
+                  authState={authState}
+                />
               ))}
             </>
           ) : (
@@ -923,7 +979,10 @@ export const ChatPage: React.FC = () => {
                       <span className="text-sm">{user.name}</span>
                       <X
                         className="h-3 w-3 cursor-pointer"
-                        onClick={() => handleRemoveUser(user.studentId)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveUser(user.studentId);
+                        }}
                       />
                     </div>
                   ))}
@@ -941,7 +1000,10 @@ export const ChatPage: React.FC = () => {
                     <div
                       key={user.studentId}
                       className="flex items-center justify-between p-2 hover:bg-accent cursor-pointer"
-                      onClick={() => handleAddUser(user)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddUser(user);
+                      }}
                     >
                       <div className="flex items-center space-x-2">
                         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -989,13 +1051,5 @@ export const ChatPage: React.FC = () => {
     </div>
   );
 };
-
-// Before return statement, add this type declaration for the window object
-declare global {
-  interface Window {
-    pendingRefreshTimeout?: NodeJS.Timeout;
-    debounceReloadTimer?: NodeJS.Timeout;
-  }
-}
 
 export default ChatPage;

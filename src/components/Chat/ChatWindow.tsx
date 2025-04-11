@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Chat, ChatMessage } from '../../models/Chat';
 import { useChatStore } from '../../store/chat';
 import { ChatService } from '../../services/ChatService';
@@ -37,6 +37,7 @@ import {
 } from '../ui/context-menu';
 import { supabase } from '../../lib/supabaseClient';
 import './chat.css';
+import toast from 'react-hot-toast';
 
 // Global declarations should go at the top level
 declare global {
@@ -80,12 +81,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     messages,
     sendMessage,
     markAsRead,
-    loadMessages
+    loadMessages,
+    deleteMessage
   } = useChatStore(state => ({
     messages: state.messages,
     sendMessage: state.sendMessage,
     markAsRead: state.markAsRead,
-    loadMessages: state.loadMessages
+    loadMessages: state.loadMessages,
+    deleteMessage: state.deleteMessage
   }));
 
   const chatMessages = messages[chat.id] || [];
@@ -124,6 +127,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
   // Load messages when component mounts or chat changes
   useEffect(() => {
+    logger.info(`ChatWindow mounted/updated for chat: ${chat.id}`, { 
+      chatName: chat.name,
+      hasUser: !!authState.currentUser,
+      currentChatMessages: chatMessages.length,
+      type: chat.type
+    });
+
     if (authState.currentUser) {
       logger.debug('Loading messages for chat:', {
         chatId: chat.id,
@@ -131,7 +141,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       });
 
       // Load messages immediately
-      loadMessages(chat.id);
+      loadMessages(chat.id).then(() => {
+        logger.debug(`Successfully loaded messages for chat ${chat.id}`, {
+          messageCount: messages[chat.id]?.length || 0
+        });
+
+        // Force scroll to bottom after messages load
+        setTimeout(() => {
+          scrollToBottom(true);
+        }, 200);
+      }).catch(error => {
+        logger.error(`Failed to load messages for chat ${chat.id}`, error);
+      });
+
+      // Mark messages as read when chat is opened
+      markAsRead(chat.id).catch(error => {
+        logger.error(`Failed to mark messages as read for chat ${chat.id}`, error);
+      });
 
       // Subscribe to real-time updates for this chat
       const channel = supabase
@@ -155,16 +181,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
         channel.unsubscribe();
       };
     }
-  }, [chat.id, authState.currentUser, loadMessages]);
+  }, [chat.id, authState.currentUser, loadMessages, markAsRead]);
 
   // Sort messages by timestamp and log for debugging
   const sortedMessages = React.useMemo(() => {
-    logger.debug(`Sorting ${chatMessages.length} messages for chat ${chat.id}:`,
-      chatMessages.map(m => ({ id: m.id, content: m.content, timestamp: m.timestamp }))
-    );
-    return [...chatMessages].sort((a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
+    const messageCount = chatMessages.length;
+    logger.debug(`Sorting ${messageCount} messages for chat ${chat.id}`);
+    
+    if (messageCount === 0) {
+      return [];
+    }
+    
+    try {
+      const sorted = [...chatMessages].sort((a, b) => {
+        const timeA = new Date(a.timestamp).getTime();
+        const timeB = new Date(b.timestamp).getTime();
+        return timeA - timeB;
+      });
+      
+      logger.debug(`Successfully sorted ${sorted.length} messages for chat ${chat.id}`);
+      return sorted;
+    } catch (error) {
+      logger.error(`Error sorting messages for chat ${chat.id}:`, error);
+      return chatMessages; // Return unsorted as fallback
+    }
   }, [chatMessages, chat.id]);
 
   // Create a ref to store timeouts and control scroll operations
@@ -263,14 +303,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   }, []);
 
   useEffect(() => {
-    // Mark messages as read when opening chat
-    if (authState.currentUser) {
-      markAsRead(chat.id);
-    }
-
     // Load chat members
     loadMembers();
-  }, [chat.id, authState.currentUser, chat.participants]);
+  }, [chat.id, chat.participants]);
 
   const loadMembers = async () => {
     try {
@@ -551,12 +586,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     logger.debug('Forwarding message:', { messageId: message.id, content: message.content });
   };
 
-  const handleDeleteMessage = (message: any) => {
-    // Implement message deletion logic
-    logger.debug('Deleting message:', { messageId: message.id, content: message.content });
-    // This would typically call a service method to delete the message
-    // For now, just log it
-    alert('Message deletion not implemented yet');
+  const handleDeleteMessage = async (message: ChatMessage) => {
+    try {
+      const isConfirmed = window.confirm("Are you sure you want to delete this message? This action cannot be undone.");
+      
+      if (!isConfirmed) {
+        return;
+      }
+      
+      // Call the deleteMessage method from the store
+      const success = await deleteMessage(message.id);
+      
+      if (success) {
+        toast.success("Message deleted successfully");
+      } else {
+        toast.error("Could not delete the message. Please try again.");
+      }
+    } catch (error) {
+      logger.error('Error handling message deletion:', error);
+      toast.error("An error occurred while trying to delete the message.");
+    }
   };
 
   const handleCancelReply = () => {
@@ -674,12 +723,48 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
   };
 
-  // Virtual list setup with proper initial scroll
+  // Calculate dynamic message size based on content
+  const estimateMessageSize = useCallback((index: number) => {
+    const message = sortedMessages[index];
+    if (!message) return 120; // Default fallback size
+
+    // Base size for a message
+    let estimatedSize = 100; // Increased base size
+
+    // Add extra height for longer messages based on content length
+    const contentLength = message.content.length;
+    const estimatedLines = Math.ceil(contentLength / 30); // Assume ~30 chars per line
+    estimatedSize += Math.max(0, estimatedLines - 1) * 24; // Increased per-line height
+
+    // Add height for reply metadata if present
+    if (message.metadata?.replyTo) {
+      estimatedSize += 70; // Increased height for reply context
+    }
+
+    // Add height for sender name in group chats
+    if (chat.type === 'group' && message.senderId !== authState.currentUser?.studentId) {
+      estimatedSize += 24;
+    }
+
+    // Add height for date divider if needed
+    if (index === 0 ||
+        !isSameDay(new Date(message.timestamp),
+                  new Date(sortedMessages[index - 1].timestamp))) {
+      estimatedSize += 44;
+    }
+
+    // Add extra padding/margin
+    estimatedSize += 20;
+
+    return estimatedSize;
+  }, [sortedMessages, chat.type, authState.currentUser?.studentId]);
+
+  // Virtual list setup with proper initial scroll and dynamic sizing
   const rowVirtualizer = useVirtualizer({
     count: sortedMessages.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 120,
-    overscan: 5,
+    estimateSize: estimateMessageSize,
+    overscan: 15, // Increased for smoother scrolling and to reduce empty space
     paddingStart: 20,
     paddingEnd: 20,
     initialRect: { width: 0, height: 0 },

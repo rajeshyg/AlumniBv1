@@ -16,6 +16,7 @@ export interface ChatStore {
   sendMessage: (chatId: string, content: string, metadata?: any) => Promise<void>;
   markAsRead: (chatId: string) => Promise<void>;
   setCurrentUser: (user: User | null) => void;
+  deleteMessage: (messageId: string) => Promise<boolean>;
 
   // Methods for real-time updates
   addOrUpdateMessage: (message: ChatMessage) => void;
@@ -99,6 +100,86 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch (error) {
       logger.error('Failed to load chats:', error);
       set({ loading: false, error: 'Failed to load chats' });
+    }
+  },
+
+  // Delete a message
+  deleteMessage: async (messageId: string) => {
+    try {
+      logger.debug('Deleting message:', { messageId });
+
+      const currentUser = get().currentUser;
+      if (!currentUser) {
+        logger.error('Cannot delete message: No current user');
+        return false;
+      }
+
+      // Call the service to delete the message
+      const success = await ChatService.deleteMessage(messageId, currentUser.studentId);
+
+      if (success) {
+        logger.debug('Message deleted successfully:', { messageId });
+        
+        // Update the store to remove the deleted message
+        set(state => {
+          // Find which chat the message belongs to
+          let chatId: string | null = null;
+          let deletedMessage: ChatMessage | null = null;
+          
+          // Loop through all chats to find the message
+          Object.entries(state.messages).forEach(([cid, messages]) => {
+            const message = messages.find(m => m.id === messageId);
+            if (message) {
+              chatId = cid;
+              deletedMessage = message;
+            }
+          });
+          
+          if (!chatId || !deletedMessage) {
+            logger.error('Could not find message to delete in store:', { messageId });
+            return state;
+          }
+          
+          // Remove the message from the messages array
+          const updatedMessages = {
+            ...state.messages,
+            [chatId]: state.messages[chatId].filter(m => m.id !== messageId)
+          };
+          
+          // If this was the last message in the chat, update the chat's last message
+          const chatIndex = state.chats.findIndex(c => c.id === chatId);
+          let updatedChats = [...state.chats];
+          
+          if (chatIndex >= 0 && state.chats[chatIndex].lastMessage?.id === messageId) {
+            // Find the new last message
+            const messagesInChat = updatedMessages[chatId] || [];
+            const newLastMessage = messagesInChat.length > 0 ? messagesInChat[messagesInChat.length - 1] : null;
+            
+            const updatedChat = {
+              ...updatedChats[chatIndex],
+              lastMessage: newLastMessage || null,
+              lastMessageId: newLastMessage?.id || null,
+              lastMessageTime: newLastMessage?.timestamp || null
+            };
+            
+            updatedChats[chatIndex] = updatedChat;
+          }
+          
+          return {
+            ...state,
+            messages: updatedMessages,
+            chats: updatedChats
+          };
+        });
+        
+        return true;
+      } else {
+        logger.error('Failed to delete message');
+        return false;
+      }
+    } catch (error) {
+      logger.error('Error deleting message:', error);
+      return false;
     }
   },
 
