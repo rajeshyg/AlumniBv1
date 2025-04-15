@@ -1,0 +1,37 @@
+flowchart TD
+    ModLogin(["🔑 Moderator Login"]) --> ModDashboard(["🛡️ Moderator Dashboard"])
+    ModDashboard --> ContentReview(["📝 Content Review"]) & ModReports(["📊 Moderation Reports"])
+    ContentReview --> PendingPosts["⏳ Pending Posts Queue"]
+    PendingPosts --> ReviewPost["🔍 Review Post Content"]
+    ReviewPost --> CheckCategory["🗂️ Verify Category Appropriateness"] & CheckTags["🏷️ Verify Tag Appropriateness"] & CheckContent["📄 Verify Content Quality"] & ModDecision{{"⚖️ Moderation Decision"}}
+    ModDecision -- Approve --> ApprovePost["✅ Approve Post"]
+    ModDecision -- Reject --> RejectPost["❌ Reject Post"]
+    ModDecision -- Request Changes --> RequestChanges["🔄 Request Changes"]
+    ApprovePost --> AddFeedback1["💬 Add Approval Comment"]
+    RejectPost --> AddFeedback2["💬 Add Rejection Reason"]
+    RequestChanges --> AddFeedback3["💬 Add Change Requests"]
+    ModReports --> ReviewStats["📈 Review Statistics"] & CategoryInsights["🔍 Category Insights"] & ContentQualityMetrics["📏 Content Quality Metrics"]
+
+     ModLogin:::primary
+     ModDashboard:::primary
+     ContentReview:::primary
+     ModReports:::primary
+     PendingPosts:::secondary
+     ReviewPost:::secondary
+     CheckCategory:::secondary
+     CheckTags:::secondary
+     CheckContent:::secondary
+     ModDecision:::secondary
+     ApprovePost:::approval
+     RejectPost:::rejection
+     RequestChanges:::highlight
+     ReviewStats:::secondary
+     CategoryInsights:::secondary
+     ContentQualityMetrics:::secondary
+    classDef primary fill:#d9edf7,stroke:#31708f,stroke-width:2px,color:#2c3e50,font-weight:bold
+    classDef secondary fill:#f5f5f5,stroke:#ddd,stroke-width:1px,color:#333
+    classDef highlight fill:#fcf8e3,stroke:#faebcc,stroke-width:2px,color:#8a6d3b,font-weight:bold
+    classDef approval fill:#dff0d8,stroke:#3c763d,stroke-width:1px,color:#3c763d
+    classDef rejection fill:#f2dede,stroke:#a94442,stroke-width:1px,color:#a94442
+
+

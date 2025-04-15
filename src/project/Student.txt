@@ -1,0 +1,60 @@
+flowchart TD
+    StudentLogin(["🔑 Student Login"]) --> ProfileSelect(["👤 Select Profile"])
+    ProfileSelect --> Dashboard(["📱 Personalized Dashboard"])
+    Dashboard --> Preferences(["⚙️ Preferences & Interests"]) & BrowseContent(["🔎 Browse Posts"]) & SeekHelp(["🆘 Seek Help"]) & OfferHelp(["🤝 Offer Help"]) & ChatSystem(["💬 Chat System"])
+    Preferences --> SetInterests["🎯 Set Interest Areas"] & NotificationPrefs["🔔 Notification Preferences"] & UICustomization["🎨 UI Customization"]
+    SetInterests --> InterestExamples["Example Interests:
+    - 🤖 Artificial Intelligence
+    - 🧠 Neurology
+    - 💊 Pharmacology
+    - 💻 Computer Science
+    - 📊 Data Science"]
+    BrowseContent --> FilterByCategory["🗂️ Filter by Category"] & SearchByTags["🏷️ Search by Tags"] & ViewRecommended["⭐ View Recommended"]
+    FilterByCategory --> CategoryExamples["Example Categories:
+    - 🎓 Admissions
+    - 💰 Scholarships
+    - 💼 Internships
+    - 🏥 Medical Residencies
+    - 🔬 Research Opportunities"]
+    SeekHelp --> CreateHelpRequest["📝 Create Help Request"] & ManageRequests["📋 Manage My Requests"]
+    CreateHelpRequest --> SelectHelpCategory["🗂️ Select Category"] & AddHelpTags["🏷️ Add Relevant Tags"] & DescribeProblem["✏️ Describe Problem"] & SetUrgencyLevel["🚨 Set Urgency Level"] & SubmitRequest["📤 Submit Request"]
+    ManageRequests --> ViewResponses["📬 View Responses"] & AcceptHelp["✅ Accept Offer"] & RateHelper["⭐ Star Helper"]
+    DescribeProblem --> HelpExample@{ label: "Example Request:\n    'Need guidance on medical school\n    application for neurology specialization.\n    Looking for advice on research\n    experience requirements.'" }
+    OfferHelp --> BrowseHelpRequests["🔍 Browse Help Requests"] & RespondToRequest["💬 Respond to Request"] & TrackContributions["📊 Track Contributions"]
+    BrowseHelpRequests --> FilterByExpertise["🧠 Filter by Expertise"] & SortByUrgency["🚨 Sort by Urgency"] & ViewRequestDetails["📄 View Request Details"]
+    RespondToRequest --> ProvideGuidance["💡 Provide Guidance"] & OfferMeeting["📅 Offer Meeting"] & ShareResources["📚 Share Resources"]
+    ChatSystem --> DirectMessages["👤 Direct Messages"] & GroupDiscussions["👥 Group Discussions"] & HelpSessionChats["🆘 Help Session Chats"]
+    ViewRequestDetails --> StartHelpChat["💬 Start Help Chat"]
+    AcceptHelp --> InitiateHelpSession["🤝 Initiate Help Session"]
+
+    HelpExample@{ shape: rect}
+     StudentLogin:::primary
+     ProfileSelect:::primary
+     Dashboard:::primary
+     Preferences:::primary
+     BrowseContent:::primary
+     SeekHelp:::seeking
+     OfferHelp:::offering
+     ChatSystem:::primary
+     SetInterests:::secondary
+     NotificationPrefs:::secondary
+     UICustomization:::secondary
+     InterestExamples:::highlight
+     FilterByCategory:::secondary
+     SearchByTags:::secondary
+     ViewRecommended:::secondary
+     CategoryExamples:::highlight
+     CreateHelpRequest:::seeking
+     ManageRequests:::seeking
+     HelpExample:::highlight
+     BrowseHelpRequests:::offering
+     RespondToRequest:::offering
+     TrackContributions:::offering
+     DirectMessages:::secondary
+     GroupDiscussions:::secondary
+     HelpSessionChats:::secondary
+    classDef primary fill:#c4e3f3,stroke:#6baed6,stroke-width:2px,color:#2c3e50,font-weight:bold
+    classDef secondary fill:#f5f5f5,stroke:#ddd,stroke-width:1px,color:#333
+    classDef highlight fill:#fcf8e3,stroke:#faebcc,stroke-width:2px,color:#8a6d3b,font-weight:bold
+    classDef seeking fill:#f2dede,stroke:#ebccd1,stroke-width:2px,color:#a94442,font-weight:bold
+    classDef offering fill:#dff0d8,stroke:#d6e9c6,stroke-width:2px,color:#3c763d,font-weight:bold

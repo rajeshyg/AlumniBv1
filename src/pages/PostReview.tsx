@@ -24,6 +24,36 @@ export default function PostReviewPage() {
   const [activeStatus, setActiveStatus] = React.useState<PostStatus>('pending');
   const [searchQuery, setSearchQuery] = React.useState('');
 
+  // Function to filter posts based on status and search query
+  const filterPosts = React.useCallback(() => {
+    let filtered = [...posts];
+
+    logger.debug(`Filtering ${posts.length} posts by status: ${activeStatus}`);
+
+    // Filter by status
+    filtered = filtered.filter(post => {
+      const postStatus = (post.status || '').toLowerCase() as PostStatus;
+      return postStatus === activeStatus.toLowerCase();
+    });
+
+    logger.debug(`After status filter: ${filtered.length} posts remain`);
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(post =>
+        post.title?.toLowerCase().includes(query) ||
+        post.content.toLowerCase().includes(query) ||
+        post.author.toLowerCase().includes(query) ||
+        post.tags?.some(tag => tag.toLowerCase().includes(query))
+      );
+      logger.debug(`After search filter: ${filtered.length} posts remain`);
+    }
+
+    setFilteredPosts(filtered);
+  }, [posts, activeStatus, searchQuery]);
+
+  // Effect to fetch posts on component mount
   React.useEffect(() => {
     const fetchPosts = async () => {
       try {
@@ -31,9 +61,13 @@ export default function PostReviewPage() {
           throw new Error('User not authenticated');
         }
 
+        logger.debug('Fetching all posts for review');
         const allPosts = await PostService.getAllPosts();
+        logger.debug(`Fetched ${allPosts.length} posts for review`, {
+          firstPostId: allPosts.length > 0 ? allPosts[0].id : 'none',
+          statuses: allPosts.map(p => p.status)
+        });
         setPosts(allPosts);
-        setFilteredPosts(allPosts);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to fetch posts';
         setError(errorMessage);
@@ -46,30 +80,23 @@ export default function PostReviewPage() {
     fetchPosts();
   }, [authState.currentUser]);
 
+  // Effect to filter posts when dependencies change
   React.useEffect(() => {
     filterPosts();
-  }, [posts, searchQuery, activeStatus]);
+  }, [filterPosts]);
 
-  const filterPosts = () => {
-    let filtered = [...posts];
-    
-    // Filter by status
-    filtered = filtered.filter(post => post.status === activeStatus);
-    
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(post => 
-        post.title?.toLowerCase().includes(query) || 
-        post.content.toLowerCase().includes(query) ||
-        post.author.toLowerCase().includes(query) ||
-        post.tags?.some(tag => tag.toLowerCase().includes(query))
-      );
+  // Debug log effect
+  React.useEffect(() => {
+    if (!loading && filteredPosts) {
+      logger.debug(`PostReview: ${filteredPosts.length} posts to display`, {
+        activeStatus,
+        searchQuery: searchQuery ? searchQuery : 'none',
+        firstPostId: filteredPosts.length > 0 ? filteredPosts[0].id : 'none'
+      });
     }
-    
-    setFilteredPosts(filtered);
-  };
+  }, [filteredPosts, activeStatus, searchQuery, loading]);
 
+  // Handler functions
   const handleApprove = async (postId: string, comment: string) => {
     try {
       if (!authState.currentUser) {
@@ -83,7 +110,7 @@ export default function PostReviewPage() {
         comment
       );
       if (updatedPost) {
-        setPosts(posts.map(post => 
+        setPosts(prevPosts => prevPosts.map(post =>
           post.id === postId ? updatedPost : post
         ));
       }
@@ -107,7 +134,7 @@ export default function PostReviewPage() {
         comment
       );
       if (updatedPost) {
-        setPosts(posts.map(post => 
+        setPosts(prevPosts => prevPosts.map(post =>
           post.id === postId ? updatedPost : post
         ));
       }
@@ -122,6 +149,26 @@ export default function PostReviewPage() {
     setActiveStatus(status as PostStatus);
   };
 
+  const handleForceReload = async () => {
+    try {
+      setLoading(true);
+      logger.debug('Force reloading posts from JSON');
+      const reloadedPosts = await PostService.forceReloadFromJson();
+      logger.debug(`Reloaded ${reloadedPosts.length} posts from JSON`);
+      setPosts(reloadedPosts);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reload posts';
+      setError(errorMessage);
+      logger.error('Error reloading posts:', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Determine the posts to display
+  const postsToDisplay = filteredPosts;
+
+  // Render loading state
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -130,6 +177,7 @@ export default function PostReviewPage() {
     );
   }
 
+  // Render error state
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -138,12 +186,10 @@ export default function PostReviewPage() {
     );
   }
 
-  // Determine the posts to display based on the active status and search query
-  const postsToDisplay = filteredPosts; // Already filtered by status and search in filterPosts
-
+  // Render main UI
   return (
     // Use a container that allows the header to be sticky and content to scroll
-    <div className="flex flex-col h-screen max-w-full"> 
+    <div className="flex flex-col h-screen max-w-full">
       {/* Sticky header section: Contains title, search, and tabs list */}
       <div className="sticky top-0 z-20 bg-background pt-4 pb-2 px-2 space-y-4 shadow-sm border-b border-border/40">
         {/* Top row: Title and user info */}
@@ -180,8 +226,8 @@ export default function PostReviewPage() {
             {Object.entries(statusLabels)
               .filter(([status]) => ['pending', 'approved', 'rejected'].includes(status)) // Only show main review statuses
               .map(([status, label]) => (
-                <TabsTrigger 
-                  key={status} 
+                <TabsTrigger
+                  key={status}
                   value={status}
                   className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
@@ -194,21 +240,42 @@ export default function PostReviewPage() {
       </div>
 
       {/* Scrollable content area */}
-      <div className="flex-1 scrollable-content px-2 pt-4 pb-20"> 
+      <div className="flex-1 scrollable-content px-2 pt-4 pb-20">
         {/* Post list */}
         <div className="space-y-4">
           {postsToDisplay.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">
-              {searchQuery 
-                ? 'No posts match your search.' 
+              {searchQuery
+                ? 'No posts match your search.'
                 : `No ${statusLabels[activeStatus].toLowerCase()} posts found.`}
             </p>
           ) : (
-            <PostReviewList 
-              posts={postsToDisplay} 
-              onApprove={handleApprove} 
-              onReject={handleReject} 
-            />
+            <>
+              <PostReviewList
+                posts={postsToDisplay}
+                onApprove={handleApprove}
+                onReject={handleReject}
+              />
+              {/* Debug info */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mt-4 p-2 bg-muted text-xs">
+                  <div className="flex justify-between items-center mb-2">
+                    <p>Debug: {postsToDisplay.length} posts to display</p>
+                    <button
+                      type="button"
+                      onClick={handleForceReload}
+                      className="px-2 py-1 bg-blue-500 text-white rounded text-xs"
+                      disabled={loading}
+                    >
+                      {loading ? 'Loading...' : 'Force Reload'}
+                    </button>
+                  </div>
+                  {postsToDisplay.length > 0 && (
+                    <p>First post: {postsToDisplay[0].id} - {postsToDisplay[0].title}</p>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

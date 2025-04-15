@@ -1,0 +1,148 @@
+flowchart TB
+ subgraph AdminModule["👤 Admin Module"]
+    direction TB
+        AdminDashboard["📊 Admin Dashboard"]
+        UserManagement["👥 User Management"]
+        CategoryManagement["📁 Category Management"]
+        TagManagement["🏷️ Tag Management"]
+        SystemSettings["⚙️ System Settings"]
+        Announcements["📣 Announcements"]
+        ChatMonitoring["💬 Chat Monitoring"]
+        CategoryExamples["📑 Category Examples:<br>• Admissions<br>• Scholarships<br>• Internships"]
+        TagExamples["🏷️ Tag Examples:<br>• A.I.<br>• Medical Specialization<br>• Computer Science"]
+  end
+ subgraph ModeratorModule["🛠️ Moderator Module"]
+    direction TB
+        ModDashboard["📋 Moderator Dashboard"]
+        ContentReview["🔍 Content Review"]
+        ReviewPending["📝 Review Pending Posts"]
+        ApproveReject{"✅ Approve or Reject?"}
+        PublishPost["📢 Publish to Platform"]
+        SendFeedback["✉️ Send Feedback to Author"]
+        CategoryMonitoring["📁 Category Monitoring"]
+        ChatModeration["💬 Chat Moderation"]
+  end
+ subgraph StudentModule["🎓 Student Module"]
+    direction TB
+        StudentDashboard["🏠 Student Dashboard"]
+        BrowsePosts["🔎 Browse Posts"]
+        CreatePost["✍️ Create Post/Request"]
+        OfferHelp["🤝 Offer Help"]
+        SeekHelp["🙋 Seek Help"]
+        ChatSystem["💬 Chat System"]
+        UserPreferences["⚙️ User Preferences"]
+        SelectCategory["📑 Select Category"]
+        AddTags["🏷️ Add Tags"]
+        SubmitForReview["📤 Submit for Review"]
+        ViewPost["📄 View Post Details"]
+        ExpressInterest["⭐ Express Interest"]
+        StartChat["💬 Start Chat About Post"]
+  end
+ subgraph ChatModule["💬 Chat Module"]
+    direction TB
+        DirectChat["📨 Direct Messaging"]
+        GroupChat["👥 Group Discussions"]
+        PostLinkedChat["📌 Post-Linked Chats"]
+  end
+ subgraph PostChatIntegration["🔗 Post-Chat Integration"]
+    direction TB
+        InterestBased["🤝 Interest-based chat recommendations"]
+        PostSpecific["📌 Post-specific discussion groups"]
+        HelpFollowups["📞 Help request follow-ups"]
+        ExpertConnections["👨‍🔬 Expert connections based on tags"]
+  end
+    LoginScreen["🔐 Login & Profile Selection"] --> AdminUser["👨‍💼 Admin User"] & ModeratorUser["👩‍💻 Moderator User"] & StudentUsers["👨‍🎓 Student Users"]
+    AdminDashboard --> UserManagement
+    UserManagement --> CategoryManagement
+    CategoryManagement --> TagManagement & CategoryExamples
+    TagManagement --> SystemSettings & TagExamples
+    SystemSettings --> Announcements
+    Announcements --> ChatMonitoring
+    AdminUser --> AdminModule
+    ModDashboard --> ContentReview
+    ContentReview --> ReviewPending
+    ReviewPending --> ApproveReject
+    ApproveReject -- Approve --> PublishPost
+    ApproveReject -- Reject --> SendFeedback
+    SendFeedback --> CategoryMonitoring
+    CategoryMonitoring --> ChatModeration
+    ModeratorUser --> ModeratorModule
+    AdminModule -.-> ModeratorModule
+    StudentDashboard --> BrowsePosts
+    BrowsePosts --> CreatePost & ViewPost
+    CreatePost --> OfferHelp & SelectCategory
+    OfferHelp --> SeekHelp
+    SeekHelp --> ChatSystem
+    ChatSystem --> UserPreferences & ChatModule
+    SelectCategory --> AddTags
+    AddTags --> SubmitForReview
+    ViewPost --> ExpressInterest & PostChatIntegration
+    ExpressInterest --> StartChat
+    StudentUsers --> StudentModule
+    ModeratorModule -.-> StudentModule
+    StartChat --> PostLinkedChat
+    ChatMonitoring --> ChatModule
+    ChatModeration --> ChatModule
+    InterestBased --> PostSpecific
+    PostSpecific --> HelpFollowups
+    HelpFollowups --> ExpertConnections
+    PostLinkedChat --> PostChatIntegration
+    Announcements -.-> StudentDashboard
+    SubmitForReview -.-> ReviewPending
+    CategoryManagement -.-> SelectCategory
+    TagManagement -.-> AddTags
+    PublishPost -.-> BrowsePosts
+
+     AdminDashboard:::screen
+     UserManagement:::screen
+     CategoryManagement:::screen
+     TagManagement:::screen
+     SystemSettings:::screen
+     Announcements:::screen
+     ChatMonitoring:::screen
+     CategoryExamples:::integration
+     TagExamples:::integration
+     ModDashboard:::screen
+     ContentReview:::screen
+     ReviewPending:::screen
+     ApproveReject:::decision
+     PublishPost:::screen
+     SendFeedback:::screen
+     CategoryMonitoring:::screen
+     ChatModeration:::screen
+     StudentDashboard:::screen
+     BrowsePosts:::screen
+     CreatePost:::screen
+     OfferHelp:::screen
+     SeekHelp:::screen
+     ChatSystem:::screen
+     UserPreferences:::screen
+     SelectCategory:::screen
+     AddTags:::screen
+     SubmitForReview:::screen
+     ViewPost:::screen
+     ExpressInterest:::screen
+     StartChat:::screen
+     DirectChat:::screen
+     GroupChat:::screen
+     PostLinkedChat:::screen
+     InterestBased:::screen
+     PostSpecific:::screen
+     HelpFollowups:::screen
+     ExpertConnections:::screen
+     LoginScreen:::screen
+     AdminUser:::userType
+     ModeratorUser:::userType
+     StudentUsers:::userType
+    classDef userType fill:#fff8e1,stroke:#ff8f00,stroke-width:2px,color:#e65100,font-weight:bold,border-radius:8px
+    classDef screen fill:#f5f5f5,stroke:#616161,stroke-width:2px,color:#212121,border-radius:4px
+    classDef integration fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20,font-weight:bold,border-radius:8px
+    classDef decision fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#b71c1c,border-radius:4px
+    style LoginScreen fill:#fefce8,stroke:#ca8a04,border-radius:4px
+    style AdminModule fill:#BBDEFB,stroke:#d32f2f,stroke-width:2px
+    style ModeratorModule fill:#BBDEFB,stroke:#689f38,stroke-width:2px
+    style ChatModule fill:#BBDEFB,stroke:#7b1fa2,stroke-width:2px
+    style PostChatIntegration fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style StudentModule fill:#BBDEFB,stroke:#f57f17,stroke-width:2px
+
+

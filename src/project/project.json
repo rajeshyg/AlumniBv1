@@ -245,7 +245,245 @@
                 "name": "Role Management",
                 "subtasks": [
                   {"id": "ST085", "name": "Implement mentor role assignment system", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
-                  {"id": "ST086", "name": "Create moderator search and management", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                  {"id": "ST086", "name": "Create moderator search and management", "status": "completed", "testAutomation": "Completed", "devStatus": "Completed", "manualTestingSignOff": "Completed"}
+                ]
+              },
+              {
+                "id": "T029",
+                "name": "Category Management",
+                "subtasks": [
+                  {"id": "ST087", "name": "View all categories", "status": "completed", "testAutomation": "Completed", "devStatus": "Completed", "manualTestingSignOff": "Completed"},
+                  {"id": "ST088", "name": "Add new category", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST089", "name": "Edit existing category", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST090", "name": "Disable category", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T030",
+                "name": "Tag Management",
+                "subtasks": [
+                  {"id": "ST091", "name": "View all tags", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST092", "name": "Add new tag", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST093", "name": "Merge similar tags", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T031",
+                "name": "Analytics Dashboard",
+                "subtasks": [
+                  {"id": "ST094", "name": "User activity tracking", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST095", "name": "Popular categories visualization", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST096", "name": "Success metrics reporting", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST097", "name": "Help request statistics", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              }
+            ]
+          },
+          {
+            "id": "IT010",
+            "name": "Iteration 10: Database Migration",
+            "tasks": [
+              {
+                "id": "T032",
+                "name": "Database Schema Design",
+                "subtasks": [
+                  {"id": "ST098", "name": "Create posts schema in Supabase", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST099", "name": "Create users schema in Supabase", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST100", "name": "Create categories and tags schema", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST101", "name": "Define relationships between entities", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T033",
+                "name": "Data Migration",
+                "subtasks": [
+                  {"id": "ST102", "name": "Migrate posts from JSON to Supabase", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST103", "name": "Migrate users from CSV to Supabase", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST104", "name": "Update services to use Supabase", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              }
+            ]
+          },
+          {
+            "id": "IT011",
+            "name": "Iteration 11: Chat System Enhancements",
+            "tasks": [
+              {
+                "id": "T034",
+                "name": "Chat UI Improvements",
+                "subtasks": [
+                  {"id": "ST105", "name": "Fix styling issues in chat components", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST106", "name": "Ensure sender identification in group chats", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST107", "name": "Implement consistent styling across chat components", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T035",
+                "name": "Chat Features",
+                "subtasks": [
+                  {"id": "ST108", "name": "Complete reply to specific message functionality", "status": "in progress", "testAutomation": "Pending", "devStatus": "In progress", "manualTestingSignOff": "Pending"},
+                  {"id": "ST109", "name": "Implement forward message functionality", "status": "in progress", "testAutomation": "Pending", "devStatus": "In progress", "manualTestingSignOff": "Pending"},
+                  {"id": "ST110", "name": "Add unread message count indicator", "status": "in progress", "testAutomation": "Pending", "devStatus": "In progress", "manualTestingSignOff": "Pending"},
+                  {"id": "ST111", "name": "Implement notifications for new messages", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T036",
+                "name": "Help Session Chats",
+                "subtasks": [
+                  {"id": "ST112", "name": "Create dedicated chat UI for help sessions", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST113", "name": "Implement help session chat creation from help requests", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST114", "name": "Add help session status tracking in chats", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              }
+            ]
+          },
+          {
+            "id": "IT012",
+            "name": "Iteration 12: Help Request System",
+            "tasks": [
+              {
+                "id": "T037",
+                "name": "Help Request Creation",
+                "subtasks": [
+                  {"id": "ST115", "name": "Extend Post model for help requests", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST116", "name": "Create UI for help request creation", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST117", "name": "Implement category and tag selection", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST118", "name": "Add urgency level setting", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T038",
+                "name": "Help Request Management",
+                "subtasks": [
+                  {"id": "ST119", "name": "Create UI for managing submitted help requests", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST120", "name": "Implement help request status tracking", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST121", "name": "Add functionality to view responses", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST122", "name": "Implement helper rating system", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              }
+            ]
+          },
+          {
+            "id": "IT013",
+            "name": "Iteration 13: Help Offering System",
+            "tasks": [
+              {
+                "id": "T039",
+                "name": "Browse Help Requests",
+                "subtasks": [
+                  {"id": "ST123", "name": "Create UI for browsing help requests", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST124", "name": "Implement filtering by expertise/tags", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST125", "name": "Add sorting by urgency level", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST126", "name": "Create detailed view for help requests", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T040",
+                "name": "Respond to Help Requests",
+                "subtasks": [
+                  {"id": "ST127", "name": "Implement guidance response functionality", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST128", "name": "Add meeting scheduling option", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST129", "name": "Create resource sharing functionality", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T041",
+                "name": "Contribution Tracking",
+                "subtasks": [
+                  {"id": "ST130", "name": "Implement helper contribution tracking", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST131", "name": "Create reputation score system", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST132", "name": "Add feedback visualization", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              }
+            ]
+          },
+          {
+            "id": "IT014",
+            "name": "Iteration 14: Personalization",
+            "tasks": [
+              {
+                "id": "T042",
+                "name": "Interest Settings",
+                "subtasks": [
+                  {"id": "ST133", "name": "Create UI for setting interest areas", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST134", "name": "Implement interest storage and retrieval", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST135", "name": "Add interest-based filtering", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T043",
+                "name": "Notification Preferences",
+                "subtasks": [
+                  {"id": "ST136", "name": "Create notification preferences UI", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST137", "name": "Implement notification settings storage", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST138", "name": "Add notification type configuration", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T044",
+                "name": "UI Customization",
+                "subtasks": [
+                  {"id": "ST139", "name": "Implement theme preferences", "status": "completed", "testAutomation": "Completed", "devStatus": "Completed", "manualTestingSignOff": "Completed"},
+                  {"id": "ST140", "name": "Add layout customization options", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST141", "name": "Create font size and accessibility settings", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T045",
+                "name": "Content Recommendations",
+                "subtasks": [
+                  {"id": "ST142", "name": "Implement recommendation algorithm", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST143", "name": "Create UI for recommended content", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST144", "name": "Add feedback mechanism for recommendations", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              }
+            ]
+          },
+          {
+            "id": "IT015",
+            "name": "Iteration 15: Moderator Features",
+            "tasks": [
+              {
+                "id": "T046",
+                "name": "Content Review Enhancements",
+                "subtasks": [
+                  {"id": "ST145", "name": "Improve post moderation queue UI", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST146", "name": "Add batch approval functionality", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST147", "name": "Implement content filtering options", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T047",
+                "name": "Moderation Reports",
+                "subtasks": [
+                  {"id": "ST148", "name": "Create UI for review statistics", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST149", "name": "Implement category insights reporting", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST150", "name": "Add content quality metrics", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              }
+            ]
+          },
+          {
+            "id": "IT016",
+            "name": "Iteration 16: Style and Test Fixes",
+            "tasks": [
+              {
+                "id": "T048",
+                "name": "Style Consolidation",
+                "subtasks": [
+                  {"id": "ST151", "name": "Consolidate styling approach (prefer Tailwind)", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST152", "name": "Remove !important overrides", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST153", "name": "Ensure consistent styling across components", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
+                ]
+              },
+              {
+                "id": "T049",
+                "name": "Test Fixes",
+                "subtasks": [
+                  {"id": "ST154", "name": "Update tests to match new UI structure", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST155", "name": "Fix failing tests", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"},
+                  {"id": "ST156", "name": "Add tests for new functionality", "status": "not started", "testAutomation": "Pending", "devStatus": "Pending", "manualTestingSignOff": "Pending"}
                 ]
               }
             ]

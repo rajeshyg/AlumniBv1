@@ -1,0 +1,46 @@
+flowchart TD
+    AdminLogin(["🔑 Admin Login"]) --> AdminDashboard(["⚙️ Admin Dashboard"])
+    AdminDashboard --> UserManagement(["👥 User Management"]) & CategoryManagement(["🗂️ Category Management"]) & TagManagement(["🏷️ Tag Management"]) & Analytics(["📊 Analytics Dashboard"])
+    UserManagement --> SearchUsers["🔍 Search Users by Email/Name"] & ViewUserDetails["👤 View User Profile"] & AssignRoles["🏷️ Assign Roles"]
+    AssignRoles --> ModeratorRole["🛡️ Assign Moderator Role"]
+    CategoryManagement --> ViewCategories["📋 View All Categories"] & AddCategory["➕ Add New Category"] & EditCategory["✏️ Edit Category"] & DisableCategory["🚫 Disable Category"]
+    AddCategory --> CategoryExamples["Examples:
+    - 🎓 Admissions
+    - 💰 Scholarships
+    - 💼 Internships
+    - 🏥 Medical Residencies
+    - 🔬 Research Opportunities"]
+    TagManagement --> ViewTags["📋 View All Tags"] & AddTag["➕ Add New Tag"] & MergeTags["🔄 Merge Similar Tags"]
+    AddTag --> TagExamples["Examples:
+    - 🤖 Artificial Intelligence
+    - 🧠 Neurology
+    - 💊 Pharmacology
+    - 💻 Computer Science
+    - 📊 Data Science"]
+    Analytics --> UserActivity["👥 User Activity"] & PopularCategories["🗂️ Popular Categories"] & SuccessMetrics["📈 Success Metrics"] & HelpRequestStats["🆘 Help Request Statistics"]
+
+     AdminLogin:::primary
+     AdminDashboard:::primary
+     UserManagement:::primary
+     CategoryManagement:::primary
+     TagManagement:::primary
+     Analytics:::primary
+     SearchUsers:::secondary
+     ViewUserDetails:::secondary
+     AssignRoles:::secondary
+     ViewCategories:::secondary
+     AddCategory:::secondary
+     EditCategory:::secondary
+     DisableCategory:::secondary
+     CategoryExamples:::highlight
+     ViewTags:::secondary
+     AddTag:::secondary
+     MergeTags:::secondary
+     TagExamples:::highlight
+     UserActivity:::secondary
+     PopularCategories:::secondary
+     SuccessMetrics:::secondary
+     HelpRequestStats:::secondary
+    classDef primary fill:#dff0d8,stroke:#3c763d,stroke-width:2px,color:#2c3e50,font-weight:bold
+    classDef secondary fill:#f5f5f5,stroke:#ddd,stroke-width:1px,color:#333
+    classDef highlight fill:#fcf8e3,stroke:#faebcc,stroke-width:2px,color:#8a6d3b,font-weight:bold

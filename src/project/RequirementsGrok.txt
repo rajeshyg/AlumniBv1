@@ -1,0 +1,65 @@
+Below is concise requirements draft for the web-based platform, capturing all functionalities from the provided flow diagrams (ProjectFlow.txt, Moderator.txt, Admin.txt, Student.txt) and incorporating the specified technical specifications and authentication requirements.
+
+---
+
+## Requirements Draft
+
+### 1. Introduction
+This document specifies the requirements for a web portal facilitating collaboration and knowledge sharing, supporting Admin, Moderator, and Student roles with content management, chat functionalities, and AI enhancements.
+
+### 2. Functional Specifications
+
+#### 2.1 User Roles and Functionalities
+
+##### 2.1.1 Admin
+- **User Management**: Search users by email/name, view profiles, assign roles (e.g., Moderator).
+- **Category Management**: View, add, edit, disable categories (e.g., Admissions, Scholarships, Internships).
+- **Tag Management**: View, add, merge tags (e.g., A.I., Neurology, Computer Science).
+- **Analytics Dashboard**: Monitor user activity, popular categories, success metrics, help request statistics.
+- **Announcements**: Create and publish announcements.
+- **Chat Monitoring**: Oversee chat activities.
+
+##### 2.1.2 Moderator
+- **Content Review**: Review pending posts for category/tags/content quality; approve, reject, or request changes; provide feedback.
+- **Category Monitoring**: Oversee category activities.
+- **Chat Moderation**: Monitor chats for compliance.
+- **Moderation Reports**: View review statistics, category insights, content quality metrics.
+
+##### 2.1.3 Student
+- **Profile Selection**: Select profile after login.
+- **Dashboard**: Access personalized dashboard.
+- **Preferences**: Set interests (e.g., A.I., Pharmacology), notification settings, UI customization.
+- **Browse Posts**: Filter by category, search by tags, view recommended posts.
+- **Create Posts/Requests**: Select category, add tags, submit for review.
+- **Seek Help**: Create help requests (category, tags, description, urgency); view responses, accept offers, rate helpers.
+- **Offer Help**: Browse help requests, filter by expertise, sort by urgency, respond with guidance/meetings/resources, track contributions.
+- **Chat System**: Use direct messages, group discussions, help session chats; express interest in posts and start related chats.
+
+#### 2.2 Chat Module
+- **Direct Messaging**: One-on-one chats.
+- **Group Discussions**: Multi-user chat rooms.
+- **Post-Linked Chats**: Chats tied to specific posts.
+
+#### 2.3 Post-Chat Integration
+- **Interest-Based Recommendations**: Suggest chats based on interests.
+- **Post-Specific Discussion Groups**: Link discussions to posts.
+- **Help Request Follow-Ups**: Continue communication post-help.
+- **Expert Connections**: Match users with experts via tags.
+
+### 3. Technical Specifications
+- **Platform**: Web portal compatible with mobile and desktop, with device detection and toggle option.
+- **UI Components**: Reusable, domain-agnostic components for posts and chats.
+- **UI Themes**: Toggle themes from profile settings.
+- **AI Features**: Implement AI for recommendations, moderation, or chat suggestions where feasible.
+
+### 4. Authentication
+- **Multi-Profile Support**: One email supports multiple profiles; landing page allows profile selection.
+
+### 5. Additional Requirements
+- **Content Workflow**: Posts/help requests submitted for moderation before publishing.
+- **Notifications**: Deliver based on user preferences (e.g., messages, approvals).
+- **Security**: Role-based access control for all functionalities.
+
+---
+
+This draft ensures all features from the flow diagrams are included while adhering to the technical and authentication specifications, presented in a clear and concise manner.
