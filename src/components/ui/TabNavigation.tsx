@@ -1,6 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { cn } from '../../lib/utils';
+import { Tabs, TabsList, TabsTrigger } from 'components/ui/tabs';
 
 const tabItems = [
   { to: '/internships', label: 'Internships' },
@@ -11,20 +10,15 @@ const tabItems = [
 
 const TabNavigation: React.FC = () => {
   return (
-    <div className="flex space-x-4 border-b">
-      {tabItems.map(({ to, label }) => (
-        <NavLink
-          key={to}
-          to={to}
-          className={({ isActive }) => cn(
-            'py-2 px-4 text-sm font-medium',
-            isActive ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground'
-          )}
-        >
-          {label}
-        </NavLink>
-      ))}
-    </div>
+    <Tabs>
+      <TabsList>
+        {tabItems.map(({ to, label }) => (
+          <TabsTrigger key={to} value={to}>
+            {label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 };
 

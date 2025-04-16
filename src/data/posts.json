@@ -1,6 +1,57 @@
 {
   "Posts": [
     {
+      "Post 0": {
+        "ID": "post-000",
+        "Title": "Harvard Medical School Research Fellowship 2025",
+        "Content": "<p>Harvard Medical School is offering a prestigious research fellowship for medical students interested in neurology and neuroscience. This is a fully funded opportunity with a stipend of $35,000 for the academic year.</p><p>The fellowship includes access to state-of-the-art research facilities and mentorship from leading faculty members. Selected candidates will work on cutting-edge research projects in areas such as neurodegeneration, brain imaging, and cognitive neuroscience.</p><p>Requirements include excellent academic standing, previous research experience, and a strong interest in neuroscience.</p>",
+        "Image": "harvard_logo.png",
+        "Author": "Dr. Elizabeth Chen",
+        "AuthorId": "10001",
+        "createdAt": "2025-04-01T09:00:00Z",
+        "updatedAt": "2025-04-01T09:00:00Z",
+        "Likes": 42,
+        "Comments": [
+          {
+            "Text": "This is an amazing opportunity! Does it require USMLE scores?",
+            "Posted by": "Priya Sharma",
+            "PostedById": "10022",
+            "createdAt": "2025-04-01T10:30:00Z"
+          },
+          {
+            "Text": "I participated in this fellowship last year and it was transformative for my career. Highly recommend applying!",
+            "Posted by": "James Wilson",
+            "PostedById": "10035",
+            "createdAt": "2025-04-01T14:15:00Z"
+          },
+          {
+            "Text": "Are international students eligible for this fellowship?",
+            "Posted by": "Ahmed Hassan",
+            "PostedById": "10042",
+            "createdAt": "2025-04-02T08:45:00Z"
+          }
+        ],
+        "category": "Research",
+        "tags": ["Harvard", "Medical", "Neuroscience", "Fellowship"],
+        "status": "approved",
+        "organization": "Harvard Medical School",
+        "location": "Boston, Massachusetts",
+        "deadline": "2025-05-15T23:59:59Z",
+        "contactInfo": "fellowships@hms.harvard.edu",
+        "applicationUrl": "https://hms.harvard.edu/fellowships/neuroscience",
+        "isUrgent": true,
+        "postType": "offering",
+        "approvalDetails": {
+          "requestedAt": "2025-03-31T16:20:00Z",
+          "reviewedAt": "2025-04-01T08:30:00Z",
+          "reviewedBy": "moderator-001",
+          "reviewerName": "Dr. Smith",
+          "comments": "Approved. Information verified with Harvard Medical School.",
+          "expiresAt": "2025-06-01T00:00:00Z"
+        }
+      }
+    },
+    {
       "Post 1": {
         "ID": "post-001",
         "Title": "Yale University Summer Internship 2025",
@@ -266,6 +317,12 @@
         "category": "Research",
         "tags": ["MIT", "Research", "AI", "Quantum Computing"],
         "status": "PENDING",
+        "organization": "Massachusetts Institute of Technology",
+        "location": "Cambridge, Massachusetts",
+        "deadline": "2025-06-30T23:59:59Z",
+        "contactInfo": "mitlabs@mit.edu",
+        "applicationUrl": "https://mitlabs.mit.edu/apply",
+        "postType": "offering",
         "approvalDetails": {
           "requestedAt": "2025-03-22T14:30:00Z",
           "requestNotes": "Information verified from MIT's official website",
@@ -313,7 +370,7 @@
       "Post 12": {
         "ID": "post-012",
         "Title": "Google Summer Internship 2025",
-        "Content": "Google is accepting applications for Summer 2025 internships. Multiple positions available across different teams.",
+        "Content": "Google is accepting applications for Summer 2025 internships. Multiple positions available across different teams including Software Engineering, UX Design, Product Management, and Data Science.",
         "Image": "google_intern.png",
         "Author": "Siddhant Peddi",
         "AuthorId": "10048",
@@ -330,6 +387,13 @@
         "category": "Internships",
         "tags": ["Google", "Tech", "Summer"],
         "status": "PENDING",
+        "organization": "Google",
+        "location": "Multiple Locations",
+        "deadline": "2025-04-30T23:59:59Z",
+        "contactInfo": "university-programs@google.com",
+        "applicationUrl": "https://careers.google.com/students/",
+        "isUrgent": true,
+        "postType": "offering",
         "approvalDetails": {
           "requestedAt": "2025-03-23T11:00:00Z",
           "requestNotes": "Details from Google Careers page",
@@ -338,6 +402,42 @@
           "reviewerName": null,
           "comments": null,
           "expiresAt": null
+        }
+      }
+    }
+  ,
+    {
+      "Post 13": {
+        "ID": "post-013",
+        "Title": "Need Advice on Medical School Applications",
+        "Content": "<p>I'm a pre-med student planning to apply to medical schools this year. I'm specifically interested in neurology specialization and looking for advice on research experience requirements.</p><p>I have a 3.8 GPA and have worked in a research lab for one semester, but I'm wondering if this is enough. Any guidance from current medical students or doctors would be greatly appreciated!</p>",
+        "Author": "Aisha Khan",
+        "AuthorId": "10062",
+        "createdAt": "2025-03-25T16:45:00Z",
+        "updatedAt": "2025-03-25T16:45:00Z",
+        "Likes": 5,
+        "Comments": [
+          {
+            "Text": "I'm a second-year medical student. I'd recommend at least a year of research experience for neurology. Feel free to DM me for more specific advice!",
+            "Posted by": "Michael Chen",
+            "PostedById": "10073",
+            "createdAt": "2025-03-25T18:20:00Z"
+          }
+        ],
+        "category": "Admissions",
+        "tags": ["Medical School", "Neurology", "Applications", "Research"],
+        "status": "approved",
+        "location": "Online",
+        "deadline": "2025-04-10T23:59:59Z",
+        "isUrgent": true,
+        "postType": "seeking",
+        "approvalDetails": {
+          "requestedAt": "2025-03-25T16:45:00Z",
+          "reviewedAt": "2025-03-25T17:30:00Z",
+          "reviewedBy": "moderator-001",
+          "reviewerName": "Dr. Smith",
+          "comments": "Approved. Legitimate request for advice.",
+          "expiresAt": "2025-04-25T00:00:00Z"
         }
       }
     }

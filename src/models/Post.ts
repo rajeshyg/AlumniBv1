@@ -37,4 +37,13 @@ export interface Post {
   rejectedBy?: string;
   rejectedById?: string;
   expiresAt?: Date;
+
+  // Additional fields for enhanced post information
+  deadline?: Date;
+  organization?: string; // Organization associated with the post (e.g., Yale, Google, MIT)
+  location?: string; // Location information
+  contactInfo?: string; // Contact information
+  applicationUrl?: string; // URL for application
+  isUrgent?: boolean; // Flag for urgent posts
+  postType?: 'offering' | 'seeking' | 'general'; // Type of post
 }

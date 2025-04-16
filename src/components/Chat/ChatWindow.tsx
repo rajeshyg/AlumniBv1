@@ -36,8 +36,17 @@ import {
   ContextMenuTrigger,
 } from '../ui/context-menu';
 import { supabase } from '../../lib/supabaseClient';
-import './chat.css';
 import toast from 'react-hot-toast';
+
+// Import our reusable chat UI components
+import {
+  ChatInput,
+  ChatButton,
+  ChatBubble,
+  ChatHeader,
+  ChatTimestamp,
+  ChatDateDivider
+} from './ui';
 
 // Global declarations should go at the top level
 declare global {
@@ -127,7 +136,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
   // Load messages when component mounts or chat changes
   useEffect(() => {
-    logger.info(`ChatWindow mounted/updated for chat: ${chat.id}`, { 
+    logger.info(`ChatWindow mounted/updated for chat: ${chat.id}`, {
       chatName: chat.name,
       hasUser: !!authState.currentUser,
       currentChatMessages: chatMessages.length,
@@ -187,18 +196,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   const sortedMessages = React.useMemo(() => {
     const messageCount = chatMessages.length;
     logger.debug(`Sorting ${messageCount} messages for chat ${chat.id}`);
-    
+
     if (messageCount === 0) {
       return [];
     }
-    
+
     try {
       const sorted = [...chatMessages].sort((a, b) => {
         const timeA = new Date(a.timestamp).getTime();
         const timeB = new Date(b.timestamp).getTime();
         return timeA - timeB;
       });
-      
+
       logger.debug(`Successfully sorted ${sorted.length} messages for chat ${chat.id}`);
       return sorted;
     } catch (error) {
@@ -534,6 +543,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       // Set up polling to check for typing users
       const interval = setInterval(() => {
         const typing = ChatService.getTypingUsers(chat.id, authState.currentUser!.studentId);
+        if (typing.length > 0) {
+          console.log('Typing users detected:', typing);
+        }
         setTypingUsers(typing);
       }, 1000);
 
@@ -589,14 +601,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
   const handleDeleteMessage = async (message: ChatMessage) => {
     try {
       const isConfirmed = window.confirm("Are you sure you want to delete this message? This action cannot be undone.");
-      
+
       if (!isConfirmed) {
         return;
       }
-      
+
       // Call the deleteMessage method from the store
       const success = await deleteMessage(message.id);
-      
+
       if (success) {
         toast.success("Message deleted successfully");
       } else {
@@ -620,6 +632,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       const now = Date.now();
       // Only send typing event if it's been more than 2 seconds since the last one
       if (now - lastTypingTime.current > 2000) {
+        console.log('Setting typing status to TRUE');
         ChatService.setTypingStatus(chat.id, authState.currentUser.studentId, true);
         lastTypingTime.current = now;
       }
@@ -632,6 +645,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       // Set a new timeout to clear typing status after 3 seconds of inactivity
       typingTimeoutRef.current = setTimeout(() => {
         if (authState.currentUser) {
+          console.log('Setting typing status to FALSE after timeout');
           ChatService.setTypingStatus(chat.id, authState.currentUser.studentId, false);
         }
         typingTimeoutRef.current = null;
@@ -804,20 +818,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       isMobile ? "fixed inset-0 z-[100]" : "h-full"
     )}>
       {/* Chat Header */}
-      <div className="chat-header">
+      <ChatHeader>
         <div className="flex items-center space-x-3">
           {isMobile && (
-            <Button
+            <ChatButton
               variant="ghost"
               size="icon"
               onClick={onBack}
               className="icon-button"
             >
               <ArrowLeft className="h-5 w-5" />
-            </Button>
+            </ChatButton>
           )}
-          <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="text-white font-medium">
+          <div className="h-10 w-10 rounded-full bg-[hsl(var(--chat-input))] flex items-center justify-center">
+            <span className="text-[hsl(var(--chat-foreground))] font-medium">
               {getChatDisplayName().charAt(0).toUpperCase()}
             </span>
           </div>
@@ -827,19 +841,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
               {chat.type === 'group' ? `${chat.participants.length} participants` : 'Online'}
             </p>
           </div>
-          <Button variant="ghost" size="icon" className="icon-button">
+          <ChatButton variant="ghost" size="icon" className="icon-button">
             <MoreVertical className="h-5 w-5" />
-          </Button>
+          </ChatButton>
         </div>
-      </div>
+      </ChatHeader>
 
       {/* Messages Area */}
       <div
         ref={parentRef}
         className="flex-1 overflow-y-auto px-4"
-        style={{
-          height: isMobile ? 'calc(100vh - 130px)' : 'calc(100vh - 180px)',
-        }}
       >
         {sortedMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
@@ -847,12 +858,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </div>
         ) : (
           <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-            className="min-h-full"
+            className="virtualizer-container min-h-full"
+            style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const message = sortedMessages[virtualRow.index];
@@ -865,11 +872,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
               return (
                 <div
                   key={message.id}
+                  className="virtualizer-item"
                   style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,
                     paddingTop: showDateDivider ? '24px' : '12px',
@@ -877,9 +881,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                   }}
                 >
                   {showDateDivider && (
-                    <div className="chat-date-divider">
+                    <ChatDateDivider>
                       {isSameDay(messageDate, new Date()) ? 'Today' : format(messageDate, 'MMMM d, yyyy')}
-                    </div>
+                    </ChatDateDivider>
                   )}
                   <div className={cn(
                     "flex w-full",
@@ -894,16 +898,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                       )}
                       <ContextMenu>
                         <ContextMenuTrigger>
-                          <div
-                            className={cn(
-                              "chat-bubble",
-                              isCurrentUser ? "chat-bubble-sent" : "chat-bubble-received"
-                            )}
-                          >
-                            <div className={isCurrentUser ? "sent-text" : "received-text"}>
+                          <ChatBubble type={isCurrentUser ? "sent" : "received"}>
+                            <div>
                               {/* Show reply information if this message is a reply */}
                               {message.metadata?.replyTo && (
-                                <div className="reply-reference p-1 mb-1 rounded text-xs">
+                                <div className="reply-reference p-1 mb-1 rounded text-xs bg-[hsl(var(--chat-input))]">
                                   <div className="flex items-center">
                                     <Reply className="h-3 w-3 mr-1" />
                                     <span className="font-medium">Reply to {getSenderName(message.metadata.replyTo.senderId)}</span>
@@ -913,14 +912,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                               )}
                               <div>{message.content}</div>
                             </div>
-                          </div>
+                          </ChatBubble>
                           <div className={cn(
                             "flex items-center gap-1 mt-1",
                             isCurrentUser ? "justify-end" : "justify-start"
                           )}>
-                            <span className="chat-timestamp">
+                            <ChatTimestamp>
                               {format(messageDate, 'h:mm a')}
-                            </span>
+                            </ChatTimestamp>
                             {isCurrentUser && (
                               <span className="message-status">
                                 <CheckCheck className="h-3 w-3" />
@@ -974,10 +973,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       )}
 
       {/* Message Input */}
-      <div className="chat-input-container">
+      <div className="chat-input-container sticky bottom-0 p-4 bg-card border-t border-border">
         {/* Reply UI */}
         {replyToMessage && (
-          <div className="reply-container bg-accent/30 p-2 mb-2 rounded flex items-center justify-between">
+          <div className="reply-container bg-secondary p-2 mb-2 rounded flex items-center justify-between">
             <div className="flex items-center">
               <Reply className="h-4 w-4 mr-2 text-primary" />
               <div className="text-sm">
@@ -985,29 +984,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                 <p className="text-muted-foreground truncate max-w-[200px]">{replyToMessage.content}</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={handleCancelReply} className="h-6 w-6">
+            <ChatButton variant="ghost" size="icon" onClick={handleCancelReply} className="h-6 w-6">
               <X className="h-4 w-4" />
-            </Button>
+            </ChatButton>
           </div>
         )}
         <form onSubmit={handleSendMessage} className="flex items-center gap-2 w-full">
-          <Input
-            value={newMessage}
-            onChange={(e) => {
-              setNewMessage(e.target.value);
-              handleTyping();
-            }}
-            placeholder={replyToMessage ? "Type your reply..." : "Type your message here..."}
-            className="chat-input flex-1"
-          />
-          <Button
+          <div className="flex-1">
+            <ChatInput
+              value={newMessage}
+              onChange={(e) => {
+                setNewMessage(e.target.value);
+                handleTyping();
+              }}
+              placeholder={replyToMessage ? "Type your reply..." : "Type your message here..."}
+            />
+          </div>
+          <ChatButton
             type="submit"
+            variant="send"
             size="icon"
-            className="chat-send-button"
             disabled={!newMessage.trim()}
           >
             <Send className="h-5 w-5" />
-          </Button>
+          </ChatButton>
         </form>
       </div>
 
@@ -1036,7 +1036,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setForwardMessageDialogOpen(false)}>Cancel</Button>
+            <ChatButton variant="secondary" onClick={() => setForwardMessageDialogOpen(false)}>Cancel</ChatButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1123,13 +1123,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                           </div>
                         </div>
                         {user.studentId !== authState.currentUser?.studentId && (
-                          <Button
+                          <ChatButton
                             variant="ghost"
                             size="icon"
                             onClick={() => handleRemoveMember(user.studentId)}
                           >
                             <X className="h-4 w-4" />
-                          </Button>
+                          </ChatButton>
                         )}
                       </div>
                     ))}
@@ -1140,9 +1140,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowMembers(false)}>
+            <ChatButton variant="secondary" onClick={() => setShowMembers(false)}>
               Close
-            </Button>
+            </ChatButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -25,6 +25,13 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { toast } from 'react-hot-toast';
 import { ChatMessage } from '../../models/Chat';
 
+// Import our reusable chat UI components
+import {
+  ChatInput,
+  ChatButton,
+  ChatHeader
+} from './ui';
+
 // TypeScript declarations for global window object
 declare global {
   interface Window {
@@ -74,10 +81,10 @@ interface ChatPageState {
 }
 
 // Create a memoized chat list item component to prevent unnecessary re-renders
-const ChatListItem = React.memo(({ 
-  chat, 
-  isActive, 
-  unreadCount, 
+const ChatListItem = React.memo(({
+  chat,
+  isActive,
+  unreadCount,
   onClick,
   getChatDisplayName,
   chatUsers,
@@ -92,7 +99,7 @@ const ChatListItem = React.memo(({
   authState: any;
 }) => {
   const displayName = getChatDisplayName(chat);
-  
+
   return (
     <div
       className={cn(
@@ -502,7 +509,7 @@ export const ChatPage: React.FC = () => {
     // Ensure messages load properly
     setTimeout(() => {
       logger.debug(`Loading messages for selected chat: ${chat.id}`);
-      
+
       // Explicitly load messages
       loadMessages(chat.id)
         .then(() => {
@@ -741,54 +748,53 @@ export const ChatPage: React.FC = () => {
         ) : (
           "w-80 border-r border-border"
         ),
-        "bg-card"
       )}>
         {/* Fixed Header */}
-        <div className="w-full bg-card border-b border-border">
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-2xl font-bold">Chats</h1>
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleClearCache}
-                  size="icon"
-                  variant="ghost"
-                  className="icon-button"
-                  title="Clear Cache"
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-                <Button
-                  onClick={() => updateState({ showNewChatDialog: true })}
-                  size="icon"
-                  variant="ghost"
-                  className="icon-button"
-                  title="New Direct Chat"
-                >
-                  <MessageSquare className="h-5 w-5" />
-                </Button>
-                <Button
-                  onClick={() => updateState({ showGroupDialog: true })}
-                  size="icon"
-                  variant="ghost"
-                  className="icon-button"
-                  title="New Group Chat"
-                >
-                  <Users className="h-5 w-5" />
-                </Button>
-              </div>
+        <ChatHeader>
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold">Chats</h1>
+            <div className="flex gap-2">
+              <ChatButton
+                onClick={handleClearCache}
+                size="icon"
+                variant="ghost"
+                className="icon-button"
+                title="Clear Cache"
+              >
+                <X className="h-5 w-5" />
+              </ChatButton>
+              <ChatButton
+                onClick={() => updateState({ showNewChatDialog: true })}
+                size="icon"
+                variant="ghost"
+                className="icon-button"
+                title="New Direct Chat"
+              >
+                <MessageSquare className="h-5 w-5" />
+              </ChatButton>
+              <ChatButton
+                onClick={() => updateState({ showGroupDialog: true })}
+                size="icon"
+                variant="ghost"
+                className="icon-button"
+                title="New Group Chat"
+              >
+                <Users className="h-5 w-5" />
+              </ChatButton>
             </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
+          </div>
+          <div className="mt-4">
+            <div className="relative w-full">
+              <ChatInput
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
                 placeholder="Search chats..."
                 className="pl-9"
               />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[hsl(var(--chat-input-placeholder))]" />
             </div>
           </div>
-        </div>
+        </ChatHeader>
 
         {/* Scrollable Chat List */}
         <div className="flex-1 overflow-y-auto min-h-0">
@@ -823,13 +829,13 @@ export const ChatPage: React.FC = () => {
           ) : (
             <div className="flex flex-col items-center justify-center h-full p-4 text-center">
               <p className="text-muted-foreground mb-2">No chats found</p>
-              <Button
+              <ChatButton
                 onClick={() => updateState({ showNewChatDialog: true })}
-                variant="outline"
+                variant="secondary"
                 size="sm"
               >
                 Start a conversation
-              </Button>
+              </ChatButton>
             </div>
           )}
         </div>
@@ -878,14 +884,14 @@ export const ChatPage: React.FC = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Search Users</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
+              <div className="relative w-full">
+                <ChatInput
                   value={userSearchQuery}
                   onChange={(e) => handleUserSearch(e.target.value)}
                   placeholder="Search users..."
                   className="pl-9"
                 />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[hsl(var(--chat-input-placeholder))]" />
               </div>
 
               {isSearching ? (
@@ -923,9 +929,9 @@ export const ChatPage: React.FC = () => {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => updateState({ showNewChatDialog: false })}>
+            <ChatButton variant="secondary" onClick={() => updateState({ showNewChatDialog: false })}>
               Cancel
-            </Button>
+            </ChatButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -946,7 +952,7 @@ export const ChatPage: React.FC = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Group Name</Label>
-              <Input
+              <ChatInput
                 value={groupName}
                 onChange={(e) => updateState({ groupName: e.target.value })}
                 placeholder="Enter group name..."
@@ -955,9 +961,8 @@ export const ChatPage: React.FC = () => {
 
             <div className="space-y-2">
               <Label>Add Members</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
+              <div className="relative w-full">
+                <ChatInput
                   value={userSearchQuery}
                   onChange={(e) => {
                     updateState({ userSearchQuery: e.target.value });
@@ -966,6 +971,7 @@ export const ChatPage: React.FC = () => {
                   placeholder="Search users..."
                   className="pl-9"
                 />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[hsl(var(--chat-input-placeholder))]" />
               </div>
 
               {/* Selected Users */}
@@ -1029,7 +1035,7 @@ export const ChatPage: React.FC = () => {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
+            <ChatButton variant="secondary" onClick={() => {
               updateState({
                 showGroupDialog: false,
                 groupName: '',
@@ -1038,13 +1044,13 @@ export const ChatPage: React.FC = () => {
               });
             }}>
               Cancel
-            </Button>
-            <Button
+            </ChatButton>
+            <ChatButton
               onClick={handleCreateGroupChat}
               disabled={!groupName.trim() || selectedUsers.length === 0}
             >
               Create Group
-            </Button>
+            </ChatButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

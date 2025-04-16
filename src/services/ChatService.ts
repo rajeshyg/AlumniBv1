@@ -853,10 +853,10 @@ export class ChatService {
 
       // Check if the user has permission (is the sender or an admin)
       if (message.sender_id !== userId) {
-        logger.warn('User does not have permission to delete this message:', { 
-          userId, 
+        logger.warn('User does not have permission to delete this message:', {
+          userId,
           messageId,
-          senderId: message.sender_id 
+          senderId: message.sender_id
         });
         return false;
       }

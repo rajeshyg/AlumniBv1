@@ -1,31 +1,31 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
+
 @layer base {
   :root {
     /* Light theme */
     --background: 210 40% 98%;
     --foreground: 222.2 84% 4.9%;
-    
+
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
-    
+
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    
+
     --primary: 199 89% 48%;
     --primary-foreground: 210 40% 98%;
-    
+
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
-    
+
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    
+
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-    
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
@@ -34,42 +34,68 @@
     --ring: 222.2 84% 4.9%;
 
     --radius: 0.5rem;
+
+    /* Chat-specific colors - Always dark regardless of theme */
+    --chat-background: 217 47% 19%;
+    --chat-foreground: 0 0% 100%;
+    --chat-card: 217 47% 19%;
+    --chat-card-foreground: 0 0% 100%;
+    --chat-border: 0 0% 100% / 0.1;
+    --chat-input: 217 33% 17%;
+    --chat-input-foreground: 0 0% 100%;
+    --chat-input-placeholder: 0 0% 100% / 0.5;
+    --chat-bubble-sent: 210 50% 75%;
+    --chat-bubble-sent-foreground: 217 47% 19%;
+    --chat-bubble-received: 217 33% 17%;
+    --chat-bubble-received-foreground: 0 0% 100% / 0.9;
+    --chat-timestamp: 215 20.2% 65.1%;
+    --chat-date-divider: 215 20.2% 65.1%;
   }
- 
+
   .dark {
     /* Dark theme based on screenshots */
     --background: 223 47% 11%;
     --foreground: 210 40% 98%;
-    
+
     --card: 223 47% 11%;
     --card-foreground: 210 40% 98%;
-    
+
     --popover: 223 47% 11%;
     --popover-foreground: 215 20.2% 65.1%;
-    
+
     --primary: 211 100% 50%;
     --primary-foreground: 255 100% 100%;
-    
+
     --secondary: 217 33% 17%;
     --secondary-foreground: 215 20.2% 65.1%;
-    
+
     --muted: 223 47% 11%;
     --muted-foreground: 215 20.2% 65.1%;
-    
+
     --accent: 217 33% 17%;
     --accent-foreground: 210 40% 98%;
-    
+
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
-    
+
     --border: 216 34% 17%;
     --input: 216 34% 17%;
     --ring: 216 34% 17%;
 
     /* Chat-specific colors */
-    --chat-bubble-sent: 211 100% 50%;
-    --chat-bubble-received: 223 47% 11%;
-    --chat-input: 223 47% 11%;
+    --chat-background: 217 47% 19%;
+    --chat-foreground: 0 0% 100%;
+    --chat-card: 217 47% 19%;
+    --chat-card-foreground: 0 0% 100%;
+    --chat-border: 0 0% 100% / 0.1;
+    --chat-input: 217 33% 17%;
+    --chat-input-foreground: 0 0% 100%;
+    --chat-input-placeholder: 0 0% 100% / 0.5;
+    --chat-bubble-sent: 210 50% 75%;
+    --chat-bubble-sent-foreground: 217 47% 19%;
+    --chat-bubble-received: 217 33% 17%;
+    --chat-bubble-received-foreground: 0 0% 100% / 0.9;
+    --chat-timestamp: 215 20.2% 65.1%;
     --chat-date-divider: 215 20.2% 65.1%;
   }
 }
@@ -97,48 +123,71 @@
   }
 
   .chat-bubble-sent {
-    @apply bg-[#0095FF] rounded-2xl rounded-br-sm;
+    @apply rounded-2xl rounded-br-sm;
+    background-color: hsl(var(--chat-bubble-sent));
   }
   .chat-bubble-sent > div {
-    @apply text-white break-words;
+    @apply break-words;
+    color: hsl(var(--chat-bubble-sent-foreground));
   }
 
   .chat-bubble-received {
-    @apply bg-[#1E2B3C] rounded-2xl rounded-bl-sm;
+    @apply rounded-2xl rounded-bl-sm;
+    background-color: hsl(var(--chat-bubble-received));
   }
   .chat-bubble-received > div {
-    @apply text-[#94A3B8] break-words;
+    @apply break-words;
+    color: hsl(var(--chat-bubble-received-foreground));
   }
 
   .chat-timestamp {
-    @apply text-xs text-[#94A3B8] mt-1;
+    @apply text-xs mt-1;
+    color: hsl(var(--chat-timestamp));
   }
 
   .chat-date-divider {
-    @apply text-xs text-[#94A3B8] text-center mb-4 opacity-60;
+    @apply text-xs text-center mb-4 opacity-60;
+    color: hsl(var(--chat-date-divider));
   }
 
   .chat-header {
-    @apply sticky top-0 z-10 bg-[#0F1A2A] border-b border-[#1E2B3C] px-4 py-3;
+    @apply sticky top-0 z-10 px-4 py-3;
+    background-color: hsl(var(--chat-background));
+    border-bottom: 1px solid hsl(var(--chat-border));
   }
 
   .chat-input-container {
-    @apply bg-[#0F1A2A] border-t border-[#1E2B3C] p-4 sticky bottom-0;
+    @apply sticky bottom-0 p-4;
+    background-color: hsl(var(--chat-background));
+    border-top: 1px solid hsl(var(--chat-border));
   }
 
   .chat-input {
-    @apply bg-[#1E2B3C] text-white rounded-full py-2 px-4;
-    @apply focus:outline-none focus:ring-2 focus:ring-[#0095FF];
-    @apply placeholder:text-[#94A3B8];
+    @apply rounded-full py-2 px-4;
+    @apply focus:outline-none focus:ring-2;
+    background-color: hsl(var(--chat-input));
+    color: hsl(var(--chat-input-foreground));
+  }
+  .chat-input::placeholder {
+    color: hsl(var(--chat-input-placeholder));
   }
 
   .chat-send-button {
-    @apply bg-[#0095FF] text-white rounded-full p-2;
-    @apply hover:bg-[#0095FF]/90 transition-colors;
+    @apply rounded-full p-2;
+    @apply hover:opacity-90 transition-colors;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    background-color: hsl(var(--chat-bubble-sent));
+    color: hsl(var(--chat-bubble-sent-foreground));
   }
 
   .message-container {
     @apply flex flex-col mb-3 max-w-[75%];
+  }
+
+  /* Search input styles */
+  .search-input {
+    @apply w-full pl-10 pr-4 py-2 border border-border/40 bg-background rounded-md;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0;
+    @apply placeholder:text-muted-foreground;
   }
 }

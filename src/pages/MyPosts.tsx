@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Post } from '../models/Post';
 import { logger } from '../utils/logger';
@@ -7,6 +7,7 @@ import { PostItem } from '../components/Posts/PostItem';
 import { PostForm } from '../components/Posts/PostForm';
 import { useNavigate } from 'react-router-dom';
 import { Edit, X, Download, PlusSquare } from 'lucide-react';
+import { Button } from '../components/ui/button';
 
 export default function MyPostsPage() {
   const { authState } = useAuth();
@@ -104,22 +105,24 @@ export default function MyPostsPage() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">My Posts</h1>
         <div className="flex gap-3">
-          <button 
+          <Button 
             onClick={() => setShowNewPostForm(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-md"
+            variant="default"
+            size="default"
             title="Create a new post"
           >
-            <PlusSquare className="h-4 w-4" />
+            <PlusSquare className="h-4 w-4 mr-2" />
             <span>New Post</span>
-          </button>
-          <button 
+          </Button>
+          <Button 
             onClick={() => PostService.downloadPostsBackup()}
-            className="flex items-center gap-2 px-3 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-md"
+            variant="outline"
+            size="default"
             title="Download your posts as a backup file"
           >
-            <Download className="h-4 w-4" />
+            <Download className="h-4 w-4 mr-2" />
             <span>Backup Posts</span>
-          </button>
+          </Button>
         </div>
       </div>
       
@@ -128,12 +131,14 @@ export default function MyPostsPage() {
         <div className="bg-card p-4 rounded-lg border border-border/40 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Create New Post</h2>
-            <button 
+            <Button 
               onClick={handleCancelNewPost}
+              variant="ghost"
+              size="icon"
               className="text-muted-foreground hover:text-foreground"
             >
               <X className="h-5 w-5" />
-            </button>
+            </Button>
           </div>
           <PostForm 
             onSubmit={handleCreatePost} 
@@ -148,12 +153,14 @@ export default function MyPostsPage() {
         <div className="bg-card p-4 rounded-lg border border-border/40 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Edit Post</h2>
-            <button 
+            <Button 
               onClick={handleCancelEdit}
+              variant="ghost"
+              size="icon"
               className="text-muted-foreground hover:text-foreground"
             >
               <X className="h-5 w-5" />
-            </button>
+            </Button>
           </div>
           <PostForm 
             onSubmit={handleUpdatePost} 
@@ -177,25 +184,29 @@ export default function MyPostsPage() {
               You haven't created any posts yet.
             </p>
             {!showNewPostForm && (
-              <button
+              <Button
                 onClick={() => setShowNewPostForm(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-md mx-auto"
+                variant="default"
+                size="default"
+                className="mx-auto flex items-center gap-2"
               >
-                <PlusSquare className="h-4 w-4" />
+                <PlusSquare className="h-4 w-4 mr-2" />
                 <span>Create Your First Post</span>
-              </button>
+              </Button>
             )}
           </div>
         ) : (
           posts.map(post => (
             <div key={post.id} className="relative">
-              <button
+              <Button
                 onClick={() => handleEditPost(post)}
+                variant="ghost"
+                size="icon"
                 className="absolute top-4 right-4 bg-background/80 p-1 rounded-md hover:bg-accent z-10"
                 title="Edit post"
               >
                 <Edit className="h-4 w-4" />
-              </button>
+              </Button>
               <PostItem
                 post={post}
                 onLike={(id, userId) => {
@@ -213,4 +224,4 @@ export default function MyPostsPage() {
       </div>
     </div>
   );
-} 
+}
