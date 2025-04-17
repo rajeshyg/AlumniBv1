@@ -1,27 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Light theme */
-    --background: 210 40% 98%;
-    --foreground: 222.2 84% 4.9%;
+    /* Light theme - Refined professional palette */
+    --background: 0 0% 100%;
+    --foreground: 224 71% 4%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 224 71% 4%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 224 71% 4%;
 
-    --primary: 199 89% 48%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary: Professional blue */
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 8% 46%;
 
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
@@ -29,9 +32,9 @@
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 224 71% 4%;
 
     --radius: 0.5rem;
 
@@ -53,34 +56,35 @@
   }
 
   .dark {
-    /* Dark theme based on screenshots */
-    --background: 223 47% 11%;
-    --foreground: 210 40% 98%;
+    /* Dark theme - Refined professional palette */
+    --background: 224 71% 4%;
+    --foreground: 210 20% 98%;
 
-    --card: 223 47% 11%;
-    --card-foreground: 210 40% 98%;
+    --card: 224 71% 4%;
+    --card-foreground: 210 20% 98%;
 
-    --popover: 223 47% 11%;
-    --popover-foreground: 215 20.2% 65.1%;
+    --popover: 224 71% 4%;
+    --popover-foreground: 210 20% 98%;
 
-    --primary: 211 100% 50%;
-    --primary-foreground: 255 100% 100%;
+    /* Primary: Professional blue */
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 215 20.2% 65.1%;
+    --secondary: 215 27% 16.5%;
+    --secondary-foreground: 210 20% 98%;
 
-    --muted: 223 47% 11%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 215 27% 16.5%;
+    --muted-foreground: 217.9 10.6% 64.9%;
 
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 215 27% 16.5%;
+    --accent-foreground: 210 20% 98%;
 
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 98%;
 
-    --border: 216 34% 17%;
-    --input: 216 34% 17%;
-    --ring: 216 34% 17%;
+    --border: 215 27% 16.5%;
+    --input: 215 27% 16.5%;
+    --ring: 216 12.2% 83.9%;
 
     /* Chat-specific colors */
     --chat-background: 217 47% 19%;
@@ -104,13 +108,49 @@
   * {
     @apply border-border;
   }
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
   body {
     @apply bg-background text-foreground;
+    letter-spacing: -0.01em;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-medium tracking-tight;
   }
 }
 
 /* Common button styles */
 @layer components {
+  /* Tab styles for consistent look across the app */
+  .custom-tabs-list {
+    @apply bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm border border-border/40 rounded-lg p-1;
+    @apply grid grid-flow-col auto-cols-fr gap-2;
+  }
+
+  .custom-tab-trigger {
+    @apply px-4 py-2 rounded-md text-sm font-medium transition-all duration-200;
+    @apply text-foreground/80 hover:text-foreground;
+    @apply data-[state=active]:bg-primary data-[state=active]:text-primary-foreground;
+    @apply data-[state=active]:shadow-md data-[state=active]:font-semibold;
+    /* Ensure consistent spacing */
+    @apply mb-0 pb-2 pt-2;
+  }
+
+  /* Card styles */
+  .announcement-card {
+    @apply border rounded-lg p-4 space-y-2 bg-card/80 transition-all duration-200;
+    @apply hover:shadow-md hover:border-border/60;
+  }
+
+  /* 3D Button styles */
+  .button-3d {
+    @apply flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium;
+    @apply transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60;
+    @apply bg-gradient-to-r from-primary/10 to-primary/5 text-foreground border border-border/40;
+    @apply shadow-md hover:shadow-lg hover:translate-y-[-1px] active:translate-y-[1px] active:shadow;
+  }
+
   .icon-button {
     @apply h-10 w-10 rounded-full flex items-center justify-center transition-colors;
     @apply hover:bg-accent hover:text-accent-foreground;

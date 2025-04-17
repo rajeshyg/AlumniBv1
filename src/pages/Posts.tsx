@@ -217,34 +217,26 @@ const Posts: React.FC = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Community Posts</h1>
           <div className="flex items-center gap-3">
-            {/* Show user info */}
-            {authState.currentUser && (
-              <div className="text-sm font-medium mr-2 hidden sm:block text-muted-foreground">
-                <span className="font-bold">{authState.currentUser.name}</span>
-              </div>
-            )}
+            {/* User info removed - already shown in header */}
 
             <button
               type="button"
               onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 bg-primary text-primary-foreground hover:bg-primary/90 shadow"
+              className="button-3d"
               aria-label={showForm ? 'Cancel post creation' : 'Create new post'}
             >
               {showForm ? <X className="w-4 h-4" /> : <PlusSquare className="w-4 h-4" />}
               {showForm ? 'Cancel' : 'New Post'}
             </button>
 
-            <div className="tooltip">
-              <button
-                type="button"
-                onClick={handleResetPosts}
-                className="flex items-center gap-2 px-2 py-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 bg-accent text-accent-foreground hover:bg-accent/80 border border-border/40"
-                aria-label="Reload posts from JSON data"
-              >
-                <RefreshCw className="w-4 h-4" aria-label="Refresh" />
-              </button>
-              <span className="tooltip-text">Reload posts from JSON data</span>
-            </div>
+            <button
+              type="button"
+              onClick={handleResetPosts}
+              className="button-3d px-2"
+              aria-label="Reload posts"
+            >
+              <RefreshCw className="w-4 h-4" aria-label="Refresh" />
+            </button>
           </div>
         </div>
 
@@ -263,14 +255,14 @@ const Posts: React.FC = () => {
           />
         </div>
 
-        {/* Tabs List - Unified with Review Posts style */}
+        {/* Tabs List - Styled like Home page */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 gap-2 bg-transparent p-1 border border-border/30 rounded-lg">
+          <TabsList className="custom-tabs-list w-full">
             {Object.values(categoryLabels).map(category => (
               <TabsTrigger
                 key={category.value}
                 value={category.value}
-                className="tab-button data-[state=active]:tab-button-active"
+                className="custom-tab-trigger"
               >
                 {category.label}
               </TabsTrigger>

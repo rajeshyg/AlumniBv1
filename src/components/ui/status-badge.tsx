@@ -50,18 +50,18 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   return (
     <div
       className={cn(
-        "flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold z-10",
-        "shadow-sm border border-transparent",
+        "flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium z-10",
+        "shadow-sm border-l-4 backdrop-blur-sm",
         position === 'absolute' && "absolute top-2 right-2",
-        status === 'pending' && "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-800/90 dark:text-yellow-100 dark:border-yellow-700",
-        status === 'approved' && "bg-green-100 text-green-800 border-green-200 dark:bg-green-800/90 dark:text-green-100 dark:border-green-700",
-        status === 'rejected' && "bg-red-100 text-red-800 border-red-200 dark:bg-red-800/90 dark:text-red-100 dark:border-red-700",
-        status === 'expired' && "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-700/90 dark:text-gray-100 dark:border-gray-600",
+        status === 'pending' && "bg-yellow-100/90 text-yellow-800 border-l-yellow-500 dark:bg-yellow-900/80 dark:text-yellow-100",
+        status === 'approved' && "bg-green-100/90 text-green-800 border-l-green-500 dark:bg-green-900/80 dark:text-green-100",
+        status === 'rejected' && "bg-red-100/90 text-red-800 border-l-red-500 dark:bg-red-900/80 dark:text-red-100",
+        status === 'expired' && "bg-gray-100/90 text-gray-800 border-l-gray-500 dark:bg-gray-800/80 dark:text-gray-100",
         className
       )}
     >
       {statusIcon}
-      {statusText}
+      <span className="relative top-px">{statusText}</span>
     </div>
   );
 };

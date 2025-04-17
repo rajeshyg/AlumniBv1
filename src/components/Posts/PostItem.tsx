@@ -241,7 +241,7 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
                 <Tag className="w-3 h-3" />
                 {post.category}
               </span>
-              <span className="tooltip-text">Category: {post.category}</span>
+              <span className="tooltip-text">Category</span>
             </div>
           )}
 
@@ -251,10 +251,12 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
                 <Tag className="w-3 h-3" />
                 {tag}
               </span>
-              <span className="tooltip-text">Tag: {tag}</span>
+              <span className="tooltip-text">Tag</span>
             </div>
           ))}
         </div>
+
+        {/* Remove redundant category/tag text display */}
 
         {/* Metadata */}
         <div className="post-metadata">
@@ -378,7 +380,7 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                    className="button-3d py-1 px-3"
                     disabled={!commentText.trim()}
                   >
                     Post comment

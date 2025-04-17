@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { logger } from '../utils/logger';
-import { 
-  Bell, 
-  Calendar, 
-  Users, 
-  FileText, 
-  Activity, 
-  BarChart2, 
+import {
+  Bell,
+  Calendar,
+  Users,
+  FileText,
+  Activity,
+  BarChart2,
   MessageSquare,
   Newspaper,
   ChevronRight,
@@ -73,7 +73,7 @@ const Home: React.FC = () => {
     const loadDashboardData = async () => {
       try {
         setLoading(true);
-        
+
         // In a real app, these would be API calls
         // Mock data for demo purposes
         setAnnouncements([
@@ -99,7 +99,7 @@ const Home: React.FC = () => {
             type: 'warning'
           }
         ]);
-        
+
         setEvents([
           {
             id: '1',
@@ -120,7 +120,7 @@ const Home: React.FC = () => {
             location: 'Convention Center'
           }
         ]);
-        
+
         setActivities([
           {
             id: '1',
@@ -163,7 +163,7 @@ const Home: React.FC = () => {
             type: 'like'
           }
         ]);
-        
+
         setStats({
           posts: 124,
           connections: 78,
@@ -253,7 +253,7 @@ const Home: React.FC = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Connections</CardTitle>
@@ -265,7 +265,7 @@ const Home: React.FC = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Messages</CardTitle>
@@ -277,7 +277,7 @@ const Home: React.FC = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Events</CardTitle>
@@ -310,13 +310,13 @@ const Home: React.FC = () => {
                     <h3 className="font-semibold">{announcement.title}</h3>
                     <p className="text-sm text-muted-foreground">{announcement.content}</p>
                   </div>
-                  <Badge 
+                  <Badge
                     variant={
-                      announcement.type === 'warning' ? 'destructive' : 
+                      announcement.type === 'warning' ? 'destructive' :
                       announcement.type === 'success' ? 'default' : 'secondary'
                     }
                   >
-                    {announcement.type === 'warning' ? 'Important' : 
+                    {announcement.type === 'warning' ? 'Important' :
                      announcement.type === 'success' ? 'New' : 'Info'}
                   </Badge>
                 </div>
@@ -417,10 +417,10 @@ const Home: React.FC = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="engagement">
-            <TabsList className="mb-4">
-              <TabsTrigger value="engagement">Engagement</TabsTrigger>
-              <TabsTrigger value="posts">Posts</TabsTrigger>
-              <TabsTrigger value="jobs">Job Opportunities</TabsTrigger>
+            <TabsList className="custom-tabs-list mb-4">
+              <TabsTrigger value="engagement" className="custom-tab-trigger">Engagement</TabsTrigger>
+              <TabsTrigger value="posts" className="custom-tab-trigger">Posts</TabsTrigger>
+              <TabsTrigger value="jobs" className="custom-tab-trigger">Job Opportunities</TabsTrigger>
             </TabsList>
             <TabsContent value="engagement" className="space-y-4">
               <div className="h-[200px] bg-primary/5 rounded-lg flex items-center justify-center">

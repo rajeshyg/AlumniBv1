@@ -7,6 +7,7 @@
   @apply relative overflow-hidden;
   min-height: 16rem; /* Prevent layout shifts */
   @apply hover:border-primary/30 focus-within:border-primary/30;
+  @apply hover:translate-y-[-2px];
 }
 
 /* Image container */
@@ -33,7 +34,7 @@
 
 /* Post content */
 .post-content {
-  @apply flex-1 flex flex-col p-4 gap-2;
+  @apply flex-1 flex flex-col p-5 gap-3;
 }
 
 /* Post title */
@@ -74,37 +75,43 @@
 
 /* Post tags */
 .post-tag {
-  @apply flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold;
+  @apply flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium;
+  @apply transition-colors duration-200;
 }
 
 .post-category-tag {
-  @apply post-tag bg-primary/10 text-primary border border-primary/20;
+  @apply post-tag bg-primary/10 text-primary border-l-4 border-l-primary border-y-0 border-r-0;
+  @apply hover:bg-primary/15;
 }
 
 .post-regular-tag {
-  @apply post-tag bg-accent text-accent-foreground border border-border/30;
+  @apply post-tag bg-accent/80 text-accent-foreground border-l-4 border-l-accent-foreground/30 border-y-0 border-r-0;
+  @apply hover:bg-accent;
 }
 
 /* Post metadata */
 .post-metadata {
-  @apply flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-2;
-  @apply border-t border-border/20 pt-2;
+  @apply flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-3;
+  @apply border-t border-border/20 pt-3;
+  @apply font-medium;
 }
 
 /* Post action buttons */
 .post-action-button {
-  @apply flex items-center gap-1 text-sm px-2 py-1 rounded-md transition-colors;
+  @apply flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md transition-all duration-200;
   @apply hover:bg-primary/10 focus-visible:bg-primary/20;
   @apply focus-visible:outline-none;
+  @apply hover:scale-105;
 }
 
 .post-action-button-active {
-  @apply text-primary;
+  @apply text-primary font-medium;
 }
 
 /* Post comment */
 .post-comment {
-  @apply bg-muted/50 p-3 rounded-md;
+  @apply bg-muted/50 p-4 rounded-md border-l-4 border-l-primary/30 border-y-0 border-r-0;
+  @apply shadow-sm;
 }
 
 /* Dark mode compatibility */
