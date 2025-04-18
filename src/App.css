@@ -10,9 +10,17 @@
   width: 0 !important;  /* Added width 0 for extra measure */
 }
 
-/* Remove any other scrollbar-related styles in this file */
+/* Chat module specific styles */
+.chat-module {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 
-
-
-
+.chat-module-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
 

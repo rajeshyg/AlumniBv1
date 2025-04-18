@@ -88,7 +88,7 @@ export const AppLayout = () => {
             {!isMobile && <Navigation className="sticky top-[80px]" />}
 
             <ErrorBoundary FallbackComponent={ErrorFallback}>
-              <div className="min-h-[calc(100vh-6rem)]">
+              <div className="min-h-[calc(100vh-6rem)]" id="app-content">
                 <Outlet />
               </div>
             </ErrorBoundary>

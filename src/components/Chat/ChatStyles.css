@@ -11,7 +11,8 @@
 .chat-input-container {
   background-color: #0F1A2A;
   border-top: 1px solid #1E2B3C;
-  padding: 1rem;
+  padding: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
   position: sticky;
   bottom: 0;
 }

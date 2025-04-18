@@ -813,8 +813,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
 
   return (
     <div className={cn(
-      "flex flex-col bg-background",
-      isMobile ? "fixed inset-0 z-[100]" : "h-full"
+      "flex flex-col bg-background overflow-hidden h-full",
+      isMobile ? "fixed inset-0 z-[100]" : ""
     )}>
       {/* Chat Header */}
       <ChatHeader>
@@ -835,7 +835,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
             </span>
           </div>
           <div className="flex-1">
-            <h2 className="font-semibold text-lg">{getChatDisplayName()}</h2>
+            <h2 className="font-semibold text-lg text-foreground">{getChatDisplayName()}</h2>
             <p className="text-sm text-muted-foreground">
               {chat.type === 'group' ? `${chat.participants.length} participants` : 'Online'}
             </p>
@@ -849,7 +849,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       {/* Messages Area */}
       <div
         ref={parentRef}
-        className="flex-1 overflow-y-auto px-4"
+        className="flex-1 overflow-y-auto px-4 relative py-1"
       >
         {sortedMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
@@ -857,8 +857,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </div>
         ) : (
           <div
-            className="virtualizer-container min-h-full"
-            style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+            className="virtualizer-container min-h-full relative"
+            style={{ 
+              height: `${rowVirtualizer.getTotalSize()}px`, 
+              padding: '4px 0'
+            }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const message = sortedMessages[virtualRow.index];
@@ -972,7 +975,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       )}
 
       {/* Message Input */}
-      <div className="chat-input-container sticky bottom-0 p-4 bg-card border-t border-border">
+      <div className="chat-input-container sticky bottom-0 pt-2 pb-4 px-4 bg-card border-t border-border mt-auto">
         {/* Reply UI */}
         {replyToMessage && (
           <div className="reply-container bg-secondary p-2 mb-2 rounded flex items-center justify-between">

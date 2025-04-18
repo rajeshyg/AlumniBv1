@@ -142,7 +142,7 @@ const ChatListItem = React.memo(({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <h3 className={cn(
-            "truncate text-white",
+            "truncate text-foreground",
             unreadCount > 0 ? "font-bold" : "font-medium"
           )}>
             {displayName}
@@ -150,7 +150,7 @@ const ChatListItem = React.memo(({
           {chat.lastMessageTime && (
             <span className={cn(
               "text-xs",
-              unreadCount > 0 ? "text-white font-medium" : "text-muted-foreground"
+              unreadCount > 0 ? "text-foreground font-medium" : "text-muted-foreground"
             )}>
               {format(new Date(chat.lastMessageTime), 'h:mm a')}
             </span>
@@ -159,7 +159,7 @@ const ChatListItem = React.memo(({
         {chat.lastMessage && (
           <p className={cn(
             "text-sm truncate",
-            unreadCount > 0 ? "text-white" : "text-muted-foreground"
+            unreadCount > 0 ? "text-foreground" : "text-muted-foreground"
           )}>
             {chat.lastMessage.senderId === authState?.currentUser?.studentId ? 'You: ' : ''}
             {chat.lastMessage.content}
@@ -738,7 +738,7 @@ export const ChatPage: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex bg-background">
+    <div className="h-[calc(100vh-4rem)] flex bg-background overflow-hidden chat-module">
       {/* Chat List Section */}
       <div className={cn(
         "flex flex-col h-full",
@@ -753,7 +753,7 @@ export const ChatPage: React.FC = () => {
         {/* Fixed Header */}
         <ChatHeader>
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Chats</h1>
+            <h1 className="text-2xl font-bold text-foreground">Chats</h1>
             <div className="flex gap-2">
               <ChatButton
                 onClick={handleClearCache}
@@ -841,7 +841,7 @@ export const ChatPage: React.FC = () => {
 
       {/* Chat Window Section */}
       <div className={cn(
-        "flex-1 h-full",
+        "flex-1 h-full overflow-hidden",
         isMobile && !currentChat && "hidden"
       )}>
         {currentChat ? (
@@ -857,7 +857,7 @@ export const ChatPage: React.FC = () => {
         ) : (
           <div className="flex-1 flex items-center justify-center p-4">
             <div className="text-center">
-              <h2 className="text-2xl font-bold mb-2">Welcome to Chat</h2>
+              <h2 className="text-2xl font-bold mb-2 text-foreground">Welcome to Chat</h2>
               <p className="text-muted-foreground">
                 Select a chat or start a new conversation
               </p>

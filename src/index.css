@@ -110,10 +110,27 @@
   }
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    height: 100%;
+    overflow: hidden;
   }
   body {
     @apply bg-background text-foreground;
     letter-spacing: -0.01em;
+    height: 100%;
+    overflow: hidden;
+  }
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+  #app-content {
+    overflow: auto;
+  }
+
+  /* Fix for chat module layout */
+  .chat-module {
+    display: flex;
+    flex-direction: row;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-medium tracking-tight;
@@ -214,13 +231,13 @@
   }
 
   .chat-input-container {
-    @apply sticky bottom-0 p-4;
+    @apply sticky bottom-0 py-2 px-4 mb-2;
     background-color: hsl(var(--chat-background));
     border-top: 1px solid hsl(var(--chat-border));
   }
 
   .chat-input {
-    @apply rounded-full py-2 px-4;
+    @apply rounded-full py-3 px-4;
     @apply focus:outline-none focus:ring-2;
     background-color: hsl(var(--chat-input));
     color: hsl(var(--chat-input-foreground));

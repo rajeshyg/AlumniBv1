@@ -13,8 +13,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <div
       className={cn(
-        "chat-header sticky top-0 z-10 px-4 py-3",
-        "bg-card text-card-foreground",
+        "chat-header sticky top-0 z-20 px-4 py-3",
+        "bg-card",
         "border-b border-border",
         className
       )}
