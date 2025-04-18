@@ -5,7 +5,7 @@ import { ChatService } from '../../services/ChatService';
 import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
 import { Button } from '../ui/button';
-import { Send, Paperclip, MoreVertical, Users, X, UserPlus, MoreHorizontal, Reply, Edit, Trash2, ArrowLeft, CheckCheck, Share, ChevronDown } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Users, X, UserPlus, MoreHorizontal, Reply, Edit, Trash2, ArrowLeft, CheckCheck, Share } from 'lucide-react';
 import { SearchInput } from '../ui/search-input';
 import { format, isSameDay } from 'date-fns';
 import { useThemeStore } from '../../store/theme';
@@ -802,32 +802,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
   };
 
-  // Completely revised message size calculation for stable scrolling
+  // Enhanced message size calculation with consistent sizing for all message types
   const estimateMessageSize = useCallback((index: number) => {
     const message = sortedMessages[index];
     if (!message) return 50; // Minimal default size
 
-    // Use a fixed base size for all messages to reduce calculation variability
+    // Use a fixed base size for all messages
     let estimatedSize = 40;
 
-    // Calculate content height with a maximum cap
+    // Calculate content height based on full content length
     const contentLength = message.content.length;
-    
-    // Maximum visible lines before showing "Read more"
-    const MAX_VISIBLE_LINES = 15;
     const charsPerLine = 50; // Average chars per line estimate
+    const estimatedLines = Math.ceil(contentLength / charsPerLine);
     
-    // Calculate estimated lines but cap it to prevent excessive spacing
-    const rawEstimatedLines = Math.ceil(contentLength / charsPerLine);
-    const estimatedLines = Math.min(rawEstimatedLines, MAX_VISIBLE_LINES);
-    
-    // Apply a fixed line height
-    estimatedSize += Math.max(0, estimatedLines - 1) * 16;
-    
-    // If message exceeds the limit, add space for "Read more" button
-    if (rawEstimatedLines > MAX_VISIBLE_LINES) {
-      estimatedSize += 24; // Height for "Read more" button
-    }
+    // Apply a fixed line height - same for both sent and received messages
+    const lineHeight = 16; // Fixed line height for consistency
+    estimatedSize += Math.max(0, estimatedLines - 1) * lineHeight;
 
     // Add fixed height for reply metadata if present
     if (message.metadata?.replyTo) {
@@ -846,26 +836,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       estimatedSize += 30; // Fixed height for date divider
     }
 
-    // Add minimal fixed padding/margin
+    // Add minimal fixed padding/margin - same for both sent and received messages
     estimatedSize += 8;
+
+    // Add a small buffer for stability, especially for received messages
+    // Determine if the message is from the current user
+    const isCurrentUser = authState.currentUser?.studentId && message.senderId === authState.currentUser.studentId;
+
+    if (!isCurrentUser && chat.type === 'group') {
+      estimatedSize += 4; // Extra buffer for sender name + potential layout shifts
+    } else {
+      estimatedSize += 2; // Smaller buffer for sent messages
+    }
 
     return estimatedSize;
   }, [sortedMessages, chat.type, authState.currentUser?.studentId]);
-
-  // Track expanded messages
-  const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({});
-  
-  const toggleMessageExpansion = useCallback((messageId: string) => {
-    setExpandedMessages(prev => ({
-      ...prev,
-      [messageId]: !prev[messageId]
-    }));
-    
-    // Force recalculation of virtualizer items after toggling
-    setTimeout(() => {
-      rowVirtualizer.measure();
-    }, 10);
-  }, []);
 
   // Completely revised virtualizer configuration for stable scrolling
   const rowVirtualizer = useVirtualizer({
@@ -875,9 +860,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     overscan: 30, // Significantly increased for smoother scrolling
     paddingStart: 8, // Minimal padding
     paddingEnd: 8, // Minimal padding
-    // Use dynamic measurement to improve accuracy
-    // This fixes the TypeScript error from using null
-    measureElement: undefined,
+    // Removed measureElement as dynamic measurement is no longer critical
     initialRect: { width: 0, height: 0 },
     // Use a more stable scroll implementation
     scrollToFn: (offset, { behavior }) => {
@@ -1051,51 +1034,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                                   <p className="truncate">{message.metadata.replyTo.content}</p>
                                 </div>
                               )}
-                              {(() => {
-                                const contentLength = message.content.length;
-                                const charsPerLine = 50;
-                                const estimatedLines = Math.ceil(contentLength / charsPerLine);
-                                const MAX_VISIBLE_LINES = 15;
-                                const isLongMessage = estimatedLines > MAX_VISIBLE_LINES;
-                                const isExpanded = expandedMessages[message.id];
-                                
-                                if (isLongMessage && !isExpanded) {
-                                  // Get approximately the first MAX_VISIBLE_LINES lines
-                                  const visibleContent = message.content.substring(0, MAX_VISIBLE_LINES * charsPerLine);
-                                  
-                                  return (
-                                    <>
-                                      <div className="message-content">{visibleContent}...</div>
-                                      <button 
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          toggleMessageExpansion(message.id);
-                                        }}
-                                        className="text-xs flex items-center text-primary mt-1 hover:underline"
-                                      >
-                                        Read more <ChevronDown className="h-3 w-3 ml-1" />
-                                      </button>
-                                    </>
-                                  );
-                                } else {
-                                  return (
-                                    <>
-                                      <div className="message-content">{message.content}</div>
-                                      {isExpanded && isLongMessage && (
-                                        <button 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggleMessageExpansion(message.id);
-                                          }}
-                                          className="text-xs flex items-center text-primary mt-1 hover:underline"
-                                        >
-                                          Show less <ChevronDown className="h-3 w-3 ml-1 transform rotate-180" />
-                                        </button>
-                                      )}
-                                    </>
-                                  );
-                                }
-                              })()}
+                              {/* Always display full message content */}
+                              <div className="message-content">{message.content}</div>
                             </div>
                           </ChatBubble>
                           <div className={cn(
@@ -1138,7 +1078,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </div>
         )}
       </div>
-      
+
       {/* Typing indicator */}
       {typingUsers.length > 0 && (
         <div className="typing-indicator px-4 py-1 text-sm flex items-center">
@@ -1156,10 +1096,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           )}
         </div>
       )}
-      
+
       {/* Top spacing */}
       <div className="h-2"></div>
-      
+
       {/* Message Input */}
       <div className="chat-input-container sticky bottom-0 pt-1 pb-2 px-4 bg-card border-t border-border mt-auto">
         {/* Reply UI */}
@@ -1198,7 +1138,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </ChatButton>
         </form>
       </div>
-      
+
       {/* Bottom spacing */}
       <div className="h-2"></div>
 

@@ -23,7 +23,9 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
       )}
       style={{
         overflowWrap: 'anywhere',
-        maxWidth: '100%' // Ensure bubble doesn't overflow container
+        maxWidth: '100%', // Ensure bubble doesn't overflow container
+        contain: 'content', // Add CSS containment to prevent layout shifts
+        willChange: 'transform' // Optimize for animations
       }}
     >
       {children}
