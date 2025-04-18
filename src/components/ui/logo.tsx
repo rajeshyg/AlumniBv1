@@ -19,49 +19,56 @@ export const Logo: React.FC<LogoProps> = ({
   logger.debug('Rendering Logo component', { showText, size });
 
   const sizeClasses = {
-    sm: 'h-6 w-6',
-    md: 'h-8 w-8',
-    lg: 'h-10 w-10'
+    sm: 'h-8 w-auto',
+    md: 'h-12 w-auto',
+    lg: 'h-16 w-auto'
   };
 
   const textSizeClasses = {
     sm: 'text-sm',
     md: 'text-lg',
-    lg: 'text-xl'
+    lg: 'text-2xl'
   };
 
   const subtitleSizeClasses = {
     sm: 'text-[10px]',
     md: 'text-xs',
-    lg: 'text-sm'
+    lg: 'text-base'
   };
 
   const logoContent = (
     <>
-      <img
-        src="/img/logo-new.svg"
-        alt="AlumniConnect Logo"
-        className={cn(
-          "transition-transform group-hover:scale-105 shadow-sm rounded-lg",
-          sizeClasses[size]
-        )}
-      />
-      {showText && (
+      <div className="flex items-center gap-3">
+        <img
+          src="/img/sgsgf-logo.png"
+          alt="SGS Gita Foundation Logo"
+          className={cn(sizeClasses[size])}
+        />
         <div className="flex flex-col">
-          <h1 className={cn(
-            "font-bold leading-tight tracking-tight text-foreground group-hover:text-primary transition-colors",
-            textSizeClasses[size]
-          )}>
-            AlumniConnect
-          </h1>
-          <span className={cn(
-            "text-muted-foreground leading-tight",
-            subtitleSizeClasses[size]
-          )}>
-            Campus Network
-          </span>
+          <div className="flex items-baseline">
+            <h1 className={cn(
+              "font-bold leading-tight tracking-tight text-foreground transition-colors",
+              textSizeClasses[size]
+            )}>
+              SGS
+            </h1>
+            <h1 className={cn(
+              "font-medium leading-tight tracking-tight text-primary ml-1.5",
+              textSizeClasses[size]
+            )}>
+              Gita Connect
+            </h1>
+          </div>
+          {showText && (
+            <span className={cn(
+              "text-muted-foreground leading-tight",
+              subtitleSizeClasses[size]
+            )}>
+              Alumni Network
+            </span>
+          )}
         </div>
-      )}
+      </div>
     </>
   );
 

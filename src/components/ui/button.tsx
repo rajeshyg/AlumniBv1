@@ -9,13 +9,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-gradient-to-r from-primary/90 to-primary/80 text-primary-foreground shadow hover:from-primary hover:to-primary/90 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]",
+          "bg-gradient-to-r from-primary/90 to-primary/80 text-primary-foreground shadow-[0_2px_4px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] hover:from-primary hover:to-primary/90 hover:shadow-[0_3px_6px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-[0.98] active:shadow-[0_1px_2px_rgba(0,0,0,0.2)]",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 hover:shadow hover:scale-[1.02] active:scale-[0.98]",
+          "bg-destructive text-destructive-foreground shadow-[0_2px_4px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] hover:bg-destructive/90 hover:shadow-[0_3px_6px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-[0.98] active:shadow-[0_1px_2px_rgba(0,0,0,0.2)]",
         outline:
-          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground hover:shadow hover:scale-[1.02] active:scale-[0.98]",
+          "border border-input bg-background shadow-[0_2px_4px_rgba(0,0,0,0.15),inset_0_1px_0_rgba(255,255,255,0.1)] hover:bg-accent hover:text-accent-foreground hover:shadow-[0_3px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-[0.98] active:shadow-[0_1px_2px_rgba(0,0,0,0.15)]",
         secondary:
-          "bg-gradient-to-r from-primary/10 to-primary/5 text-foreground shadow-sm hover:from-primary/15 hover:to-primary/10 hover:shadow hover:scale-[1.02] active:scale-[0.98]",
+          "bg-gradient-to-r from-primary/15 to-primary/10 text-foreground shadow-[0_2px_4px_rgba(0,0,0,0.15),inset_0_1px_0_rgba(255,255,255,0.1)] hover:from-primary/20 hover:to-primary/15 hover:shadow-[0_3px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-[0.98] active:shadow-[0_1px_2px_rgba(0,0,0,0.15)]",
         ghost: "hover:bg-accent hover:text-accent-foreground hover:scale-[1.02] active:scale-[0.98]",
         link: "text-primary underline-offset-4 hover:underline hover:text-primary/80",
       },

@@ -7,7 +7,8 @@ import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
 import { ChatWindow } from './ChatWindow';
 import { Button } from '../ui/button';
-import { Plus, Users, MessageSquare, Search, X, UserPlus } from 'lucide-react';
+import { Plus, Users, MessageSquare, X, UserPlus } from 'lucide-react';
+import { SearchInput } from '../ui/search-input';
 import {
   Dialog,
   DialogContent,
@@ -784,15 +785,12 @@ export const ChatPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-4">
-            <div className="relative w-full">
-              <ChatInput
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Search chats..."
-                className="pl-9"
-              />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[hsl(var(--chat-input-placeholder))]" />
-            </div>
+            <SearchInput
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Search chats..."
+              wrapperClassName="w-full"
+            />
           </div>
         </ChatHeader>
 
@@ -884,15 +882,12 @@ export const ChatPage: React.FC = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Search Users</Label>
-              <div className="relative w-full">
-                <ChatInput
-                  value={userSearchQuery}
-                  onChange={(e) => handleUserSearch(e.target.value)}
-                  placeholder="Search users..."
-                  className="pl-9"
-                />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[hsl(var(--chat-input-placeholder))]" />
-              </div>
+              <SearchInput
+                value={userSearchQuery}
+                onChange={(e) => handleUserSearch(e.target.value)}
+                placeholder="Search users..."
+                wrapperClassName="w-full"
+              />
 
               {isSearching ? (
                 <div className="text-sm text-muted-foreground text-center py-2">
@@ -961,18 +956,15 @@ export const ChatPage: React.FC = () => {
 
             <div className="space-y-2">
               <Label>Add Members</Label>
-              <div className="relative w-full">
-                <ChatInput
-                  value={userSearchQuery}
-                  onChange={(e) => {
-                    updateState({ userSearchQuery: e.target.value });
-                    handleUserSearch(e.target.value);
-                  }}
-                  placeholder="Search users..."
-                  className="pl-9"
-                />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[hsl(var(--chat-input-placeholder))]" />
-              </div>
+              <SearchInput
+                value={userSearchQuery}
+                onChange={(e) => {
+                  updateState({ userSearchQuery: e.target.value });
+                  handleUserSearch(e.target.value);
+                }}
+                placeholder="Search users..."
+                wrapperClassName="w-full"
+              />
 
               {/* Selected Users */}
               {selectedUsers.length > 0 && (

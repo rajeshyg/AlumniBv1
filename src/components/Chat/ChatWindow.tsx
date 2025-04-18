@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
 import { Button } from '../ui/button';
 import { Send, Paperclip, MoreVertical, Users, X, UserPlus, MoreHorizontal, Reply, Edit, Trash2, ArrowLeft, CheckCheck, Share } from 'lucide-react';
+import { SearchInput } from '../ui/search-input';
 import { format, isSameDay } from 'date-fns';
 import { useThemeStore } from '../../store/theme';
 import { cn } from '../../lib/utils';
@@ -25,9 +26,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '../ui/dialog';
-import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Search } from 'lucide-react';
 import { useVirtualizer, VirtualItem } from '@tanstack/react-virtual';
 import {
   ContextMenu,
@@ -1057,18 +1056,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Add Members</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={userSearchQuery}
-                  onChange={(e) => {
-                    setUserSearchQuery(e.target.value);
-                    handleSearchUsers(e.target.value);
-                  }}
-                  placeholder="Search users..."
-                  className="pl-9"
-                />
-              </div>
+              <SearchInput
+                value={userSearchQuery}
+                onChange={(e) => {
+                  setUserSearchQuery(e.target.value);
+                  handleSearchUsers(e.target.value);
+                }}
+                placeholder="Search users..."
+                wrapperClassName="w-full"
+              />
 
               {isSearching ? (
                 <div className="text-sm text-muted-foreground text-center py-2">

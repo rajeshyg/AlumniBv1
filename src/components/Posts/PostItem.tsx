@@ -103,7 +103,14 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
       });
       return fallbackImage;
     }
-    return post.image;
+
+    // Check if the image path already includes the base path
+    if (post.image.startsWith('http') || post.image.startsWith('/')) {
+      return post.image;
+    }
+
+    // Otherwise, ensure we prepend the image path
+    return `/img/${post.image}`;
   };
 
   // Filter posts that have sortable comments
@@ -132,7 +139,7 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
       {/* Image Section */}
       <div className="md:w-56 w-full flex-shrink-0 bg-muted rounded-t-xl md:rounded-l-xl md:rounded-tr-none overflow-hidden border border-border/30 md:h-full md:min-h-[16rem] relative">
         <div className="w-full h-full flex items-center justify-center relative">
-          {post.image || imageError ? (
+          {post.image ? (
             <>
               {imageLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
@@ -149,12 +156,11 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
               />
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center w-full h-full p-4 bg-muted/30">
-              <ImageIcon className="h-10 w-10 text-muted-foreground mb-2" />
-              <span className="text-xs text-muted-foreground text-center">No image available</span>
-              {post.organization && (
-                <span className="text-sm font-medium text-primary/70 mt-2 text-center">{post.organization}</span>
-              )}
+            <div className="flex flex-col items-center justify-center w-full h-full p-4 bg-muted/30 border border-border/20 rounded-md m-2">
+              <div className="bg-background/50 p-3 rounded-full mb-2 shadow-sm">
+                <ImageIcon className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <span className="text-xs text-muted-foreground text-center font-medium">No image available</span>
             </div>
           )}
         </div>
@@ -209,7 +215,7 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
-            className="text-sm text-primary flex items-center gap-1 hover:underline focus-visible:underline"
+            className="text-sm text-primary flex items-center gap-1.5 hover:bg-primary/5 focus-visible:bg-primary/10 px-2 py-1 rounded-md transition-all duration-200 w-fit border border-transparent hover:border-border/30 mt-1"
             aria-label={expanded ? 'Show less content' : 'Read more content'}
           >
             {expanded ?
@@ -234,7 +240,7 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
         )}
 
         {/* Tags & Category */}
-        <div className="flex flex-wrap gap-2 mt-1" data-testid="post-tags">
+        <div className="flex flex-wrap gap-2.5 mt-2" data-testid="post-tags">
           {post.category && (
             <div className="tooltip">
               <span className="post-category-tag">
@@ -347,7 +353,7 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
                     <button
                       type="button"
                       onClick={() => setShowAllComments(!showAllComments)}
-                      className="w-full mt-2 p-2 text-sm text-primary hover:bg-primary/5 rounded-md flex items-center justify-center gap-1"
+                      className="w-full mt-2 p-2 text-sm text-primary hover:bg-primary/5 rounded-md flex items-center justify-center gap-1.5 border border-transparent hover:border-border/30 transition-all duration-200"
                       aria-label={showAllComments ? 'Show fewer comments' : `View all ${sortedComments.length} comments`}
                     >
                       {showAllComments ?
@@ -424,9 +430,10 @@ export const PostItem: React.FC<PostItemProps> = ({ post, onLike, onComment }) =
               </svg>
             </button>
             <img
-              src={getImageSrc()}
+              src={post.image ? getImageSrc() : getCategoryFallbackImage(post.category, post.organization)}
               alt={post.title}
               className="max-w-full max-h-[90vh] object-contain rounded-md"
+              onError={handleImageError}
             />
           </div>
         </div>

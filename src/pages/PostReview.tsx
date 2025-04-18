@@ -6,7 +6,7 @@ import { logger } from '../utils/logger';
 import { PostService } from '../services/PostService';
 import { User } from '../models/User';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Search } from 'lucide-react';
+import { SearchInput } from '../components/ui/search-input';
 
 const statusLabels: Record<PostStatus, string> = {
   pending: 'Pending Approval',
@@ -191,32 +191,26 @@ export default function PostReviewPage() {
     // Use a container that allows the header to be sticky and content to scroll
     <div className="flex flex-col h-screen max-w-full">
       {/* Sticky header section: Contains title, search, and tabs list */}
-      <div className="sticky top-0 z-20 bg-background pt-4 pb-2 px-2 space-y-4 shadow-sm border-b border-border/40">
+      <div className="sticky top-0 z-20 bg-background pt-3 pb-1 px-2 shadow-sm border-b border-border/40">
         {/* Top row: Title and user info */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-3">
           <h1 className="text-xl font-bold">Review Posts</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <div className="w-64 mr-2">
+              <SearchInput
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search posts..."
+                wrapperClassName="w-full"
+              />
+            </div>
             {/* Show user info */}
             {authState.currentUser && (
-              <div className="text-sm font-medium mr-2 hidden sm:block">
+              <div className="text-sm font-medium hidden sm:block">
                 <span className="font-bold">{authState.currentUser.name}</span>
               </div>
             )}
           </div>
-        </div>
-
-        {/* Search bar */}
-        <div className="relative w-full">
-          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search posts..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-border/40 bg-background rounded-md"
-          />
         </div>
 
         {/* Tabs List - Part of the sticky header */}

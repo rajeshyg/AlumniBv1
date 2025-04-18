@@ -416,12 +416,13 @@ const Home: React.FC = () => {
           <CardDescription>Statistics and trends from your alumni community</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="engagement">
-            <TabsList className="custom-tabs-list mb-4">
-              <TabsTrigger value="engagement" className="custom-tab-trigger">Engagement</TabsTrigger>
-              <TabsTrigger value="posts" className="custom-tab-trigger">Posts</TabsTrigger>
-              <TabsTrigger value="jobs" className="custom-tab-trigger">Job Opportunities</TabsTrigger>
-            </TabsList>
+          <div className="w-full">
+            <Tabs defaultValue="engagement" className="w-full">
+              <TabsList className="custom-tabs-list mb-4" style={{ justifyContent: 'flex-start' }}>
+                <TabsTrigger value="engagement" className="custom-tab-trigger">Engagement</TabsTrigger>
+                <TabsTrigger value="posts" className="custom-tab-trigger">Posts</TabsTrigger>
+                <TabsTrigger value="jobs" className="custom-tab-trigger">Job Opportunities</TabsTrigger>
+              </TabsList>
             <TabsContent value="engagement" className="space-y-4">
               <div className="h-[200px] bg-primary/5 rounded-lg flex items-center justify-center">
                 <p className="text-muted-foreground">Engagement chart visualization would appear here</p>
@@ -455,6 +456,7 @@ const Home: React.FC = () => {
               </div>
             </TabsContent>
           </Tabs>
+        </div>
         </CardContent>
         <CardFooter>
           <Button variant="outline" size="sm" className="ml-auto flex items-center gap-1">

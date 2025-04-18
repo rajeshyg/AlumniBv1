@@ -17,12 +17,14 @@ export const Header = ({ className }: HeaderProps) => {
 
   return (
     <header className={cn(
-      "fixed top-0 left-0 right-0 h-16 bg-background/90 backdrop-blur-md border-b border-border/40 z-50",
+      "fixed top-0 left-0 right-0 h-20 bg-background/95 backdrop-blur-md border-b border-border/40 z-50",
       "transition-all duration-200",
       className
     )}>
       <div className="container h-full mx-auto px-4 flex items-center justify-between">
-        <Logo />
+        <div className="flex items-center gap-6">
+          <Logo size="lg" />
+        </div>
 
         <div className="flex items-center gap-4">
           <DeviceToggle />
@@ -40,4 +42,4 @@ export const Header = ({ className }: HeaderProps) => {
       </div>
     </header>
   );
-}
+};

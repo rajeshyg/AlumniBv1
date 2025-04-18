@@ -15,9 +15,15 @@ export function resolveImagePath(imageName: string | undefined): string | undefi
   if (!imageName) return undefined;
 
   // If it's already a full URL or data URL, return as is
-  if (imageName.startsWith('http') || imageName.startsWith('data:')) {
+  if (imageName.startsWith('http') || imageName.startsWith('data:') || imageName.startsWith('/')) {
     return imageName;
   }
+
+  // Log the image path resolution for debugging
+  logger.debug('Resolving image path', {
+    original: imageName,
+    resolved: `${IMAGE_BASE_PATH}${imageName}`
+  });
 
   // Otherwise, resolve it relative to our image folder
   return `${IMAGE_BASE_PATH}${imageName}`;

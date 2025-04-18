@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { Search, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
+import { SearchInput } from '../components/ui/search-input';
 import { useAuth } from '../context/AuthContext';
 import { CsvAdminRepository } from '../infrastructure/repositories/csvAdminRepository';
 import { Admin as AdminType } from '../models/Admin';
@@ -42,18 +43,18 @@ const Admin: React.FC = () => {
   React.useEffect(() => {
     const loadModerators = async () => {
       if (!adminData || adminData.role !== 'system_admin') return;
-      
+
       try {
         setLoading(true);
         const response = await fetch(`/admin-emails.csv?t=${Date.now()}`);
         const csvText = await response.text();
-        
+
         const lines = csvText.split('\n').map(line => line.trim()).filter(Boolean);
         const headers = lines[0].toLowerCase().split(',');
         const emailIndex = headers.indexOf('email');
         const roleIndex = headers.indexOf('role');
         const studentIdIndex = headers.indexOf('studentid');
-        
+
         const moderators = lines.slice(1)
           .map(line => {
             const values = line.split(',').map(v => v.trim());
@@ -71,7 +72,7 @@ const Admin: React.FC = () => {
             studentId: moderator.studentId,
             name: ''
           }));
-        
+
         logger.debug("Found moderators:", moderators);
         setExistingModerators(moderators);
       } catch (error) {
@@ -80,22 +81,22 @@ const Admin: React.FC = () => {
         setLoading(false);
       }
     };
-    
+
     loadModerators();
   }, [adminData, refreshTrigger]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-    
+
     setLoading(true);
     setError(null);
     try {
       const repository = new CsvAdminRepository();
       logger.info("Starting user search", { query: searchQuery });
-      
+
       const users = await repository.searchUsers(searchQuery);
       logger.info('Search results:', users);
-      
+
       const userRoles = await Promise.all(
         users.map(async (user) => {
           const adminStatus = await repository.getAdminWithRole(user.email);
@@ -105,7 +106,7 @@ const Admin: React.FC = () => {
           };
         })
       );
-      
+
       logger.debug("Users with roles:", userRoles);
       setSearchResults(userRoles);
       setSearchResult(null);
@@ -126,20 +127,20 @@ const Admin: React.FC = () => {
     try {
       const repository = new CsvAdminRepository();
       await repository.updateUserRole(email, 'moderator', studentId);
-      
+
       // Reload moderators list
       const response = await fetch(`/admin-emails.csv?t=${Date.now()}`, {
         cache: 'no-store'
       });
       const csvText = await response.text();
-      
+
       // Parse and update moderators list
       const lines = csvText.split('\n').map(line => line.trim()).filter(Boolean);
       const headers = lines[0].toLowerCase().split(',');
       const emailIndex = headers.indexOf('email');
       const roleIndex = headers.indexOf('role');
       const studentIdIndex = headers.indexOf('studentid');
-      
+
       const moderators = lines.slice(1)
         .map(line => {
           const values = line.split(',').map(v => v.trim());
@@ -157,10 +158,10 @@ const Admin: React.FC = () => {
           studentId: moderator.studentId,
           name: ''
         }));
-      
+
       setExistingModerators(moderators);
-      setSearchResults(prev => 
-        prev.map(user => 
+      setSearchResults(prev =>
+        prev.map(user =>
           user.email === email ? { ...user, role: 'moderator' } : user
         )
       );
@@ -234,18 +235,18 @@ const Admin: React.FC = () => {
           <Card className="p-6">
             <h2 className="text-xl font-semibold mb-4">Moderator Management</h2>
             <div className="flex gap-4 mb-6">
-              <Input
-                type="text"
-                placeholder="Search by email, phone, or name"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="max-w-md"
-              />
-              <Button 
+              <div className="max-w-md w-full">
+                <SearchInput
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by email, phone, or name"
+                  wrapperClassName="w-full"
+                />
+              </div>
+              <Button
                 onClick={handleSearch}
                 disabled={loading}
               >
-                <Search className="w-4 h-4 mr-2" />
                 Search
               </Button>
             </div>

@@ -35,21 +35,21 @@ export const AppLayout = () => {
     const checkAdminStatus = async () => {
       if (authState.currentUser?.email) {
         try {
-          logger.debug('Checking admin status', { 
+          logger.debug('Checking admin status', {
             email: authState.currentUser.email,
             currentPath: location.pathname
           });
-          
+
           const adminRepo = new CsvAdminRepository();
           const validateAdminEmail = new ValidateAdminEmail(adminRepo);
           const adminStatus = await validateAdminEmail.execute(authState.currentUser.email);
-          
+
           setIsAdmin(adminStatus);
-          logger.info('Admin status checked', { 
-            email: authState.currentUser.email, 
-            isAdmin: adminStatus 
+          logger.info('Admin status checked', {
+            email: authState.currentUser.email,
+            isAdmin: adminStatus
           });
-          
+
           // Redirect admin to admin page if on home
           if (adminStatus && location.pathname === '/home') {
             logger.info('Admin user detected on home page, redirecting to admin page');
@@ -65,9 +65,9 @@ export const AppLayout = () => {
 
   // Add startup log to verify logger is working
   useEffect(() => {
-    logger.info('AppLayout mounted', { 
+    logger.info('AppLayout mounted', {
       path: location.pathname,
-      auth: authState.isAuthenticated 
+      auth: authState.isAuthenticated
     });
   }, []);
 
@@ -78,17 +78,17 @@ export const AppLayout = () => {
       'transition-colors duration-300'
     )}>
       <Header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur" />
-      
+
       <main className="flex-1">
         <div className="container mx-auto p-4">
           <div className={cn(
             'grid gap-4',
             isMobile ? 'grid-cols-1' : 'grid-cols-[240px_1fr]'
           )}>
-            {!isMobile && <Navigation className="sticky top-[65px]" />}
-            
+            {!isMobile && <Navigation className="sticky top-[80px]" />}
+
             <ErrorBoundary FallbackComponent={ErrorFallback}>
-              <div className="min-h-[calc(100vh-5rem)]">
+              <div className="min-h-[calc(100vh-6rem)]">
                 <Outlet />
               </div>
             </ErrorBoundary>
@@ -99,7 +99,7 @@ export const AppLayout = () => {
       {isMobile && (
         <Navigation className="fixed bottom-0 left-0 right-0 bg-background border-t border-border/40 z-50" />
       )}
-      
+
       {/* Add LogViewer component to see logs in the UI */}
       <LogViewer />
     </div>

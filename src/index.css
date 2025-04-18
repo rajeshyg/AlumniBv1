@@ -125,7 +125,9 @@
   /* Tab styles for consistent look across the app */
   .custom-tabs-list {
     @apply bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm border border-border/40 rounded-lg p-1;
-    @apply grid grid-flow-col auto-cols-fr gap-2;
+    @apply flex gap-2 w-full;
+    @apply shadow-sm dark:shadow-[0_2px_6px_rgba(0,0,0,0.3)];
+    justify-content: flex-start !important; /* Force left alignment */
   }
 
   .custom-tab-trigger {
@@ -135,6 +137,8 @@
     @apply data-[state=active]:shadow-md data-[state=active]:font-semibold;
     /* Ensure consistent spacing */
     @apply mb-0 pb-2 pt-2;
+    /* Prevent tabs from stretching */
+    @apply whitespace-nowrap;
   }
 
   /* Card styles */
@@ -149,6 +153,19 @@
     @apply transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60;
     @apply bg-gradient-to-r from-primary/10 to-primary/5 text-foreground border border-border/40;
     @apply shadow-md hover:shadow-lg hover:translate-y-[-1px] active:translate-y-[1px] active:shadow;
+  }
+
+  /* Enhanced shadows for dark mode buttons */
+  .dark .button-3d {
+    box-shadow: 0 4px 8px rgba(0, 149, 255, 0.1), 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .button-3d:hover {
+    box-shadow: 0 6px 12px rgba(0, 149, 255, 0.15), 0 3px 6px rgba(0, 0, 0, 0.4);
+  }
+
+  .dark .button-3d:active {
+    box-shadow: 0 2px 4px rgba(0, 149, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.3);
   }
 
   .icon-button {
@@ -229,5 +246,20 @@
     @apply w-full pl-10 pr-4 py-2 border border-border/40 bg-background rounded-md;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0;
     @apply placeholder:text-muted-foreground;
+  }
+
+  /* Tooltip styles */
+  .tooltip {
+    @apply relative inline-flex;
+  }
+
+  .tooltip .tooltip-text {
+    @apply invisible absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1;
+    @apply text-xs rounded bg-foreground text-background whitespace-nowrap z-50;
+    @apply opacity-0 transition-opacity duration-200;
+  }
+
+  .tooltip:hover .tooltip-text {
+    @apply visible opacity-100;
   }
 }

@@ -3,7 +3,8 @@ import { Post } from '../models/Post';
 import { PostService } from '../services/PostService';
 import { PostItem } from '../components/Posts/PostItem';
 import { PostForm } from '../components/Posts/PostForm';
-import { Search, PlusSquare, X, RefreshCw } from 'lucide-react';
+import { PlusSquare, X, RefreshCw } from 'lucide-react';
+import { SearchInput } from '../components/ui/search-input';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { logger } from '../utils/logger';
@@ -212,12 +213,19 @@ const Posts: React.FC = () => {
     // Use a container that allows the header to be sticky and content to scroll
     <div className="flex flex-col h-screen max-w-full">
       {/* Sticky header section: Contains title, buttons, search, and tabs list */}
-      <div className="sticky top-0 z-20 bg-background pt-4 pb-2 px-2 space-y-4 shadow-sm border-b border-border/40">
-        {/* Top row: Title and buttons */}
-        <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-20 bg-background pt-3 pb-1 px-2 shadow-sm border-b border-border/40">
+        {/* Top row: Title, search and buttons */}
+        <div className="flex items-center justify-between mb-3">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Community Posts</h1>
           <div className="flex items-center gap-3">
-            {/* User info removed - already shown in header */}
+            <div className="w-64 mr-2">
+              <SearchInput
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search posts..."
+                wrapperClassName="w-full"
+              />
+            </div>
 
             <button
               type="button"
@@ -240,35 +248,22 @@ const Posts: React.FC = () => {
           </div>
         </div>
 
-        {/* Search bar */}
-        <div className="relative w-full">
-          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-muted-foreground" aria-label="Search" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search posts..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="search-input"
-            aria-label="Search posts"
-          />
-        </div>
-
         {/* Tabs List - Styled like Home page */}
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="custom-tabs-list w-full">
-            {Object.values(categoryLabels).map(category => (
-              <TabsTrigger
-                key={category.value}
-                value={category.value}
-                className="custom-tab-trigger"
-              >
-                {category.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className="w-full">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+            <TabsList className="custom-tabs-list shadow-md" style={{ justifyContent: 'flex-start' }}>
+              {Object.values(categoryLabels).map(category => (
+                <TabsTrigger
+                  key={category.value}
+                  value={category.value}
+                  className="custom-tab-trigger"
+                >
+                  {category.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
 
       {/* Scrollable content area - Takes remaining height */}
