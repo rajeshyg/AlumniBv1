@@ -52,7 +52,7 @@
 
 .chat-bubble {
   display: inline-flex;
-  padding: 0.75rem;
+  padding: 0.375rem 0.625rem;
   min-width: 60px;
   font-size: 0.875rem;
 }
@@ -89,14 +89,14 @@
   font-size: 0.75rem;
   color: #94A3B8;
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.25rem;
   opacity: 0.6;
 }
 
 .message-container {
   display: flex;
   flex-direction: column;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.125rem;
   max-width: 75%;
 }
 
@@ -168,6 +168,36 @@
   font-size: 0.75rem;
   font-weight: 500;
   color: #0095FF;
-  margin-bottom: 0.25rem;
-  margin-left: 0.25rem;
+  margin-bottom: 0.125rem;
+  margin-left: 0.125rem;
+}
+
+/* Virtualizer styles */
+.virtualizer-container {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+}
+
+.virtualizer-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+/* Dynamic styles that will be set via JavaScript */
+.virtualizer-container-dynamic-height {
+  /* This class will have its height set dynamically via JS */
+}
+
+.virtualizer-item-dynamic-position {
+  /* These properties will be set dynamically via JS */
+}
+
+/* Fix for chat timestamp */
+.chat-timestamp {
+  font-size: 0.7rem;
+  color: #94A3B8;
+  margin-top: 0.125rem;
 }

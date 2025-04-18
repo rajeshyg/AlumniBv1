@@ -13,9 +13,9 @@ export const ChatDateDivider: React.FC<ChatDateDividerProps> = ({
   return (
     <div
       className={cn(
-        "chat-date-divider text-xs text-center mb-4 opacity-60",
+        "chat-date-divider text-xs text-center mb-1 opacity-60",
         "text-muted-foreground",
-        "bg-secondary px-3 py-1 rounded-full",
+        "bg-secondary px-2 py-0.5 rounded-full",
         "mx-auto w-fit",
         className
       )}

@@ -220,7 +220,7 @@
   }
 
   .chat-date-divider {
-    @apply text-xs text-center mb-4 opacity-60;
+    @apply text-xs text-center mb-1 opacity-60;
     color: hsl(var(--chat-date-divider));
   }
 
@@ -255,7 +255,7 @@
   }
 
   .message-container {
-    @apply flex flex-col mb-3 max-w-[75%];
+    @apply flex flex-col mb-0 max-w-[75%];
   }
 
   /* Search input styles */

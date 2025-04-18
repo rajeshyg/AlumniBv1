@@ -215,100 +215,166 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
   }, [chatMessages, chat.id]);
 
-  // Create a ref to store timeouts and control scroll operations
+  // Completely redesigned scroll handling system to eliminate flickering
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const scrollOperationInProgress = useRef<boolean>(false);
+  const isUserScrolling = useRef<boolean>(false);
+  const lastScrollTop = useRef<number>(0);
+  const scrollLock = useRef<boolean>(false);
+  const lastScrollTime = useRef<number>(0);
 
-  // Dedicated scroll to bottom function with debounce to prevent duplicate scrolls
+  // Improved scroll to bottom function with debounce and lock mechanism
   const scrollToBottom = (immediate = false) => {
-    // If a scroll operation is already in progress, cancel it
+    // Don't interrupt if we're in a scroll lock (prevents rapid scroll changes)
+    if (scrollLock.current) return;
+
+    // Cancel any pending scroll operations
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
       scrollTimeoutRef.current = null;
     }
 
-    // Mark that a scroll operation is starting
-    scrollOperationInProgress.current = true;
+    // Only scroll if user isn't manually scrolling
+    if (isUserScrolling.current) return;
 
-    // Execute the scroll
-    if (parentRef.current) {
-      if (immediate) {
-        // Force immediate scroll without animation
-        parentRef.current.scrollTop = parentRef.current.scrollHeight;
-        logger.debug('Executed immediate scroll to bottom');
+    // Set scroll lock to prevent multiple scroll operations
+    scrollLock.current = true;
 
-        // Set a timeout to allow further scrolls
-        setTimeout(() => {
-          scrollOperationInProgress.current = false;
-        }, 300);
-      } else {
-        // Smooth scroll with animation
-        if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-          logger.debug('Executed smooth scroll to bottom');
-
-          // Set a timeout to allow further scrolls
-          setTimeout(() => {
-            scrollOperationInProgress.current = false;
-          }, 500); // Longer timeout for smooth scrolls
-        }
+    // Use a more stable approach with requestAnimationFrame
+    const performScroll = () => {
+      if (!parentRef.current) {
+        scrollLock.current = false;
+        return;
       }
-    }
+
+      try {
+        if (immediate) {
+          // Force immediate scroll without animation
+          parentRef.current.scrollTop = parentRef.current.scrollHeight;
+          logger.debug('Executed immediate scroll to bottom');
+
+          // Release scroll lock after a short delay
+          setTimeout(() => {
+            scrollLock.current = false;
+          }, 200);
+        } else {
+          // Smooth scroll with custom animation
+          const startPosition = parentRef.current.scrollTop;
+          const targetPosition = parentRef.current.scrollHeight - parentRef.current.clientHeight;
+          const distance = targetPosition - startPosition;
+          const duration = 300; // ms
+          const startTime = performance.now();
+
+          const animateScroll = (currentTime: number) => {
+            const elapsedTime = currentTime - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+            // Use easeOutQuad for smoother animation
+            const easeProgress = 1 - (1 - progress) * (1 - progress);
+
+            if (parentRef.current) {
+              parentRef.current.scrollTop = startPosition + distance * easeProgress;
+            }
+
+            if (progress < 1) {
+              requestAnimationFrame(animateScroll);
+            } else {
+              // Release scroll lock when animation completes
+              scrollLock.current = false;
+            }
+          };
+
+          requestAnimationFrame(animateScroll);
+        }
+      } catch (error) {
+        // Fallback to basic scrolling if animation fails
+        if (parentRef.current) {
+          parentRef.current.scrollTop = parentRef.current.scrollHeight;
+        }
+        scrollLock.current = false;
+      }
+    };
+
+    // Execute scroll with a minimal delay to ensure DOM is ready
+    setTimeout(performScroll, 10);
   };
 
-  // Single scroll effect that manages all scroll triggers
+  // Enhanced scroll event handling with throttling
   useEffect(() => {
-    // Function to determine if we should scroll
-    const shouldScrollToBottom = () => {
-      // Don't interrupt an ongoing scroll operation
-      if (scrollOperationInProgress.current) {
-        return false;
+    const handleScroll = () => {
+      if (!parentRef.current || scrollLock.current) return;
+
+      // Throttle scroll events to reduce processing
+      const now = Date.now();
+      if (now - lastScrollTime.current < 50) return; // 50ms throttle
+      lastScrollTime.current = now;
+
+      const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 30;
+
+      // Detect if user is scrolling up (with a threshold to avoid false positives)
+      if (scrollTop < lastScrollTop.current - 5) {
+        isUserScrolling.current = true;
       }
 
-      // Always scroll when messages change
-      return sortedMessages.length > 0;
+      // If user scrolled to bottom, allow auto-scrolling again
+      if (isAtBottom) {
+        isUserScrolling.current = false;
+      }
+
+      lastScrollTop.current = scrollTop;
     };
 
-    // If we should scroll, schedule a scroll operation
-    if (shouldScrollToBottom()) {
-      logger.debug(`Scheduling scroll for chat ${chat.id}`);
-
-      // Clear any existing scroll timeouts
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-
-      // Schedule a new scroll with a small delay to let the DOM update
-      scrollTimeoutRef.current = setTimeout(() => {
-        scrollToBottom(true);
-      }, 150);
+    const scrollElement = parentRef.current;
+    if (scrollElement) {
+      scrollElement.addEventListener('scroll', handleScroll, { passive: true });
     }
 
-    // Cleanup function
     return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-    };
-  }, [sortedMessages, chat.id]); // Only re-run if messages or chat changes
-
-  // Initial scroll when changing chats
-  useEffect(() => {
-    if (parentRef.current) {
-      // Force immediate scroll without animation
-      parentRef.current.scrollTop = parentRef.current.scrollHeight;
-      logger.debug(`Initial scroll for new chat ${chat.id}`);
-    }
-  }, [chat.id]); // Only when chat changes
-
-  // Clean up any timeouts when component unmounts
-  useEffect(() => {
-    return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
+      if (scrollElement) {
+        scrollElement.removeEventListener('scroll', handleScroll);
       }
     };
   }, []);
+
+  // Improved scroll to bottom when messages change
+  useEffect(() => {
+    if (sortedMessages.length === 0) return;
+
+    // Clear any existing scroll timeouts
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    // Use a more reliable approach with a slightly longer delay
+    scrollTimeoutRef.current = setTimeout(() => {
+      // Only scroll if we're not in a scroll lock and user isn't manually scrolling
+      if (!scrollLock.current && !isUserScrolling.current) {
+        scrollToBottom(true);
+      }
+    }, 150);
+
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [sortedMessages.length]);
+
+  // Improved initial scroll when changing chats
+  useEffect(() => {
+    // Reset user scrolling state when changing chats
+    isUserScrolling.current = false;
+    scrollLock.current = false;
+
+    if (parentRef.current) {
+      // Use a more reliable approach with setTimeout
+      setTimeout(() => {
+        if (parentRef.current) {
+          parentRef.current.scrollTop = parentRef.current.scrollHeight;
+          logger.debug(`Initial scroll for new chat ${chat.id}`);
+        }
+      }, 50);
+    }
+  }, [chat.id]);
 
   useEffect(() => {
     // Load chat members
@@ -736,54 +802,97 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
   };
 
-  // Calculate dynamic message size based on content
+  // Completely revised message size calculation for stable scrolling
   const estimateMessageSize = useCallback((index: number) => {
     const message = sortedMessages[index];
-    if (!message) return 120; // Default fallback size
+    if (!message) return 50; // Minimal default size
 
-    // Base size for a message
-    let estimatedSize = 100; // Increased base size
+    // Use a fixed base size for all messages to reduce calculation variability
+    let estimatedSize = 40;
 
-    // Add extra height for longer messages based on content length
+    // Calculate content height more precisely
     const contentLength = message.content.length;
-    const estimatedLines = Math.ceil(contentLength / 30); // Assume ~30 chars per line
-    estimatedSize += Math.max(0, estimatedLines - 1) * 24; // Increased per-line height
+    // Use a more accurate chars per line estimate based on average character width
+    const charsPerLine = 50; // Higher value = fewer lines = less height
+    const estimatedLines = Math.ceil(contentLength / charsPerLine);
+    // Use a fixed height per line to ensure consistency
+    estimatedSize += Math.max(0, estimatedLines - 1) * 16;
 
-    // Add height for reply metadata if present
+    // Add fixed height for reply metadata if present
     if (message.metadata?.replyTo) {
-      estimatedSize += 70; // Increased height for reply context
+      estimatedSize += 40; // Fixed height for reply context
     }
 
-    // Add height for sender name in group chats
+    // Add fixed height for sender name in group chats
     if (chat.type === 'group' && message.senderId !== authState.currentUser?.studentId) {
-      estimatedSize += 24;
+      estimatedSize += 16; // Fixed height for sender name
     }
 
-    // Add height for date divider if needed
+    // Add fixed height for date divider if needed
     if (index === 0 ||
         !isSameDay(new Date(message.timestamp),
                   new Date(sortedMessages[index - 1].timestamp))) {
-      estimatedSize += 44;
+      estimatedSize += 30; // Fixed height for date divider
     }
 
-    // Add extra padding/margin
-    estimatedSize += 20;
+    // Add minimal fixed padding/margin
+    estimatedSize += 8;
 
     return estimatedSize;
   }, [sortedMessages, chat.type, authState.currentUser?.studentId]);
 
-  // Virtual list setup with proper initial scroll and dynamic sizing
+  // Completely revised virtualizer configuration for stable scrolling
   const rowVirtualizer = useVirtualizer({
     count: sortedMessages.length,
     getScrollElement: () => parentRef.current,
     estimateSize: estimateMessageSize,
-    overscan: 15, // Increased for smoother scrolling and to reduce empty space
-    paddingStart: 20,
-    paddingEnd: 20,
+    overscan: 30, // Significantly increased for smoother scrolling
+    paddingStart: 8, // Minimal padding
+    paddingEnd: 8, // Minimal padding
+    // Disable dynamic measurement which can cause flickering
+    measureElement: null,
     initialRect: { width: 0, height: 0 },
+    // Use a more stable scroll implementation
     scrollToFn: (offset, { behavior }) => {
-      if (parentRef.current) {
-        parentRef.current.scrollTop = offset;
+      if (!parentRef.current) return;
+
+      // Prevent scroll events during programmatic scrolling
+      isUserScrolling.current = false;
+
+      // Use a more stable approach for scrolling
+      try {
+        if (behavior === 'smooth') {
+          // Smooth scrolling with animation frame for better performance
+          const startPosition = parentRef.current.scrollTop;
+          const distance = offset - startPosition;
+          const duration = 300; // ms
+          const startTime = performance.now();
+
+          const animateScroll = (currentTime: number) => {
+            const elapsedTime = currentTime - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+            // Use easeOutQuad for smoother animation
+            const easeProgress = 1 - (1 - progress) * (1 - progress);
+
+            if (parentRef.current) {
+              parentRef.current.scrollTop = startPosition + distance * easeProgress;
+            }
+
+            if (progress < 1) {
+              requestAnimationFrame(animateScroll);
+            }
+          };
+
+          requestAnimationFrame(animateScroll);
+        } else {
+          // Immediate scrolling
+          parentRef.current.scrollTop = offset;
+        }
+      } catch (error) {
+        // Fallback to basic scrolling if animation fails
+        if (parentRef.current) {
+          parentRef.current.scrollTop = offset;
+        }
       }
     }
   });
@@ -857,10 +966,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </div>
         ) : (
           <div
-            className="virtualizer-container min-h-full relative"
-            style={{ 
-              height: `${rowVirtualizer.getTotalSize()}px`, 
-              padding: '4px 0'
+            className="virtualizer-container min-h-full relative w-full virtualizer-container-dynamic-height"
+            ref={(el) => {
+              if (el) el.style.height = `${rowVirtualizer.getTotalSize()}px`;
             }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -874,16 +982,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
               return (
                 <div
                   key={message.id}
-                  className="virtualizer-item"
-                  style={{
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                    paddingTop: showDateDivider ? '24px' : '12px',
-                    paddingBottom: '12px'
+                  className={cn(
+                    "virtualizer-item virtualizer-item-dynamic-position",
+                    showDateDivider ? "pt-2" : "pt-0",
+                    "pb-0"
+                  )}
+                  ref={(el) => {
+                    if (el) {
+                      el.style.height = `${virtualRow.size}px`;
+                      el.style.transform = `translateY(${virtualRow.start}px)`;
+                    }
                   }}
                 >
                   {showDateDivider && (
-                    <ChatDateDivider>
+                    <ChatDateDivider className="mb-1">
                       {isSameDay(messageDate, new Date()) ? 'Today' : format(messageDate, 'MMMM d, yyyy')}
                     </ChatDateDivider>
                   )}
@@ -891,7 +1003,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                     "flex w-full",
                     isCurrentUser ? "justify-end" : "justify-start"
                   )}>
-                    <div className="message-container">
+                    <div className="message-container mb-0">
                       {/* Show sender name for messages from others in group chats */}
                       {!isCurrentUser && chat.type === 'group' && (
                         <div className="message-sender-name text-xs font-medium text-primary mb-1 ml-1">
@@ -916,7 +1028,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                             </div>
                           </ChatBubble>
                           <div className={cn(
-                            "flex items-center gap-1 mt-1",
+                            "flex items-center gap-1 mt-0.5",
                             isCurrentUser ? "justify-end" : "justify-start"
                           )}>
                             <ChatTimestamp>
@@ -955,7 +1067,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </div>
         )}
       </div>
-
+      
       {/* Typing indicator */}
       {typingUsers.length > 0 && (
         <div className="typing-indicator px-4 py-1 text-sm flex items-center">
@@ -973,9 +1085,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           )}
         </div>
       )}
-
+      
+      {/* Top spacing */}
+      <div className="h-2"></div>
+      
       {/* Message Input */}
-      <div className="chat-input-container sticky bottom-0 pt-2 pb-4 px-4 bg-card border-t border-border mt-auto">
+      <div className="chat-input-container sticky bottom-0 pt-1 pb-2 px-4 bg-card border-t border-border mt-auto">
         {/* Reply UI */}
         {replyToMessage && (
           <div className="reply-container bg-secondary p-2 mb-2 rounded flex items-center justify-between">
@@ -1012,6 +1127,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
           </ChatButton>
         </form>
       </div>
+      
+      {/* Bottom spacing */}
+      <div className="h-2"></div>
 
       {/* Forward Message Dialog */}
       <Dialog open={forwardMessageDialogOpen} onOpenChange={setForwardMessageDialogOpen}>
