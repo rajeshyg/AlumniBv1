@@ -5,7 +5,7 @@ import { ChatService } from '../../services/ChatService';
 import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
 import { Button } from '../ui/button';
-import { Send, Paperclip, MoreVertical, Users, X, UserPlus, MoreHorizontal, Reply, Edit, Trash2, ArrowLeft, CheckCheck, Share } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Users, X, UserPlus, MoreHorizontal, Reply, Edit, Trash2, ArrowLeft, CheckCheck, Share, ChevronDown } from 'lucide-react';
 import { SearchInput } from '../ui/search-input';
 import { format, isSameDay } from 'date-fns';
 import { useThemeStore } from '../../store/theme';
@@ -810,13 +810,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     // Use a fixed base size for all messages to reduce calculation variability
     let estimatedSize = 40;
 
-    // Calculate content height more precisely
+    // Calculate content height with a maximum cap
     const contentLength = message.content.length;
-    // Use a more accurate chars per line estimate based on average character width
-    const charsPerLine = 50; // Higher value = fewer lines = less height
-    const estimatedLines = Math.ceil(contentLength / charsPerLine);
-    // Use a fixed height per line to ensure consistency
+    
+    // Maximum visible lines before showing "Read more"
+    const MAX_VISIBLE_LINES = 15;
+    const charsPerLine = 50; // Average chars per line estimate
+    
+    // Calculate estimated lines but cap it to prevent excessive spacing
+    const rawEstimatedLines = Math.ceil(contentLength / charsPerLine);
+    const estimatedLines = Math.min(rawEstimatedLines, MAX_VISIBLE_LINES);
+    
+    // Apply a fixed line height
     estimatedSize += Math.max(0, estimatedLines - 1) * 16;
+    
+    // If message exceeds the limit, add space for "Read more" button
+    if (rawEstimatedLines > MAX_VISIBLE_LINES) {
+      estimatedSize += 24; // Height for "Read more" button
+    }
 
     // Add fixed height for reply metadata if present
     if (message.metadata?.replyTo) {
@@ -841,6 +852,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     return estimatedSize;
   }, [sortedMessages, chat.type, authState.currentUser?.studentId]);
 
+  // Track expanded messages
+  const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({});
+  
+  const toggleMessageExpansion = useCallback((messageId: string) => {
+    setExpandedMessages(prev => ({
+      ...prev,
+      [messageId]: !prev[messageId]
+    }));
+    
+    // Force recalculation of virtualizer items after toggling
+    setTimeout(() => {
+      rowVirtualizer.measure();
+    }, 10);
+  }, []);
+
   // Completely revised virtualizer configuration for stable scrolling
   const rowVirtualizer = useVirtualizer({
     count: sortedMessages.length,
@@ -849,8 +875,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     overscan: 30, // Significantly increased for smoother scrolling
     paddingStart: 8, // Minimal padding
     paddingEnd: 8, // Minimal padding
-    // Disable dynamic measurement which can cause flickering
-    measureElement: null,
+    // Use dynamic measurement to improve accuracy
+    // This fixes the TypeScript error from using null
+    measureElement: undefined,
     initialRect: { width: 0, height: 0 },
     // Use a more stable scroll implementation
     scrollToFn: (offset, { behavior }) => {
@@ -1024,7 +1051,51 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                                   <p className="truncate">{message.metadata.replyTo.content}</p>
                                 </div>
                               )}
-                              <div>{message.content}</div>
+                              {(() => {
+                                const contentLength = message.content.length;
+                                const charsPerLine = 50;
+                                const estimatedLines = Math.ceil(contentLength / charsPerLine);
+                                const MAX_VISIBLE_LINES = 15;
+                                const isLongMessage = estimatedLines > MAX_VISIBLE_LINES;
+                                const isExpanded = expandedMessages[message.id];
+                                
+                                if (isLongMessage && !isExpanded) {
+                                  // Get approximately the first MAX_VISIBLE_LINES lines
+                                  const visibleContent = message.content.substring(0, MAX_VISIBLE_LINES * charsPerLine);
+                                  
+                                  return (
+                                    <>
+                                      <div className="message-content">{visibleContent}...</div>
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleMessageExpansion(message.id);
+                                        }}
+                                        className="text-xs flex items-center text-primary mt-1 hover:underline"
+                                      >
+                                        Read more <ChevronDown className="h-3 w-3 ml-1" />
+                                      </button>
+                                    </>
+                                  );
+                                } else {
+                                  return (
+                                    <>
+                                      <div className="message-content">{message.content}</div>
+                                      {isExpanded && isLongMessage && (
+                                        <button 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleMessageExpansion(message.id);
+                                          }}
+                                          className="text-xs flex items-center text-primary mt-1 hover:underline"
+                                        >
+                                          Show less <ChevronDown className="h-3 w-3 ml-1 transform rotate-180" />
+                                        </button>
+                                      )}
+                                    </>
+                                  );
+                                }
+                              })()}
                             </div>
                           </ChatBubble>
                           <div className={cn(
