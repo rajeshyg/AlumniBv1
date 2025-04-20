@@ -47,10 +47,10 @@
     --chat-input: 217 33% 17%;
     --chat-input-foreground: 0 0% 100%;
     --chat-input-placeholder: 0 0% 100% / 0.5;
-    --chat-bubble-sent: 210 50% 75%;
-    --chat-bubble-sent-foreground: 217 47% 19%;
-    --chat-bubble-received: 217 33% 17%;
-    --chat-bubble-received-foreground: 0 0% 100% / 0.9;
+    --chat-bubble-sent: 210 100% 97%;
+    --chat-bubble-sent-foreground: 220 10% 40%;
+    --chat-bubble-received: 220 10% 65%;
+    --chat-bubble-received-foreground: 220 10% 30%;
     --chat-timestamp: 215 20.2% 65.1%;
     --chat-date-divider: 215 20.2% 65.1%;
   }
@@ -95,10 +95,10 @@
     --chat-input: 217 33% 17%;
     --chat-input-foreground: 0 0% 100%;
     --chat-input-placeholder: 0 0% 100% / 0.5;
-    --chat-bubble-sent: 210 50% 75%;
-    --chat-bubble-sent-foreground: 217 47% 19%;
-    --chat-bubble-received: 217 33% 17%;
-    --chat-bubble-received-foreground: 0 0% 100% / 0.9;
+    --chat-bubble-sent: 210 100% 85%;
+    --chat-bubble-sent-foreground: 220 10% 20%;
+    --chat-bubble-received: 220 10% 30%;
+    --chat-bubble-received-foreground: 220 10% 90%;
     --chat-timestamp: 215 20.2% 65.1%;
     --chat-date-divider: 215 20.2% 65.1%;
   }

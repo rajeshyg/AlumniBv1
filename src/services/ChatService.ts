@@ -92,6 +92,20 @@ export class ChatService {
     try {
       this.currentUserId = userId;
 
+      // If socket already exists, disconnect it first
+      if (this.socket) {
+        logger.debug('Disconnecting existing socket before reinitializing');
+        this.socket.disconnect();
+        this.socket = null;
+
+        // Clear any existing health check interval
+        // @ts-ignore - Accessing custom property
+        if (this.socket?._healthCheckIntervalId) {
+          // @ts-ignore
+          clearInterval(this.socket._healthCheckIntervalId);
+        }
+      }
+
       // Log actual URL being used (not just the configured one)
       const actualSocketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3006';
       logger.info('Initializing Socket.IO connection', {
@@ -100,18 +114,26 @@ export class ChatService {
         envVariable: import.meta.env.VITE_SOCKET_URL ? 'defined' : 'undefined'
       });
 
-      // Initialize Socket.IO connection with reconnection options
+      // Initialize Socket.IO connection with improved reconnection options
       this.socket = io(this.socketUrl, {
         auth: { userId },
         reconnection: true,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 10, // Increased from 5
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        timeout: 20000
+        timeout: 20000,
+        forceNew: true, // Force a new connection
+        transports: ['websocket', 'polling'] // Try websocket first, then polling
       });
 
       // Setup Socket.IO event handlers
       this.setupSocketHandlers();
+
+      // Immediate connection check
+      if (!this.socket.connected) {
+        logger.debug('Socket not immediately connected - forcing connection');
+        this.socket.connect();
+      }
 
       // Add a timeout to check if connection was successful
       setTimeout(() => {
@@ -122,16 +144,22 @@ export class ChatService {
             connected: this.socket?.connected,
             socketId: this.socket?.id
           });
+
+          // Try to reconnect if still not connected
+          if (this.socket && !this.socket.connected) {
+            logger.debug('Forcing reconnection after failed initial connection');
+            this.socket.connect();
+          }
         }
       }, 3000);
 
-      // CRITICAL: Set up a periodic health check to ensure socket stays connected
+      // CRITICAL: Set up a more frequent health check to ensure socket stays connected
       const healthCheckIntervalId = setInterval(() => {
         if (!this.socket?.connected && this.currentUserId) {
           logger.warn('Socket disconnected during health check - forcing reconnection');
           this.socket?.connect();
         }
-      }, 30000); // Check every 30 seconds
+      }, 15000); // Check every 15 seconds (reduced from 30)
 
       // Store the interval ID so we can clear it if needed
       // @ts-ignore - Adding custom property to socket
@@ -161,10 +189,10 @@ export class ChatService {
     }
   }
 
-  // Get messages for a specific chat from Supabase
-  static async getChatMessages(chatId: string): Promise<ChatMessage[]> {
+  // Get messages for a specific chat from Supabase with pagination support
+  static async getChatMessages(chatId: string, limit = 50, before?: string): Promise<ChatMessage[]> {
     try {
-      logger.debug('Getting messages for chat:', { chatId });
+      logger.debug('Getting messages for chat:', { chatId, limit, before });
 
       // Validate input
       if (!chatId) {
@@ -180,11 +208,20 @@ export class ChatService {
 
       while (retries < maxRetries) {
         try {
-          const response = await supabase
+          // Build query with pagination support
+          let query = supabase
             .from('chat_messages')
             .select('*')
             .eq('chat_id', chatId)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: false }) // Newest first for efficient pagination
+            .limit(limit);
+
+          // Add cursor-based pagination if 'before' is provided
+          if (before) {
+            query = query.lt('created_at', before);
+          }
+
+          const response = await query;
 
           data = response.data;
           error = response.error;
@@ -213,7 +250,7 @@ export class ChatService {
       }
 
       if (!data || data.length === 0) {
-        logger.debug('No messages found for chat:', { chatId });
+        logger.debug('No messages found for chat:', { chatId, limit, before });
         return [];
       }
 
@@ -226,6 +263,7 @@ export class ChatService {
         content: msg.content,
         timestamp: msg.created_at,
         readBy: msg.read_by || [],
+        metadata: msg.metadata || null,
         // Add source tracking to help with debugging
         source: 'supabase'
       }));
@@ -313,8 +351,20 @@ export class ChatService {
           id: this.socket.id
         });
 
+        // CRITICAL FIX: Check if socket is connected and reconnect if needed
+        if (!this.socket.connected && this.currentUserId) {
+          logger.warn('Socket not connected when sending message - attempting reconnection');
+          this.socket.connect();
+
+          // Wait a short time for connection to establish
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
         logger.debug('Emitting message through Socket.IO:', message);
         this.socket.emit('send_message', message);
+
+        // Also emit to the specific chat room to ensure delivery
+        this.socket.emit('message_to_room', { chatId, message });
 
         // Check if we've actually joined the chat room
         logger.debug('Attempting to emit to chat room:', chatId);

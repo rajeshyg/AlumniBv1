@@ -1,5 +1,7 @@
 import React from 'react';
 import { cn } from '../../../lib/utils';
+import { logger } from '../../../utils/logger';
+import '../ChatStyles.css';
 
 interface ChatBubbleProps {
   children: React.ReactNode;
@@ -12,21 +14,17 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
   type,
   className
 }) => {
+  logger.debug('Rendering ChatBubble', { type });
+
   return (
     <div
       className={cn(
-        "chat-bubble inline-flex p-1.5 min-w-[60px] text-sm break-words",
+        "chat-bubble",
         type === 'sent'
-          ? "chat-bubble-sent rounded-xl rounded-br-sm ml-auto bg-primary/20 dark:bg-blue-200 text-primary-foreground dark:text-gray-800"
-          : "chat-bubble-received rounded-xl rounded-bl-sm mr-auto bg-gray-400 dark:bg-gray-700 text-gray-800 dark:text-gray-200",
+          ? "chat-bubble-sent"
+          : "chat-bubble-received",
         className
       )}
-      style={{
-        overflowWrap: 'anywhere',
-        maxWidth: '100%', // Ensure bubble doesn't overflow container
-        contain: 'content', // Add CSS containment to prevent layout shifts
-        willChange: 'transform' // Optimize for animations
-      }}
     >
       {children}
     </div>

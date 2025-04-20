@@ -4,18 +4,10 @@ import { useChatStore } from '../../store/chat';
 import { ChatService } from '../../services/ChatService';
 import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
-import { Button } from '../ui/button';
-import { Send, Paperclip, MoreVertical, Users, X, UserPlus, MoreHorizontal, Reply, Edit, Trash2, ArrowLeft, CheckCheck, Share } from 'lucide-react';
+import { Send, MoreVertical, Reply, Trash2, ArrowLeft, CheckCheck, Share, X } from 'lucide-react';
 import { SearchInput } from '../ui/search-input';
 import { format, isSameDay } from 'date-fns';
-import { useThemeStore } from '../../store/theme';
 import { cn } from '../../lib/utils';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../ui/dropdown-menu';
 import { UserService } from '../../services/UserService';
 import { User } from '../../models/User';
 import {
@@ -27,7 +19,6 @@ import {
   DialogFooter,
 } from '../ui/dialog';
 import { Label } from '../ui/label';
-import { useVirtualizer, VirtualItem } from '@tanstack/react-virtual';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -148,16 +139,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
         chatName: chat.name
       });
 
+      // Reset scrolling state when changing chats
+      isUserScrolling.current = false;
+      scrollLock.current = false;
+
       // Load messages immediately
       loadMessages(chat.id).then(() => {
         logger.debug(`Successfully loaded messages for chat ${chat.id}`, {
           messageCount: messages[chat.id]?.length || 0
         });
 
-        // Force scroll to bottom after messages load
-        setTimeout(() => {
-          scrollToBottom(true);
-        }, 200);
+        // Force scroll to bottom after messages load using multiple attempts
+        setTimeout(() => scrollToBottom(true), 50);
+        setTimeout(() => scrollToBottom(true), 200);
+        setTimeout(() => scrollToBottom(true), 500);
+        setTimeout(() => scrollToBottom(true), 1000);
       }).catch(error => {
         logger.error(`Failed to load messages for chat ${chat.id}`, error);
       });
@@ -191,7 +187,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
   }, [chat.id, authState.currentUser, loadMessages, markAsRead]);
 
-  // Sort messages by timestamp and log for debugging
+  // Sort messages by timestamp in ascending order (oldest first) for standard layout
   const sortedMessages = React.useMemo(() => {
     const messageCount = chatMessages.length;
     logger.debug(`Sorting ${messageCount} messages for chat ${chat.id}`);
@@ -201,10 +197,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
 
     try {
+      // Sort in ascending order (oldest first)
       const sorted = [...chatMessages].sort((a, b) => {
         const timeA = new Date(a.timestamp).getTime();
         const timeB = new Date(b.timestamp).getTime();
-        return timeA - timeB;
+        return timeA - timeB; // Normal order - oldest first
       });
 
       logger.debug(`Successfully sorted ${sorted.length} messages for chat ${chat.id}`);
@@ -215,92 +212,34 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
   }, [chatMessages, chat.id]);
 
-  // Completely redesigned scroll handling system to eliminate flickering
+  // Simplified scroll handling system for flex-col-reverse layout
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isUserScrolling = useRef<boolean>(false);
   const lastScrollTop = useRef<number>(0);
   const scrollLock = useRef<boolean>(false);
   const lastScrollTime = useRef<number>(0);
 
-  // Improved scroll to bottom function with debounce and lock mechanism
-  const scrollToBottom = (immediate = false) => {
-    // Don't interrupt if we're in a scroll lock (prevents rapid scroll changes)
-    if (scrollLock.current) return;
+  // Scroll to bottom function for standard layout
+  const scrollToBottom = useCallback((immediate = false) => {
+    if (!parentRef.current || !messagesEndRef.current) return;
 
-    // Cancel any pending scroll operations
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-      scrollTimeoutRef.current = null;
+    // Scroll to the messagesEndRef at the bottom
+    if (immediate) {
+      messagesEndRef.current.scrollIntoView({ block: 'end' });
+      logger.debug('Executed immediate scroll to bottom');
+    } else {
+      // Smooth scroll to bottom
+      messagesEndRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'end'
+      });
     }
+  }, []);
 
-    // Only scroll if user isn't manually scrolling
-    if (isUserScrolling.current) return;
-
-    // Set scroll lock to prevent multiple scroll operations
-    scrollLock.current = true;
-
-    // Use a more stable approach with requestAnimationFrame
-    const performScroll = () => {
-      if (!parentRef.current) {
-        scrollLock.current = false;
-        return;
-      }
-
-      try {
-        if (immediate) {
-          // Force immediate scroll without animation
-          parentRef.current.scrollTop = parentRef.current.scrollHeight;
-          logger.debug('Executed immediate scroll to bottom');
-
-          // Release scroll lock after a short delay
-          setTimeout(() => {
-            scrollLock.current = false;
-          }, 200);
-        } else {
-          // Smooth scroll with custom animation
-          const startPosition = parentRef.current.scrollTop;
-          const targetPosition = parentRef.current.scrollHeight - parentRef.current.clientHeight;
-          const distance = targetPosition - startPosition;
-          const duration = 300; // ms
-          const startTime = performance.now();
-
-          const animateScroll = (currentTime: number) => {
-            const elapsedTime = currentTime - startTime;
-            const progress = Math.min(elapsedTime / duration, 1);
-            // Use easeOutQuad for smoother animation
-            const easeProgress = 1 - (1 - progress) * (1 - progress);
-
-            if (parentRef.current) {
-              parentRef.current.scrollTop = startPosition + distance * easeProgress;
-            }
-
-            if (progress < 1) {
-              requestAnimationFrame(animateScroll);
-            } else {
-              // Release scroll lock when animation completes
-              scrollLock.current = false;
-            }
-          };
-
-          requestAnimationFrame(animateScroll);
-        }
-      } catch (error) {
-        // Fallback to basic scrolling if animation fails
-        if (parentRef.current) {
-          parentRef.current.scrollTop = parentRef.current.scrollHeight;
-        }
-        scrollLock.current = false;
-      }
-    };
-
-    // Execute scroll with a minimal delay to ensure DOM is ready
-    setTimeout(performScroll, 10);
-  };
-
-  // Enhanced scroll event handling with throttling
+  // Scroll event handling for standard layout
   useEffect(() => {
     const handleScroll = () => {
-      if (!parentRef.current || scrollLock.current) return;
+      if (!parentRef.current) return;
 
       // Throttle scroll events to reduce processing
       const now = Date.now();
@@ -308,16 +247,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       lastScrollTime.current = now;
 
       const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 30;
 
-      // Detect if user is scrolling up (with a threshold to avoid false positives)
+      // Calculate how close we are to the bottom
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const isAtLatestMessages = distanceFromBottom < 20; // Near the bottom
+
+      // If user is scrolling up (to see older messages), prevent auto-scroll
       if (scrollTop < lastScrollTop.current - 5) {
         isUserScrolling.current = true;
+        logger.debug('User scrolling to view older messages');
       }
 
-      // If user scrolled to bottom, allow auto-scrolling again
-      if (isAtBottom) {
+      // If user scrolled back to latest messages, allow auto-scrolling again
+      if (isAtLatestMessages) {
         isUserScrolling.current = false;
+        logger.debug('User returned to latest messages');
       }
 
       lastScrollTop.current = scrollTop;
@@ -335,7 +279,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     };
   }, []);
 
-  // Improved scroll to bottom when messages change
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (sortedMessages.length === 0) return;
 
@@ -344,37 +288,64 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
       clearTimeout(scrollTimeoutRef.current);
     }
 
-    // Use a more reliable approach with a slightly longer delay
+    // Use a short delay to ensure DOM is updated
     scrollTimeoutRef.current = setTimeout(() => {
-      // Only scroll if we're not in a scroll lock and user isn't manually scrolling
-      if (!scrollLock.current && !isUserScrolling.current) {
+      // Only scroll if user isn't manually scrolling
+      if (!isUserScrolling.current) {
         scrollToBottom(true);
+        logger.debug('Auto-scrolling to latest messages after messages changed');
       }
-    }, 150);
+    }, 100); // Slightly longer delay to ensure DOM is fully updated
 
     return () => {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
     };
-  }, [sortedMessages.length]);
+  }, [sortedMessages.length, scrollToBottom]);
 
-  // Improved initial scroll when changing chats
+  // Initial scroll when changing chats
   useEffect(() => {
     // Reset user scrolling state when changing chats
     isUserScrolling.current = false;
     scrollLock.current = false;
 
+    // Set initial scroll position immediately without animation
     if (parentRef.current) {
-      // Use a more reliable approach with setTimeout
+      // Hide the content until scrolled to bottom
+      parentRef.current.classList.add('chat-messages-hidden');
+      parentRef.current.classList.remove('chat-messages-visible');
+      parentRef.current.classList.remove('chat-messages-smooth-scroll');
+
+      // Use a sequence of delayed scroll attempts to ensure we catch the final layout
+      const scrollAttempts = [0, 50, 100, 300];
+
+      scrollAttempts.forEach((delay, index) => {
+        setTimeout(() => {
+          if (messagesEndRef.current && !isUserScrolling.current) {
+            // Use immediate scroll for all attempts
+            scrollToBottom(true);
+            logger.debug(`Initial scroll attempt at ${delay}ms for chat ${chat.id}`);
+
+            // Show content after the first successful scroll
+            if (index === 0 && parentRef.current) {
+              parentRef.current.classList.remove('chat-messages-hidden');
+              parentRef.current.classList.add('chat-messages-visible');
+            }
+          }
+        }, delay);
+      });
+
+      // Ensure content is visible even if scrolling fails
       setTimeout(() => {
         if (parentRef.current) {
-          parentRef.current.scrollTop = parentRef.current.scrollHeight;
-          logger.debug(`Initial scroll for new chat ${chat.id}`);
+          parentRef.current.classList.remove('chat-messages-hidden');
+          parentRef.current.classList.add('chat-messages-visible');
+          parentRef.current.classList.add('chat-messages-smooth-scroll'); // Re-enable smooth scrolling
         }
-      }, 50);
+      }, 350);
     }
-  }, [chat.id]);
+  }, [chat.id, scrollToBottom]);
 
   useEffect(() => {
     // Load chat members
@@ -720,22 +691,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
   };
 
-  const handleLeaveChat = () => {
-    if (!authState.currentUser) return;
-    try {
-      // Since removeParticipant doesn't exist, log this action instead
-      logger.info('User leaving chat:', {
-        chatId: chat.id,
-        userId: authState.currentUser.studentId
-      });
-      // Instead of calling refreshChats, reload chats using the store
-      loadMessages(chat.id);
-      // Navigate back to chat list
-      window.location.href = '/chat';
-    } catch (error) {
-      logger.error('Failed to leave chat', { error });
-    }
-  };
+
 
   const handleSearchUsers = async (query: string) => {
     if (!query.trim()) {
@@ -802,110 +758,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
     }
   };
 
-  // Enhanced message size calculation with consistent sizing for all message types
-  const estimateMessageSize = useCallback((index: number) => {
-    const message = sortedMessages[index];
-    if (!message) return 50; // Minimal default size
 
-    // Use a fixed base size for all messages
-    let estimatedSize = 40;
-
-    // Calculate content height based on full content length
-    const contentLength = message.content.length;
-    const charsPerLine = 50; // Average chars per line estimate
-    const estimatedLines = Math.ceil(contentLength / charsPerLine);
-    
-    // Apply a fixed line height - same for both sent and received messages
-    const lineHeight = 16; // Fixed line height for consistency
-    estimatedSize += Math.max(0, estimatedLines - 1) * lineHeight;
-
-    // Add fixed height for reply metadata if present
-    if (message.metadata?.replyTo) {
-      estimatedSize += 40; // Fixed height for reply context
-    }
-
-    // Add fixed height for sender name in group chats
-    if (chat.type === 'group' && message.senderId !== authState.currentUser?.studentId) {
-      estimatedSize += 16; // Fixed height for sender name
-    }
-
-    // Add fixed height for date divider if needed
-    if (index === 0 ||
-        !isSameDay(new Date(message.timestamp),
-                  new Date(sortedMessages[index - 1].timestamp))) {
-      estimatedSize += 30; // Fixed height for date divider
-    }
-
-    // Add minimal fixed padding/margin - same for both sent and received messages
-    estimatedSize += 8;
-
-    // Add a small buffer for stability, especially for received messages
-    // Determine if the message is from the current user
-    const isCurrentUser = authState.currentUser?.studentId && message.senderId === authState.currentUser.studentId;
-
-    if (!isCurrentUser && chat.type === 'group') {
-      estimatedSize += 4; // Extra buffer for sender name + potential layout shifts
-    } else {
-      estimatedSize += 2; // Smaller buffer for sent messages
-    }
-
-    return estimatedSize;
-  }, [sortedMessages, chat.type, authState.currentUser?.studentId]);
-
-  // Completely revised virtualizer configuration for stable scrolling
-  const rowVirtualizer = useVirtualizer({
-    count: sortedMessages.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: estimateMessageSize,
-    overscan: 30, // Significantly increased for smoother scrolling
-    paddingStart: 8, // Minimal padding
-    paddingEnd: 8, // Minimal padding
-    // Removed measureElement as dynamic measurement is no longer critical
-    initialRect: { width: 0, height: 0 },
-    // Use a more stable scroll implementation
-    scrollToFn: (offset, { behavior }) => {
-      if (!parentRef.current) return;
-
-      // Prevent scroll events during programmatic scrolling
-      isUserScrolling.current = false;
-
-      // Use a more stable approach for scrolling
-      try {
-        if (behavior === 'smooth') {
-          // Smooth scrolling with animation frame for better performance
-          const startPosition = parentRef.current.scrollTop;
-          const distance = offset - startPosition;
-          const duration = 300; // ms
-          const startTime = performance.now();
-
-          const animateScroll = (currentTime: number) => {
-            const elapsedTime = currentTime - startTime;
-            const progress = Math.min(elapsedTime / duration, 1);
-            // Use easeOutQuad for smoother animation
-            const easeProgress = 1 - (1 - progress) * (1 - progress);
-
-            if (parentRef.current) {
-              parentRef.current.scrollTop = startPosition + distance * easeProgress;
-            }
-
-            if (progress < 1) {
-              requestAnimationFrame(animateScroll);
-            }
-          };
-
-          requestAnimationFrame(animateScroll);
-        } else {
-          // Immediate scrolling
-          parentRef.current.scrollTop = offset;
-        }
-      } catch (error) {
-        // Fallback to basic scrolling if animation fails
-        if (parentRef.current) {
-          parentRef.current.scrollTop = offset;
-        }
-      }
-    }
-  });
 
   // Add a function to get proper chat display name
   const getChatDisplayName = (): string => {
@@ -948,8 +801,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
               <ArrowLeft className="h-5 w-5" />
             </ChatButton>
           )}
-          <div className="h-10 w-10 rounded-full bg-[hsl(var(--chat-input))] flex items-center justify-center">
-            <span className="text-[hsl(var(--chat-foreground))] font-medium">
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <span className="text-foreground font-medium">
               {getChatDisplayName().charAt(0).toUpperCase()}
             </span>
           </div>
@@ -965,55 +818,44 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
         </div>
       </ChatHeader>
 
-      {/* Messages Area */}
+      {/* Messages Area - Using standard flex-col layout */}
       <div
         ref={parentRef}
-        className="flex-1 overflow-y-auto px-4 relative py-1"
+        className="flex-1 overflow-y-auto px-4 relative py-1 scroll-smooth chat-messages-container"
       >
         {sortedMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted-foreground">No messages yet. Start the conversation!</p>
           </div>
         ) : (
-          <div
-            className="virtualizer-container min-h-full relative w-full virtualizer-container-dynamic-height"
-            ref={(el) => {
-              if (el) el.style.height = `${rowVirtualizer.getTotalSize()}px`;
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const message = sortedMessages[virtualRow.index];
+          <div className="flex flex-col">
+            {/* End of messages marker at the top for scrolling reference */}
+            <div className="h-4" />
+
+            {/* Messages are rendered in ascending order (oldest first) */}
+            {sortedMessages.map((message, index) => {
               const currentUserId = authState.currentUser?.studentId;
               const isCurrentUser = Boolean(currentUserId && message.senderId === currentUserId);
               const messageDate = new Date(message.timestamp);
-              const showDateDivider = virtualRow.index === 0 ||
-                !isSameDay(messageDate, new Date(sortedMessages[virtualRow.index - 1].timestamp));
+
+              // Check if we should show a date divider
+              const showDateDivider = index === 0 ||
+                !isSameDay(messageDate, new Date(sortedMessages[index - 1].timestamp));
 
               return (
-                <div
-                  key={message.id}
-                  className={cn(
-                    "virtualizer-item virtualizer-item-dynamic-position",
-                    showDateDivider ? "pt-2" : "pt-0",
-                    "pb-0"
-                  )}
-                  ref={(el) => {
-                    if (el) {
-                      el.style.height = `${virtualRow.size}px`;
-                      el.style.transform = `translateY(${virtualRow.start}px)`;
-                    }
-                  }}
-                >
+                <div key={message.id} className="message-wrapper mb-2">
+                  {/* Date divider */}
                   {showDateDivider && (
-                    <ChatDateDivider className="mb-1">
+                    <ChatDateDivider className="my-2">
                       {isSameDay(messageDate, new Date()) ? 'Today' : format(messageDate, 'MMMM d, yyyy')}
                     </ChatDateDivider>
                   )}
+
                   <div className={cn(
                     "flex w-full",
                     isCurrentUser ? "justify-end" : "justify-start"
                   )}>
-                    <div className="message-container mb-0">
+                    <div className="message-container">
                       {/* Show sender name for messages from others in group chats */}
                       {!isCurrentUser && chat.type === 'group' && (
                         <div className="message-sender-name text-xs font-medium text-primary mb-1 ml-1">
@@ -1026,7 +868,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                             <div>
                               {/* Show reply information if this message is a reply */}
                               {message.metadata?.replyTo && (
-                                <div className="reply-reference p-1 mb-1 rounded text-xs bg-[hsl(var(--chat-input))]">
+                                <div className="reply-reference p-1 mb-1 rounded text-xs bg-accent/50">
                                   <div className="flex items-center">
                                     <Reply className="h-3 w-3 mr-1" />
                                     <span className="font-medium">Reply to {getSenderName(message.metadata.replyTo.senderId)}</span>
@@ -1074,7 +916,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, isMobile }
                 </div>
               );
             })}
-            <div ref={messagesEndRef} />
+
+            {/* End of messages marker at the bottom for auto-scrolling */}
+            <div ref={messagesEndRef} className="h-4" />
           </div>
         )}
       </div>

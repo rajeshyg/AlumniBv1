@@ -12,7 +12,7 @@ export interface ChatStore {
   loading: boolean;
   error: string | null;
   loadChats: () => Promise<void>;
-  loadMessages: (chatId: string) => Promise<void>;
+  loadMessages: (chatId: string, before?: string) => Promise<void>;
   sendMessage: (chatId: string, content: string, metadata?: any) => Promise<void>;
   markAsRead: (chatId: string) => Promise<void>;
   setCurrentUser: (user: User | null) => void;
@@ -119,13 +119,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
       if (success) {
         logger.debug('Message deleted successfully:', { messageId });
-        
+
         // Update the store to remove the deleted message
         set(state => {
           // Find which chat the message belongs to
           let chatId: string | null = null;
           let deletedMessage: ChatMessage | null = null;
-          
+
           // Loop through all chats to find the message
           Object.entries(state.messages).forEach(([cid, messages]) => {
             const message = messages.find(m => m.id === messageId);
@@ -134,44 +134,44 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               deletedMessage = message;
             }
           });
-          
+
           if (!chatId || !deletedMessage) {
             logger.error('Could not find message to delete in store:', { messageId });
             return state;
           }
-          
+
           // Remove the message from the messages array
           const updatedMessages = {
             ...state.messages,
             [chatId]: state.messages[chatId].filter(m => m.id !== messageId)
           };
-          
+
           // If this was the last message in the chat, update the chat's last message
           const chatIndex = state.chats.findIndex(c => c.id === chatId);
           let updatedChats = [...state.chats];
-          
+
           if (chatIndex >= 0 && state.chats[chatIndex].lastMessage?.id === messageId) {
             // Find the new last message
             const messagesInChat = updatedMessages[chatId] || [];
             const newLastMessage = messagesInChat.length > 0 ? messagesInChat[messagesInChat.length - 1] : null;
-            
+
             const updatedChat = {
               ...updatedChats[chatIndex],
               lastMessage: newLastMessage || null,
               lastMessageId: newLastMessage?.id || null,
               lastMessageTime: newLastMessage?.timestamp || null
             };
-            
+
             updatedChats[chatIndex] = updatedChat;
           }
-          
+
           return {
             ...state,
             messages: updatedMessages,
             chats: updatedChats
           };
         });
-        
+
         return true;
       } else {
         logger.error('Failed to delete message');
@@ -356,11 +356,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }));
   },
 
-  // Load messages for a specific chat
-  loadMessages: async (chatId: string) => {
+  // Load messages for a specific chat with pagination support
+  loadMessages: async (chatId: string, before?: string) => {
     try {
       set({ loading: true, error: null });
-      logger.debug('Loading messages for chat:', { chatId });
+      logger.debug('Loading messages for chat:', { chatId, before });
 
       const currentUser = get().currentUser;
       if (!currentUser) {
@@ -370,13 +370,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
 
       try {
-        const messages = await ChatService.getChatMessages(chatId);
-        logger.debug('Messages loaded:', { chatId, count: messages.length });
+        // Check if we already have messages for this chat
+        const existingMessages = get().messages[chatId] || [];
+
+        // If we're loading initial messages and already have some, use cache
+        if (!before && existingMessages.length > 0) {
+          logger.debug('Using cached messages for chat:', { chatId, count: existingMessages.length });
+          set({ loading: false });
+          return;
+        }
+
+        // Fetch new batch of messages with pagination
+        const messages = await ChatService.getChatMessages(chatId, 50, before);
+        logger.debug('Messages loaded:', { chatId, count: messages.length, before });
+
+        // Merge with existing messages without duplicates
+        const mergedMessages = before
+          ? [...existingMessages, ...messages.filter(newMsg =>
+              !existingMessages.some(existingMsg => existingMsg.id === newMsg.id)
+            )]
+          : messages;
+
+        // Sort messages by timestamp (newest last for display)
+        const sortedMessages = mergedMessages.sort((a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
 
         set(state => ({
           messages: {
             ...state.messages,
-            [chatId]: messages
+            [chatId]: sortedMessages
           },
           loading: false
         }));
